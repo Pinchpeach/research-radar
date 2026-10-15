@@ -214,3 +214,65 @@ def test_cluster_label_phrase_found_past_first_three_words():
     ]
     labels = [c["label"] for c in flow.build_flow(CORPUS, foundations=foundations)["clusters"]]
     assert any("gravitational wave" in label for label in labels), labels
+
+
+# ---------- real-data issues: duplicates and labels ----------
+
+
+def test_dedupe_merges_versions_and_redirects_citations():
+    from backend.services.dedupe import dedupe
+
+    preprint = p("W10", "Optical Observations of Isolated Neutron Stars", "", 1998, 0, ["W1"])
+    journal = p("W11", "Optical observations of isolated neutron stars.", "abstract", 1999, 40, ["W2"])
+    other = p("W12", "Optical Observations of Isolated Neutron Stars", "", 2015, 3)  # a later, different paper
+    citer = p("W20", "Follow-up", "x", 2005, 1, ["W10"])
+    unique, alias = dedupe([preprint, journal, other, citer])
+    ids = [u["id"].rsplit("/", 1)[-1] for u in unique]
+    assert ids == ["W11", "W12", "W20"]
+    assert alias == {"W10": "W11"}
+    kept = unique[0]
+    assert set(kept["referenced_works"]) == {"W1", "W2"}
+    assert unique[2]["referenced_works"] == ["W11"]
+    assert preprint["referenced_works"] == ["W1"]  # inputs untouched
+
+
+def test_build_flow_merges_duplicates_and_keeps_query_out_of_labels():
+    dup = {**CORPUS[0], "id": "https://openalex.org/W1b", "citations": 0}
+    result = flow.build_flow(CORPUS + [dup], query="neutron star optical observations")
+    ids = {n["id"] for n in result["nodes"]}
+    assert "W1b" not in ids and "W1" in ids
+    for c in result["clusters"]:
+        words = set(c["label"].replace(",", " ").split())
+        assert not words & {"neutron", "star", "stars", "optical", "observations"}, c["label"]
+
+
+def test_labels_skip_generic_and_short_tokens():
+    papers = [
+        p(f"W{i}", f"RX J{i} gives new results", "this paper gives results using rx data on magnetar bursts", 2000 + i)
+        for i in range(4)
+    ] + [
+        p(f"W{i + 10}", f"Gravitational wave search {i}", "we present interferometer gravitational wave searches", 2000 + i)
+        for i in range(4)
+    ]
+    labels = " ".join(c["label"] for c in flow.build_flow(papers)["clusters"])
+    words = set(labels.replace(",", " ").split())
+    assert not words & {"gives", "results", "using", "rx", "paper", "present", "new"}, labels
+    assert "magnetar" in labels and "gravitational wave" in labels
+
+
+def test_impossible_citations_are_ignored():
+    old = p("W1", "Old paper about pulsars", "pulsars", 2000, 10, ["W9"])  # "cites" a 2025 paper
+    new = p("W9", "New paper about pulsars", "pulsars", 2025, 1)
+    preprint_lag = p("W3", "Journal version", "pulsars", 2010, 1, ["W4"])
+    early = p("W4", "Cited preprint", "pulsars", 2011, 1)  # one year of slack is fine
+    result = flow.build_flow([old, new, preprint_lag, early])
+    edges = {(e["source"], e["target"]) for e in result["edges"]}
+    assert ("W1", "W9") not in edges and ("W3", "W4") in edges
+
+
+def test_credible_foundations_recounts_citers():
+    citers = [p(f"W{i}", "t", "x", 2020, 1, ["W90", "W91"]) for i in range(3)]
+    good = p("W90", "Classic", "x", 2010, 500)
+    bogus = p("W91", "From the future", "x", 2025, 3)
+    kept = flow.credible_foundations(citers, [good, bogus])
+    assert [k["id"] for k in kept] == [good["id"]] and kept[0]["cited_by_in_set"] == 3

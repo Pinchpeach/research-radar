@@ -240,8 +240,10 @@ def _svg(lay: dict, title: str) -> str:
 
     # title
     first, last = lay["years"]
+    # shrink long titles so they stay within the map width (~0.75 em per letter with the tracking)
+    title_size = max(26, min(52, (W - 160) / max(1, len(title)) / 0.75))
     out.append(
-        f'<text x="{W / 2:.0f}" y="92" text-anchor="middle" fill="{TEXT}" font-size="52" font-weight="300" '
+        f'<text x="{W / 2:.0f}" y="92" text-anchor="middle" fill="{TEXT}" font-size="{title_size:.0f}" font-weight="300" '
         f'letter-spacing="6">{_t(title.upper())}</text>'
         f'<text x="{W / 2:.0f}" y="128" text-anchor="middle" fill="{TEXT_2}" font-size="17" letter-spacing="2">'
         f"연구 발전 지도 · {len(lay['nodes'])} papers · {len(lay['lanes'])} topics · {first}–{last}</text>"

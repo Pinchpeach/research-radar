@@ -80,7 +80,7 @@ def main_cli() -> int:
         print(f"  seeds resolved: {[s['title'][:50] for s in body['seeds']]}  unresolved: {body['unresolved_seeds']}")
 
     started = time.time()
-    flow_res = client.post("/flow", json={"papers": papers, "include_foundations": True})
+    flow_res = client.post("/flow", json={"papers": papers, "query": args.query, "include_foundations": True})
     if flow_res.status_code != 200:
         print(f"/flow failed: {flow_res.status_code} {flow_res.text[:300]}")
         return 1

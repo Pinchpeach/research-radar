@@ -95,6 +95,7 @@ class Bookmark(BaseModel):
 
 class FlowRequest(BaseModel):
     papers: list[PaperData] = Field(default_factory=list, max_length=300)
+    query: Optional[str] = None  # kept out of topic labels
     include_bookmarks: bool = False
     include_foundations: bool = True
     max_foundations: int = Field(default=10, ge=0, le=30)

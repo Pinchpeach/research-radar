@@ -17,7 +17,8 @@ from backend.models import (
     SearchResponse,
 )
 from backend.services import embeddings, openalex
-from backend.services.flow import build_flow, outside_references, short_id
+from backend.services.dedupe import dedupe
+from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import paper_text, rank_papers
 from backend.storage import BookmarkStore, to_bibtex
 
@@ -80,7 +81,7 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
         if paper["id"] and paper["id"] not in seed_ids and paper["id"] not in unique:
             unique[paper["id"]] = paper
 
-    papers = list(unique.values())
+    papers, _ = dedupe(list(unique.values()))  # preprint + journal versions count once
     if request.require_abstract:
         papers = [paper for paper in papers if paper["abstract"]]
     return papers
@@ -165,12 +166,12 @@ def research_flow(request: FlowRequest, store: BookmarkStore = Depends(get_store
     if request.include_foundations and request.max_foundations:
         wanted = outside_references(papers, limit=request.max_foundations)
         if wanted:
-            counts = dict(wanted)
             try:
-                foundations = openalex.papers_by_ids([ref for ref, _ in wanted])
+                fetched = openalex.papers_by_ids([ref for ref, _ in wanted])
             except RequestException:
                 logger.warning("Could not fetch foundational works", exc_info=True)
-            for paper in foundations:
-                paper["cited_by_in_set"] = counts.get(short_id(paper["id"]), 0)
+            else:
+                # drops works "cited" by papers older than themselves (bad citation data)
+                foundations = credible_foundations(papers, fetched)
 
-    return build_flow(papers, bookmarked=store.ids(), foundations=foundations)
+    return build_flow(papers, bookmarked=store.ids(), foundations=foundations, query=request.query)

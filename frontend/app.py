@@ -314,6 +314,7 @@ with flow_tab:
             ]
             payload = {
                 "papers": papers,
+                "query": state.run["query"] if state.run and source != "Bookmarks only" else None,
                 "include_bookmarks": source != "Search results only",
                 "include_foundations": include_foundations,
             }
