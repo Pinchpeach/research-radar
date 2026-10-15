@@ -14,8 +14,8 @@ sys.path.insert(0, str(ROOT))
 from backend.evaluation import ndcg_at_k, precision_at_k  # noqa: E402
 from backend.judgments import save_run  # noqa: E402
 from flow_chart import build_figure, lineage_rows  # noqa: E402
-from techtree import layout as tech_tree_layout  # noqa: E402
-from techtree import render_html as render_tech_tree  # noqa: E402
+from backend.services.techtree import layout as tech_tree_layout  # noqa: E402
+from backend.services.techtree import render_html as render_tech_tree  # noqa: E402
 
 API_URL = os.getenv("RADAR_API_URL", "http://localhost:8000")
 JUDGMENTS = {"—": None, "Relevant": "relevant", "Partial": "partial", "Not relevant": "not_relevant"}

@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Research Radar</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">◎</span> Research Radar</div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="discover" role="tab">🔎 탐색</button>
+      <button class="tab" data-tab="bookmarks" role="tab">★ 북마크 <span id="bm-count" class="count"></span></button>
+      <button class="tab" data-tab="map" role="tab">🧭 연구 지도</button>
+      <button class="tab" data-tab="settings" role="tab">⚙ 환경설정</button>
+    </nav>
+    <button id="key-pill" class="pill" title="OpenAlex API 키 상태">키 확인 중…</button>
+  </header>
+
+  <div id="banner" class="banner" hidden>
+    OpenAlex API 키가 없습니다. 키 없이는 공용 한도를 나눠 써서 검색이 막힐 수 있어요.
+    <button id="banner-go" class="link-button">환경설정에서 키 입력 →</button>
+  </div>
+
+  <main>
+    <!-- ───────────── 탐색 ───────────── -->
+    <section id="tab-discover" class="panel">
+      <form id="search-form" class="search">
+        <input id="query" type="search" placeholder="연구 주제를 입력하세요 (예: optical observations of isolated neutron stars)" required minlength="2" autocomplete="off">
+        <button class="primary" type="submit">검색</button>
+      </form>
+      <details class="options">
+        <summary>검색 옵션</summary>
+        <div class="grid">
+          <label>결과 수
+            <select id="limit"><option>10</option><option selected>20</option><option>30</option><option>50</option><option>100</option></select>
+          </label>
+          <label>출판 연도
+            <span class="row"><input id="year-from" type="number" min="1800" max="2100" placeholder="시작"> – <input id="year-to" type="number" min="1800" max="2100" placeholder="끝"></span>
+          </label>
+          <label class="wide">시드 논문 <small>DOI 또는 OpenAlex ID, 한 줄에 하나</small>
+            <textarea id="seeds" rows="2" placeholder="10.1086/345493&#10;W2058532123"></textarea>
+          </label>
+          <label class="check"><input id="bookmark-seeds" type="checkbox"> 내 북마크를 시드로 사용 (최근 10개)</label>
+          <label class="check"><input id="require-abstract" type="checkbox"> 초록이 있는 논문만</label>
+          <fieldset class="wide weights">
+            <legend>정렬 가중치</legend>
+            <label>주제 관련도 <input type="range" data-weight="relevance" min="0" max="1" step="0.05" value="0.6"><output>0.60</output></label>
+            <label>시드 연결 <input type="range" data-weight="seed" min="0" max="1" step="0.05" value="0.2"><output>0.20</output></label>
+            <label>최신성 <input type="range" data-weight="recency" min="0" max="1" step="0.05" value="0.1"><output>0.10</output></label>
+            <label>인용 영향력 <input type="range" data-weight="impact" min="0" max="1" step="0.05" value="0.1"><output>0.10</output></label>
+          </fieldset>
+        </div>
+      </details>
+      <p id="search-status" class="status" role="status"></p>
+      <ol id="results" class="papers"></ol>
+    </section>
+
+    <!-- ───────────── 북마크 ───────────── -->
+    <section id="tab-bookmarks" class="panel" hidden>
+      <div class="toolbar">
+        <label>태그 <select id="tag-filter"><option value="">전체</option></select></label>
+        <span class="spacer"></span>
+        <button id="export-bib">BibTeX 저장</button>
+      </div>
+      <p id="bm-empty" class="empty">아직 북마크가 없습니다. 탐색 결과에서 ☆ 를 눌러 저장하세요.</p>
+      <ol id="bookmarks" class="papers"></ol>
+    </section>
+
+    <!-- ───────────── 연구 지도 ───────────── -->
+    <section id="tab-map" class="panel" hidden>
+      <div class="toolbar">
+        <fieldset class="segmented" id="map-source">
+          <label><input type="radio" name="source" value="both" checked> 검색 결과 + 북마크</label>
+          <label><input type="radio" name="source" value="results"> 검색 결과만</label>
+          <label><input type="radio" name="source" value="bookmarks"> 북마크만</label>
+        </fieldset>
+        <label class="check" title="결과 중 2편 이상이 인용한 오래된 핵심 논문을 함께 넣습니다"><input id="foundations" type="checkbox" checked> 기초 논문 추가</label>
+        <span class="spacer"></span>
+        <button id="build-map" class="primary">지도 만들기</button>
+        <button id="save-poster" disabled>포스터 저장</button>
+      </div>
+      <p id="map-status" class="status" role="status"></p>
+      <iframe id="poster" title="연구 지도" hidden></iframe>
+      <div id="story" class="story"></div>
+    </section>
+
+    <!-- ───────────── 환경설정 ───────────── -->
+    <section id="tab-settings" class="panel" hidden>
+      <form id="settings-form" class="settings" autocomplete="off">
+        <h2>OpenAlex</h2>
+        <p class="hint">논문 검색에 쓰는 무료 학술 데이터베이스입니다. 개인 API 키가 있으면 자신만의 하루 한도를 씁니다.
+          <a href="https://openalex.org/settings/api" target="_blank" rel="noopener">무료 키 발급 ↗</a></p>
+        <label>API 키
+          <span class="row">
+            <input id="openalex-key" type="password" placeholder="새 키를 붙여 넣으세요" spellcheck="false">
+            <button type="button" id="toggle-key" title="키 보기/숨기기">보기</button>
+            <button type="button" id="test-key">키 확인</button>
+          </span>
+          <span class="row"><small id="openalex-key-state"></small>
+            <button type="button" id="clear-openalex-key" class="link-button small" hidden>저장된 키 삭제</button></span>
+          <small id="test-result" class="test-result" role="status"></small>
+        </label>
+        <label>연락용 이메일 <small>(선택) OpenAlex에 요청자를 알립니다</small>
+          <input id="openalex-email" type="email" placeholder="you@university.edu">
+        </label>
+
+        <h2>의미 기반 정렬 <small>(선택)</small></h2>
+        <p class="hint">OpenAI API 키를 넣으면 단어 일치뿐 아니라 의미가 비슷한 논문도 위로 올립니다.</p>
+        <label>OpenAI API 키
+          <input id="openai-key" type="password" placeholder="sk-…" spellcheck="false">
+          <span class="row"><small id="openai-key-state"></small>
+            <button type="button" id="clear-openai-key" class="link-button small" hidden>삭제</button></span>
+        </label>
+
+        <div class="actions">
+          <button type="submit" class="primary">저장</button>
+          <span id="settings-status" class="status" role="status"></span>
+        </div>
+        <p class="hint">키는 이 컴퓨터의 데이터 폴더에만 저장됩니다: <code id="data-dir"></code></p>
+      </form>
+    </section>
+  </main>
+
+  <template id="paper-template">
+    <li class="paper">
+      <div class="paper-head">
+        <span class="rank"></span>
+        <a class="title" target="_blank" rel="noopener"></a>
+        <button class="star" title="북마크">☆</button>
+      </div>
+      <div class="authors"></div>
+      <div class="meta"></div>
+      <div class="chips"></div>
+      <details class="abstract"><summary>초록</summary><p></p></details>
+    </li>
+  </template>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

@@ -1,15 +1,10 @@
 import json
 import re
-import sys
-from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
-
-import techtree  # noqa: E402
-from backend.services import flow  # noqa: E402
-from tests.test_bookmarks_flow import CORPUS, p  # noqa: E402
+from backend.services import flow, techtree
+from tests.test_bookmarks_flow import CORPUS, p
 
 
 def big_corpus():

@@ -1,10 +1,12 @@
 import logging
+import sys
 from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
 from backend import settings
@@ -14,6 +16,7 @@ from backend.models import (
     BookmarkUpdate,
     FlowRequest,
     KeyTest,
+    PosterRequest,
     SearchRequest,
     SearchResponse,
     SettingsUpdate,
@@ -22,6 +25,7 @@ from backend.services import embeddings, openalex
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import paper_text, rank_papers
+from backend.services.techtree import render_html as render_poster
 from backend.storage import BookmarkStore, to_bibtex
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -40,9 +44,15 @@ def get_store() -> BookmarkStore:
     return BookmarkStore()
 
 
-@app.get("/")
-def root():
-    return {"service": "Research Radar", "version": VERSION}
+# Files bundled with the app: next to the code, or unpacked by PyInstaller into sys._MEIPASS.
+APP_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+WEB_DIR = APP_DIR / "frontend" / "web"
+app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
+
+
+@app.get("/", include_in_schema=False)
+def index():
+    return FileResponse(WEB_DIR / "index.html")
 
 
 @app.get("/health")
@@ -197,3 +207,9 @@ def update_settings(update: SettingsUpdate):
 def test_openalex_key(body: KeyTest):
     """Check a key before saving it (or the saved key when none is given)."""
     return openalex.check_key(body.api_key or None)
+
+
+@app.post("/poster", response_class=HTMLResponse)
+def poster(request: PosterRequest):
+    """The interactive tech-tree page for a map returned by /flow."""
+    return render_poster(request.flow, request.title)

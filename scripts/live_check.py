@@ -10,7 +10,6 @@ Writes the poster to data/live-map.html (or --out).
 """
 
 import argparse
-import sys
 import time
 from collections import Counter
 from pathlib import Path
@@ -18,11 +17,10 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "frontend"))
 
-from backend import main  # noqa: E402
-from backend.services import openalex  # noqa: E402
-from techtree import layout, render_html  # noqa: E402
+from backend import main
+from backend.services import openalex
+from backend.services.techtree import layout, render_html
 
 
 def check(label: str, ok: bool, detail: str = "") -> bool:

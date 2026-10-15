@@ -113,3 +113,8 @@ class SettingsUpdate(BaseModel):
 
 class KeyTest(BaseModel):
     api_key: Optional[str] = Field(default=None, max_length=200)
+
+
+class PosterRequest(BaseModel):
+    flow: dict
+    title: str = Field(default="My Research", max_length=300)
