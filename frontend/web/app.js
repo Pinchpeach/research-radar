@@ -496,8 +496,27 @@ $("settings-form").addEventListener("submit", async (event) => {
   }
 });
 
+// ───────────── version & updates ─────────────
+
+async function checkVersion() {
+  let info;
+  try { info = await api("GET", "/version"); } catch { return; }
+  $("app-version").textContent = `v${info.version}`;
+  if (info.update_available) {
+    const pill = $("update-pill");
+    pill.textContent = `새 버전 v${info.latest.version}`;
+    pill.title = "GitHub Releases에서 내려받기";
+    pill.href = info.latest.url;
+    pill.hidden = false;
+    $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: `새 버전 v${info.latest.version}이 있습니다 ↗` }));
+  } else {
+    $("update-state").textContent = info.latest ? "· 최신 버전입니다" : "";
+  }
+}
+
 // ───────────── start ─────────────
 
 loadSettings();
 loadBookmarks();
+checkVersion();
 loadEvaluations();

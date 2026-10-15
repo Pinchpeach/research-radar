@@ -7,6 +7,8 @@ from pathlib import Path
 from PyInstaller.utils.hooks import collect_submodules
 
 ROOT = Path(SPECPATH).parent  # noqa: F821 - provided by PyInstaller
+VERSION = {}
+exec((ROOT / "backend" / "version.py").read_text(encoding="utf-8"), VERSION)
 
 hiddenimports = (
     collect_submodules("uvicorn")  # protocol/loop implementations are picked at runtime
@@ -40,5 +42,5 @@ if sys.platform == "darwin":
         coll,
         name="Research Radar.app",
         bundle_identifier="org.researchradar.desktop",
-        info_plist={"NSHighResolutionCapable": True, "CFBundleShortVersionString": "0.3.0"},
+        info_plist={"NSHighResolutionCapable": True, "CFBundleShortVersionString": VERSION["__version__"]},
     )

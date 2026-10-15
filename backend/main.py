@@ -11,7 +11,8 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import judgments, settings
+from backend import judgments, settings, updates
+from backend.version import __version__
 from backend.models import (
     Bookmark,
     BookmarkIn,
@@ -35,7 +36,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.3.0"
+VERSION = __version__
 CITING_PER_SEED = 25
 CORE_REFERENCES = 25  # outside works cited by many candidates, added to the pool (some fail checks)
 CORE_MIN_CITERS = 3
@@ -291,3 +292,9 @@ def list_evaluations():
 def delete_evaluation(run_id: str):
     if not judgments.delete_run(run_id):
         raise HTTPException(status_code=404, detail="Evaluation run not found")
+
+
+@app.get("/version")
+def version():
+    """This app's version and, when GitHub can be reached, whether a newer release exists."""
+    return updates.update_info()

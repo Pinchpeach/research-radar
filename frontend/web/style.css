@@ -59,6 +59,7 @@ a { color: var(--accent); }
   padding: 4px 10px; font-size: 12px; cursor: pointer; white-space: nowrap;
 }
 .pill.ok { color: var(--ok); }
+.pill.update { color: var(--accent); border-color: var(--accent); text-decoration: none; font-weight: 600; }
 .pill.warn { color: var(--danger); }
 .banner {
   background: #fff4d6; color: #6b4b00; padding: 10px 20px; border-bottom: 1px solid #f0dca0;
