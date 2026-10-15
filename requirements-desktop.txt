@@ -1,0 +1,12 @@
+# Desktop app (no Streamlit): backend + native window + packaging
+fastapi
+uvicorn
+requests
+scikit-learn
+numpy
+pydantic>=2
+python-dotenv
+openai>=1.40
+platformdirs
+pywebview>=5
+pyinstaller>=6

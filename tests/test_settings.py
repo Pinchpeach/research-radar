@@ -1,6 +1,7 @@
 import os
 import stat
 
+import pytest
 import requests
 from fastapi.testclient import TestClient
 
@@ -20,6 +21,8 @@ def test_saved_value_wins_over_environment_and_can_be_cleared(monkeypatch):
 
 
 def test_settings_file_is_private():
+    if os.name == "nt":
+        pytest.skip("POSIX permission bits; Windows protects the per-user app-data folder instead")
     settings.save({"openalex_api_key": "abc"})
     mode = stat.S_IMODE(os.stat(settings.settings_path()).st_mode)
     assert mode == 0o600

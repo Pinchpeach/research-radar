@@ -199,6 +199,7 @@ def test_cluster_label_prefers_phrases():
 
 
 def test_flow_figure_builds():
+    pytest.importorskip("plotly")  # the Plotly chart belongs to the Streamlit dev UI only
     import sys
     from pathlib import Path
 
