@@ -50,6 +50,14 @@ def normalize_work(work: dict) -> dict:
     }
 
 
+class RateLimited(requests.HTTPError):
+    """OpenAlex refused the request because the (key or shared-IP) budget is used up."""
+
+    def __init__(self, message: str, retry_after: int | None, response: requests.Response):
+        super().__init__(message, response=response)
+        self.retry_after = retry_after
+
+
 def _params(**params) -> dict:
     email = os.getenv("OPENALEX_EMAIL")
     if email:
@@ -57,8 +65,25 @@ def _params(**params) -> dict:
     return params
 
 
+def _headers() -> dict:
+    # Requests without a key share a small daily budget per IP address; a free key has its own.
+    key = os.getenv("OPENALEX_API_KEY")
+    return {"Authorization": f"Bearer {key}"} if key else {}
+
+
 def _get(url: str, params: dict) -> dict:
-    response = _session.get(url, params=params, timeout=TIMEOUT)
+    response = _session.get(url, params=params, headers=_headers(), timeout=TIMEOUT)
+    if response.status_code == 429:
+        try:
+            message = response.json().get("message", "")
+        except ValueError:
+            message = ""
+        retry = response.headers.get("retry-after")
+        raise RateLimited(
+            message or "OpenAlex rate limit reached.",
+            int(retry) if retry and retry.isdigit() else None,
+            response,
+        )
     response.raise_for_status()
     return response.json()
 

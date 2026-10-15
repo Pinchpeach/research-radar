@@ -248,3 +248,48 @@ def test_judgments_roundtrip(tmp_path):
     [summary] = summarize(load_rows(path))
     assert summary["judged"] == 2
     assert summary["p@10"] == 1.0
+
+
+def test_api_key_is_sent_as_bearer(monkeypatch):
+    seen = {}
+
+    class Resp:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"results": []}
+
+    def fake_get(url, params, headers, timeout):
+        seen["headers"] = headers
+        return Resp()
+
+    monkeypatch.setattr(openalex._session, "get", fake_get)
+    monkeypatch.setenv("OPENALEX_API_KEY", "k123")
+    openalex.search_papers("q", 1)
+    assert seen["headers"] == {"Authorization": "Bearer k123"}
+    monkeypatch.delenv("OPENALEX_API_KEY")
+    openalex.search_papers("q", 1)
+    assert seen["headers"] == {}
+
+
+def test_rate_limit_becomes_429_with_guidance(monkeypatch):
+    import requests
+
+    response = requests.Response()
+    response.status_code = 429
+    response.headers["retry-after"] = "7200"
+    response._content = b'{"message": "Insufficient budget."}'
+    monkeypatch.setattr(openalex._session, "get", lambda *a, **k: response)
+    monkeypatch.delenv("OPENALEX_API_KEY", raising=False)
+
+    with pytest.raises(openalex.RateLimited) as err:
+        openalex.search_papers("q", 1)
+    assert err.value.retry_after == 7200 and "Insufficient budget" in str(err.value)
+
+    res = api.post("/search", json={"query": QUERY})
+    assert res.status_code == 429
+    assert "OPENALEX_API_KEY" in res.json()["detail"] and "3 h" in res.json()["detail"]

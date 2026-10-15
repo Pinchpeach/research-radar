@@ -85,6 +85,7 @@ pip install -r requirements.txt
 Optional settings (shell or a `.env` file in the repository root):
 
 ```bash
+OPENALEX_API_KEY=...                # free key from openalex.org; without one, requests share a small daily budget per IP
 OPENALEX_EMAIL=you@example.com      # OpenAlex polite pool
 OPENAI_API_KEY=sk-...               # enables semantic ranking
 RADAR_EMBEDDINGS=off                # disable embeddings even when a key is set

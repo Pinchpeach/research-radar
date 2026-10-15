@@ -46,6 +46,10 @@ def main_cli() -> int:
     started = time.time()
     try:
         openalex.search_papers(args.query, 1)
+    except openalex.RateLimited as exc:
+        print(f"OpenAlex rate limit: {exc}")
+        print("Set OPENALEX_API_KEY (free at https://openalex.org) and run this again.")
+        return 2
     except Exception as exc:  # noqa: BLE001 - report any connectivity problem plainly
         print(f"Cannot reach OpenAlex ({exc.__class__.__name__}: {exc}).")
         print("Allow api.openalex.org in the network settings, then run this again.")

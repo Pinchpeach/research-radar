@@ -1,4 +1,5 @@
 import logging
+import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -46,6 +47,16 @@ def health():
     return {"status": "ok", "version": VERSION, "semantic": embeddings.enabled()}
 
 
+def rate_limit_detail(exc: "openalex.RateLimited") -> str:
+    hours = f" Try again in about {exc.retry_after // 3600 + 1} h." if exc.retry_after else ""
+    if os.getenv("OPENALEX_API_KEY"):
+        return f"OpenAlex rate limit reached for your API key.{hours}"
+    return (
+        "OpenAlex's shared free budget for this network is used up. Set OPENALEX_API_KEY "
+        f"(free at https://openalex.org) to use your own budget.{hours}"
+    )
+
+
 def candidate_pool_size(limit: int) -> int:
     return min(openalex.MAX_PER_PAGE, max(50, limit * 3))
 
@@ -86,6 +97,8 @@ def search(request: SearchRequest):
             else:
                 unresolved.append(identifier)
         candidates = gather_candidates(request, seeds)
+    except openalex.RateLimited as exc:
+        raise HTTPException(status_code=429, detail=rate_limit_detail(exc)) from exc
     except RequestException as exc:
         raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
 
