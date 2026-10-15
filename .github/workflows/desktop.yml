@@ -1,8 +1,9 @@
 name: Desktop app
 
 # Every push that touches the app: test, build and smoke-test on Windows, macOS and Linux.
-# Pushing a version tag (v1.2.3, must match backend/version.py) also publishes a GitHub
-# Release with the three packages.
+# A GitHub Release with the three packages is published either by pushing a version tag
+# (v1.2.3, must match backend/version.py) or by running this workflow by hand on main with
+# "release" ticked, which tags the version in backend/version.py itself.
 on:
   push:
     # A push trigger that lists only tags would stop running for branches, so name both.
@@ -16,6 +17,11 @@ on:
       - "requirements-desktop.txt"
       - ".github/workflows/desktop.yml"
   workflow_dispatch:
+    inputs:
+      release:
+        description: "Publish a release of the version in backend/version.py (main only)"
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -78,13 +84,30 @@ jobs:
 
   release:
     name: Publish release
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: >-
+      startsWith(github.ref, 'refs/tags/v') ||
+      (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
     needs: build # only when all three builds and smoke tests passed
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
       - uses: actions/checkout@v4
+
+      - name: Release tag
+        id: tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            tag="$GITHUB_REF_NAME"
+          else
+            tag="v$(python3 desktop/release.py version)"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" > /dev/null; then
+              echo "::error::$tag is already released; raise __version__ in backend/version.py first"
+              exit 1
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Publishing $tag"
 
       - uses: actions/download-artifact@v4
         with:
@@ -98,13 +121,15 @@ jobs:
           cat SHA256SUMS.txt
 
       - name: Release notes
-        run: python desktop/release.py notes "$GITHUB_REF_NAME" > release-notes.md
+        run: python3 desktop/release.py notes "${{ steps.tag.outputs.tag }}" > release-notes.md
 
       - uses: softprops/action-gh-release@v2
         with:
-          name: Research Radar ${{ github.ref_name }}
+          tag_name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }} # creates the tag here when run by hand
+          name: Research Radar ${{ steps.tag.outputs.tag }}
           body_path: release-notes.md
           generate_release_notes: true # appends the merged PRs since the previous release
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           files: release/*
           fail_on_unmatched_files: true
