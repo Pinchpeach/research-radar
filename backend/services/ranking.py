@@ -6,7 +6,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 RECENCY_HALF_LIFE_YEARS = 5
-DEFAULT_WEIGHTS = {"relevance": 0.6, "seed": 0.2, "recency": 0.1, "impact": 0.1}
+DEFAULT_WEIGHTS = {"relevance": 0.35, "influence": 0.45, "seed": 0.2, "recency": 0.05, "impact": 0.15}
 
 
 def paper_text(paper: dict) -> str:
@@ -36,6 +36,62 @@ def impact_values(papers: list[dict], current_year: int) -> np.ndarray:
     return np.array(values)
 
 
+def plausible_citation(citing_year: int | None, cited_year: int | None) -> bool:
+    """A paper can't cite one published later. Allow a year of slack for preprints vs. journals;
+    anything beyond that is an error in the citation data."""
+    return not citing_year or not cited_year or cited_year <= citing_year + 1
+
+
+def _short(paper_id: str) -> str:
+    return paper_id.rstrip("/").rsplit("/", 1)[-1]
+
+
+def citation_counts_within(papers: list[dict]) -> np.ndarray:
+    """How many papers in the set cite each paper (ignoring impossible citations)."""
+    index = {_short(p["id"]): i for i, p in enumerate(papers)}
+    counts = np.zeros(len(papers))
+    for paper in papers:
+        own = _short(paper["id"])
+        for ref in set(paper.get("referenced_works") or []):
+            j = index.get(ref)
+            if j is not None and ref != own and plausible_citation(paper.get("year"), papers[j].get("year")):
+                counts[j] += 1
+    return counts
+
+
+def citation_influence(papers: list[dict], start: np.ndarray, damping: float = 0.85, iterations: int = 60) -> np.ndarray:
+    """Personalized PageRank over the citation graph of the candidates.
+
+    A reader starts at papers in proportion to `start` (their relevance) and keeps following
+    references. Papers the relevant literature keeps building on collect the most weight:
+    the core papers for understanding how the field developed.
+    """
+    n = len(papers)
+    if n == 0:
+        return np.zeros(0)
+    index = {_short(p["id"]): i for i, p in enumerate(papers)}
+    out: list[list[int]] = []
+    for i, paper in enumerate(papers):
+        refs = {index[r] for r in paper.get("referenced_works") or [] if r in index}
+        out.append([j for j in refs if j != i and plausible_citation(paper.get("year"), papers[j].get("year"))])
+    teleport = np.clip(np.asarray(start, dtype=float), 0, None) + 1e-9
+    teleport /= teleport.sum()
+    rank = teleport.copy()
+    via_citations = np.zeros(n)
+    for _ in range(iterations):
+        via_citations = np.zeros(n)
+        dangling = 0.0
+        for i, targets in enumerate(out):
+            if targets:
+                via_citations[targets] += damping * rank[i] / len(targets)
+            else:
+                dangling += damping * rank[i]
+        rank = via_citations + ((1 - damping) + dangling) * teleport
+    # Return only what arrives along citation links: the restart share (and the share returned
+    # by papers citing nothing in the set) is spread by relevance and would just repeat it.
+    return via_citations
+
+
 def rank_papers(
     query: str,
     papers: list[dict],
@@ -51,6 +107,8 @@ def rank_papers(
       `semantic` (embedding similarity per paper) when it is given
     - seed: 1 for papers that cite or are cited by a seed, otherwise text similarity to the
       closest seed, scaled to the best candidate
+    - influence: how much the relevant candidates build on the paper (personalized PageRank
+      over their citations), damped for papers whose topic is unrelated; scaled to the best
     - recency: halves every RECENCY_HALF_LIFE_YEARS
     - impact: log citations per year, scaled to the best candidate
     The final score is the weighted mean × 100. It ranks candidates; it is not a probability.
@@ -92,11 +150,17 @@ def rank_papers(
 
     recency = np.array([recency_score(paper.get("year"), current_year) for paper in papers])
     impact = scale_to_max(impact_values(papers, current_year))
+    # sqrt spreads PageRank's long tail; the relevance gate keeps generic method papers
+    # (cited by everyone, about something else) from taking over
+    influence = np.sqrt(scale_to_max(citation_influence(papers, relevance))) * (0.3 + 0.7 * relevance)
+    influence = scale_to_max(influence)
+    cited_within = citation_counts_within(papers)
 
     total_weight = sum(weights.values()) or 1.0
     combined = (
         weights["relevance"] * relevance
         + weights["seed"] * seed_scores
+        + weights["influence"] * influence
         + weights["recency"] * recency
         + weights["impact"] * impact
     ) / total_weight
@@ -108,8 +172,10 @@ def rank_papers(
             score=round(float(combined[index]) * 100, 1),
             relevance_score=round(float(tfidf[index]) * 100, 1),
             seed_link=links[index],
+            cited_by_results=int(cited_within[index]),
             scores={
                 "relevance": round(float(relevance[index]), 3),
+                "influence": round(float(influence[index]), 3),
                 "seed": round(float(seed_scores[index]), 3),
                 "recency": round(float(recency[index]), 3),
                 "impact": round(float(impact[index]), 3),

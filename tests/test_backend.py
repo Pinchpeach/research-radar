@@ -293,3 +293,65 @@ def test_rate_limit_becomes_429_with_guidance(monkeypatch):
     res = api.post("/search", json={"query": QUERY})
     assert res.status_code == 429
     assert "OPENALEX_API_KEY" in res.json()["detail"] and "3 h" in res.json()["detail"]
+
+
+# ---------- flow importance (influence) ----------
+
+
+def test_influence_rewards_papers_the_relevant_literature_builds_on():
+    from backend.services.ranking import citation_influence
+
+    core = paper("W1", "Graph convolutional networks", "graph convolution", 2016, 5000)
+    followers = [paper(f"W{i}", f"Graph network variant {i}", "graph network", 2020, 10, refs=["W1"]) for i in range(2, 6)]
+    loner = paper("W9", "Graph networks again", "graph network", 2021, 10)
+    papers = [core, *followers, loner]
+    received = citation_influence(papers, np.ones(len(papers)))
+    assert received.argmax() == 0  # everyone builds on W1
+    assert received[-1] == pytest.approx(0, abs=1e-9)  # nobody cites the loner
+
+
+def test_key_paper_outranks_relevant_but_uncited_paper():
+    core = paper("W1", "Semi-supervised classification with graph convolutional networks", "graph convolution layer", 2016, 7000)
+    followers = [paper(f"W{i}", f"Graph neural networks for task {i}", "graph neural networks", 2022, 20, refs=["W1"]) for i in range(2, 7)]
+    ranked = rank_papers("graph neural networks", [core, *followers], current_year=2026)
+    assert ranked[0]["id"].endswith("W1")
+    assert ranked[0]["scores"]["influence"] == 1.0 and ranked[0]["cited_by_results"] == 5
+    # with the flow-importance weight off, plain relevance puts the title matches first
+    plain = rank_papers("graph neural networks", [core, *followers], weights={"influence": 0}, current_year=2026)
+    assert not plain[0]["id"].endswith("W1")
+
+
+def test_influence_is_damped_for_off_topic_hubs():
+    on_topic = paper("W1", "Graph attention networks", "graph attention networks neural", 2017, 8000)
+    generic = paper("W2", "Adam: a method for stochastic optimization", "stochastic optimization gradient", 2014, 90000)
+    followers = [paper(f"W{i}", f"Graph neural network model {i}", "graph neural network attention", 2021, 5, refs=["W1", "W2"])
+                 for i in range(3, 8)]
+    ranked = {p["id"].rsplit("/", 1)[-1]: p for p in rank_papers("graph neural networks", [on_topic, generic, *followers])}
+    assert ranked["W1"]["scores"]["influence"] > ranked["W2"]["scores"]["influence"]
+    assert ranked["W1"]["score"] > ranked["W2"]["score"]
+
+
+def test_influence_ignores_impossible_citations():
+    from backend.services.ranking import citation_counts_within
+
+    old = paper("W1", "Old", "x", 2000, 1, refs=["W2"])
+    future = paper("W2", "From the future", "x", 2025, 1)
+    assert citation_counts_within([old, future]).tolist() == [0, 0]
+
+
+def test_search_adds_core_references(monkeypatch):
+    monkeypatch.setattr(embeddings, "enabled", lambda: False)
+
+    def fake_get(url, params):
+        flt = params.get("filter", "")
+        if "ids.openalex" in flt:
+            return {"results": [work("W500", "Semi-supervised classification with graph convolutional networks",
+                                     "graph convolution", 2016, 7000)]}
+        return {"results": [work(f"W{i}", f"Graph neural networks study {i}", "graph neural networks", 2022, 10, refs=["W500"])
+                            for i in range(1, 6)]}
+
+    monkeypatch.setattr(openalex, "_get", fake_get)
+    body = api.post("/search", json={"query": "graph neural networks", "limit": 10}).json()
+    core = [p for p in body["papers"] if p["id"].endswith("W500")]
+    assert core and core[0]["core_reference"] is True and core[0]["cited_by_results"] == 5
+    assert body["papers"][0]["id"].endswith("W500")  # the paper every result builds on comes first

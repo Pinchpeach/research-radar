@@ -4,10 +4,11 @@ from pydantic import BaseModel, Field, model_validator
 
 
 class Weights(BaseModel):
-    relevance: float = Field(default=0.6, ge=0)
+    relevance: float = Field(default=0.35, ge=0)
+    influence: float = Field(default=0.45, ge=0)  # how much the relevant literature builds on a paper
     seed: float = Field(default=0.2, ge=0)
-    recency: float = Field(default=0.1, ge=0)
-    impact: float = Field(default=0.1, ge=0)
+    recency: float = Field(default=0.05, ge=0)
+    impact: float = Field(default=0.15, ge=0)
 
 
 class SearchRequest(BaseModel):
@@ -28,6 +29,7 @@ class SearchRequest(BaseModel):
 
 class Scores(BaseModel):
     relevance: float
+    influence: float
     seed: float
     recency: float
     impact: float
@@ -52,6 +54,8 @@ class PaperData(BaseModel):
 
 class Paper(PaperData):
     seed_link: bool = False
+    core_reference: bool = False  # found because many results cite it, not by the text search
+    cited_by_results: int = 0
     score: float
     relevance_score: float
     scores: Scores

@@ -4,6 +4,7 @@ const $ = (id) => document.getElementById(id);
 const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "venue", "authors", "citations",
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
+const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
 
 const state = { run: null, bookmarks: [], flow: null, poster: null, posterTitle: "", evalMode: false, judgments: {} };
 
@@ -101,6 +102,14 @@ function paperCard(paper, { rank, query, extra } = {}) {
   node.querySelector(".meta").textContent = metaLine(paper);
 
   const chips = node.querySelector(".chips");
+  const influence = paper.scores && paper.scores.influence;
+  if (influence >= KEY_PAPER) {
+    const why = paper.cited_by_results ? `검색 결과 ${paper.cited_by_results}편이 인용` : "관련 논문들이 바탕으로 삼는 논문";
+    chips.append(el("span", { class: "chip key", text: "◆ 핵심 논문", title: `흐름 중요도 ${influence.toFixed(2)} · ${why}` }));
+  }
+  if (paper.core_reference) {
+    chips.append(el("span", { class: "chip", text: "📌 검색어 밖 핵심 참고문헌", title: "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문" }));
+  }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: "🔗 시드와 연결" }));
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
@@ -153,6 +162,12 @@ function paperCard(paper, { rank, query, extra } = {}) {
 document.querySelectorAll("[data-weight]").forEach((range) => {
   const out = range.nextElementSibling;
   range.addEventListener("input", () => (out.value = Number(range.value).toFixed(2)));
+});
+$("reset-weights").addEventListener("click", () => {
+  document.querySelectorAll("[data-weight]").forEach((range) => {
+    range.value = range.defaultValue;
+    range.nextElementSibling.value = Number(range.value).toFixed(2);
+  });
 });
 
 $("search-form").addEventListener("submit", async (event) => {
@@ -253,7 +268,7 @@ async function loadEvaluations() {
   $("eval-table").hidden = runs.length === 0;
   $("eval-table").querySelector("tbody").replaceChildren(...runs.map((r) => {
     const w = (r.settings && r.settings.weights) || {};
-    const weights = ["relevance", "seed", "recency", "impact"].map((k) => (w[k] ?? 0).toFixed(2)).join(" · ");
+    const weights = ["relevance", "influence", "impact", "recency", "seed"].map((k) => (w[k] ?? 0).toFixed(2)).join(" · ");
     const when = r.saved_at ? new Date(r.saved_at).toLocaleString() : "—";
     const remove = el("button", { text: "삭제", title: "이 평가 기록 삭제" });
     remove.addEventListener("click", async () => {

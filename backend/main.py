@@ -1,4 +1,5 @@
 import logging
+import math
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -35,6 +36,9 @@ logger = logging.getLogger(__name__)
 
 VERSION = "0.3.0"
 CITING_PER_SEED = 25
+CORE_REFERENCES = 25  # outside works cited by many candidates, added to the pool (some fail checks)
+CORE_MIN_CITERS = 3
+CORE_MIN_SHARE = 0.05
 REFERENCES_PER_SEED = 50
 
 app = FastAPI(title="Research Radar API", version=VERSION)
@@ -75,6 +79,24 @@ def candidate_pool_size(limit: int) -> int:
     return min(openalex.MAX_PER_PAGE, max(50, limit * 3))
 
 
+def core_references(candidates: list[dict], years: dict) -> list[dict]:
+    """Classic papers the candidates keep citing, even when their text doesn't match the query
+    (e.g. "Semi-supervised classification with graph convolutional networks" for "graph neural
+    networks"). They join the pool and compete on relevance and influence like any other."""
+    min_count = max(CORE_MIN_CITERS, math.ceil(CORE_MIN_SHARE * len(candidates)))
+    wanted = outside_references(candidates, min_count=min_count, limit=CORE_REFERENCES)
+    if not wanted:
+        return []
+    try:
+        fetched = openalex.papers_by_ids([ref for ref, _ in wanted], **years)
+    except RequestException:
+        logger.warning("Could not fetch core references", exc_info=True)
+        return []
+    known = {paper["id"] for paper in candidates}
+    found = credible_foundations(candidates, fetched, min_count=min_count)
+    return [{**paper, "core_reference": True} for paper in found if paper["id"] not in known]
+
+
 def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
     years = {"year_from": request.year_from, "year_to": request.year_to}
     candidates = openalex.search_papers(request.query, candidate_pool_size(request.limit), **years)
@@ -95,6 +117,7 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
             unique[paper["id"]] = paper
 
     papers, _ = dedupe(list(unique.values()))  # preprint + journal versions count once
+    papers += core_references(papers, years)
     if request.require_abstract:
         papers = [paper for paper in papers if paper["abstract"]]
     return papers
