@@ -1,23 +1,39 @@
 import logging
+from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
+from fastapi.responses import PlainTextResponse
 from requests import RequestException
 
-from backend.models import SearchRequest, SearchResponse
+from backend.models import (
+    Bookmark,
+    BookmarkIn,
+    BookmarkUpdate,
+    FlowRequest,
+    SearchRequest,
+    SearchResponse,
+)
 from backend.services import embeddings, openalex
+from backend.services.flow import build_flow, outside_references, short_id
 from backend.services.ranking import paper_text, rank_papers
+from backend.storage import BookmarkStore, to_bibtex
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 logger = logging.getLogger(__name__)
 
-VERSION = "0.2.0"
+VERSION = "0.3.0"
 CITING_PER_SEED = 25
 REFERENCES_PER_SEED = 50
 
 app = FastAPI(title="Research Radar API", version=VERSION)
+
+
+@lru_cache
+def get_store() -> BookmarkStore:
+    return BookmarkStore()
 
 
 @app.get("/")
@@ -87,3 +103,61 @@ def search(request: SearchRequest):
         "unresolved_seeds": unresolved,
         "papers": papers,
     }
+
+
+# ---------- bookmarks ----------
+
+
+@app.get("/bookmarks", response_model=list[Bookmark])
+def list_bookmarks(tag: str | None = None, store: BookmarkStore = Depends(get_store)):
+    return store.all(tag)
+
+
+@app.put("/bookmarks", response_model=Bookmark)
+def save_bookmark(item: BookmarkIn, store: BookmarkStore = Depends(get_store)):
+    return store.save(item.paper.model_dump(), item.note, item.tags, item.query)
+
+
+@app.get("/bookmarks/export.bib", response_class=PlainTextResponse)
+def export_bibtex(tag: str | None = None, store: BookmarkStore = Depends(get_store)):
+    return to_bibtex(store.all(tag))
+
+
+@app.patch("/bookmarks/{bookmark_id}", response_model=Bookmark)
+def update_bookmark(bookmark_id: str, item: BookmarkUpdate, store: BookmarkStore = Depends(get_store)):
+    updated = store.update(bookmark_id, item.note, item.tags)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Bookmark not found")
+    return updated
+
+
+@app.delete("/bookmarks/{bookmark_id}", status_code=204)
+def delete_bookmark(bookmark_id: str, store: BookmarkStore = Depends(get_store)):
+    if not store.delete(bookmark_id):
+        raise HTTPException(status_code=404, detail="Bookmark not found")
+
+
+# ---------- research flow ----------
+
+
+@app.post("/flow")
+def research_flow(request: FlowRequest, store: BookmarkStore = Depends(get_store)):
+    papers = [paper.model_dump() for paper in request.papers]
+    if request.include_bookmarks:
+        papers.extend(bookmark["paper"] for bookmark in store.all())
+    if not papers:
+        raise HTTPException(status_code=400, detail="No papers to map. Search or bookmark papers first.")
+
+    foundations = []
+    if request.include_foundations and request.max_foundations:
+        wanted = outside_references(papers, limit=request.max_foundations)
+        if wanted:
+            counts = dict(wanted)
+            try:
+                foundations = openalex.papers_by_ids([ref for ref, _ in wanted])
+            except RequestException:
+                logger.warning("Could not fetch foundational works", exc_info=True)
+            for paper in foundations:
+                paper["cited_by_in_set"] = counts.get(short_id(paper["id"]), 0)
+
+    return build_flow(papers, bookmarked=store.ids(), foundations=foundations)

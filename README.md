@@ -1,6 +1,14 @@
 # Research Radar
 
-Discover and rank academic papers by how relevant they are to your research topic.
+Discover papers for your research topic, bookmark the ones that matter, and map how the field developed.
+
+The Streamlit UI has three tabs:
+
+| Tab | What it does |
+|---|---|
+| 🔎 **Discover** | Ranked search over OpenAlex (below). ☆ Bookmark any result; optionally use your bookmarks as seed papers. |
+| ★ **Bookmarks** | Saved papers with notes and tags, filter by tag, export BibTeX. Stored in `data/radar.db` (SQLite). |
+| 🧭 **Research flow** | A map of the search results and/or bookmarks: topics as lanes, publication year left to right, citation links between papers, plus a written storyline. |
 
 ## How it works
 
@@ -15,6 +23,18 @@ Discover and rank academic papers by how relevant they are to your research topi
 3. **Rank.** The final score is the weighted mean × 100. The default weights are relevance 0.6, seed 0.2, recency 0.1, and impact 0.1, and you can change them per search. The score ranks candidates; **it is not a probability**.
 4. **Evaluate.** In the UI, mark results Relevant, Partial, or Not relevant to see Precision@10/20 and nDCG@20, then save the judgments to compare ranking settings over time.
 
+## Research flow map
+
+`POST /flow` turns a set of papers into:
+
+- **Topics:** TF-IDF + k-means clusters (2–6, depending on how many papers), each labeled by its top phrases and ordered by when the topic emerged.
+- **Citation links:** edges between papers in the set, plus cross-topic counts ("topic A → topic B: 3 citations").
+- **Foundational works:** older papers that at least two papers in the set cite but the search did not return. These are fetched from OpenAlex, up to 10.
+- **Storyline per topic:** *origin* (earliest paper), *hub* (most cited within the map), and *frontier* (newest papers).
+- **Key lineage:** the longest chain of papers that each cite the previous one.
+
+In the chart, a paper's role is shown by both color and shape: ● search result, ★ bookmarked, ◆ foundational. Marker size grows with total citations, and a table view lists every paper.
+
 ## Architecture
 
 - **Backend:** FastAPI (`backend/`)
@@ -26,15 +46,19 @@ Discover and rank academic papers by how relevant they are to your research topi
 ```text
 research-radar/
 ├── backend/
-│   ├── main.py              # API: /search, /health
+│   ├── main.py              # API: /search, /bookmarks, /flow, /health
 │   ├── models.py            # request / response schemas
+│   ├── storage.py           # SQLite bookmarks, BibTeX export
 │   ├── evaluation.py        # Precision@k, nDCG@k
 │   ├── judgments.py         # save and summarize relevance judgments
 │   └── services/
 │       ├── openalex.py      # search, citing papers, references, DOI/ID lookup
 │       ├── ranking.py       # hybrid scoring
+│       ├── flow.py          # topics, citation graph, storyline, lineage
 │       └── embeddings.py    # optional semantic similarity
-├── frontend/app.py
+├── frontend/
+│   ├── app.py               # Streamlit UI
+│   └── flow_chart.py        # Plotly research-flow figure
 ├── scripts/evaluate.py      # metrics per saved run
 └── tests/
 ```
@@ -57,6 +81,7 @@ OPENAI_API_KEY=sk-...               # enables semantic ranking
 RADAR_EMBEDDINGS=off                # disable embeddings even when a key is set
 RADAR_EMBEDDING_MODEL=text-embedding-3-small
 RADAR_API_URL=http://localhost:8000 # where the UI finds the API
+RADAR_DB=data/radar.db              # bookmark database
 ```
 
 Start the API:
@@ -87,7 +112,19 @@ streamlit run frontend/app.py
 }
 ```
 
-Only `query` is required. The response includes `papers` (with `score`, a `scores` breakdown, `seed_link`, venue, and URL), `candidates`, `semantic` (whether embeddings were used), and the resolved and unresolved seeds. OpenAlex failures return `502`.
+Only `query` is required. The response includes `papers` (with `score`, a `scores` breakdown, `seed_link`, venue, URL, and `referenced_works`), `candidates`, `semantic` (whether embeddings were used), and the resolved and unresolved seeds. OpenAlex failures return `502`.
+
+Bookmarks (IDs are short OpenAlex IDs such as `W2058532123`):
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /bookmarks?tag=` | List, newest first |
+| `PUT /bookmarks` `{paper, note?, tags?, query?}` | Add, or refresh the stored paper (keeps the existing note and tags) |
+| `PATCH /bookmarks/{id}` `{note?, tags?}` | Edit note and tags |
+| `DELETE /bookmarks/{id}` | Remove |
+| `GET /bookmarks/export.bib?tag=` | BibTeX export |
+
+Research flow: `POST /flow` `{papers: [...], include_bookmarks, include_foundations, max_foundations}` returns `nodes`, `edges`, `clusters`, `cluster_links`, and `chain`.
 
 ## Evaluating ranking quality
 
@@ -108,4 +145,6 @@ python -m pytest
 
 ## Next
 
-AI summaries and a Change Score, once evaluation shows the ranking is good enough.
+- AI summaries of each topic's storyline.
+- A Change Score for new papers in a bookmarked topic.
+- Saved maps you can compare over time.

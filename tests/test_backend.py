@@ -79,7 +79,7 @@ def test_relevance_dominates_by_default():
     ranked = rank_papers(QUERY, candidates(), current_year=2026)
     assert [p["id"].rsplit("/", 1)[-1] for p in ranked][0] == "W1"
     assert ranked[-1]["id"].endswith("W2")
-    assert "referenced_works" not in ranked[0]
+    assert "referenced_works" in ranked[0]
     for p in ranked:
         assert 0 <= p["score"] <= 100
         assert all(0 <= v <= 1 for v in p["scores"].values())

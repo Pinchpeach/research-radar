@@ -33,16 +33,22 @@ class Scores(BaseModel):
     impact: float
 
 
-class Paper(BaseModel):
+class PaperData(BaseModel):
+    """Bibliographic fields shared by search results, bookmarks and flow input."""
+
     id: str
-    title: str
-    abstract: str
+    title: str = ""
+    abstract: str = ""
     year: Optional[int] = None
     doi: Optional[str] = None
     url: Optional[str] = None
     venue: Optional[str] = None
-    authors: list[str]
-    citations: int
+    authors: list[str] = Field(default_factory=list)
+    citations: int = 0
+    referenced_works: list[str] = Field(default_factory=list)
+
+
+class Paper(PaperData):
     seed_link: bool = False
     score: float
     relevance_score: float
@@ -63,3 +69,32 @@ class SearchResponse(BaseModel):
     seeds: list[Seed]
     unresolved_seeds: list[str]
     papers: list[Paper]
+
+
+class BookmarkIn(BaseModel):
+    paper: PaperData
+    note: str = ""
+    tags: Optional[list[str]] = None
+    query: Optional[str] = None
+
+
+class BookmarkUpdate(BaseModel):
+    note: Optional[str] = None
+    tags: Optional[list[str]] = None
+
+
+class Bookmark(BaseModel):
+    id: str
+    paper: PaperData
+    note: str
+    tags: list[str]
+    query: Optional[str] = None
+    created_at: str
+    updated_at: str
+
+
+class FlowRequest(BaseModel):
+    papers: list[PaperData] = Field(default_factory=list, max_length=300)
+    include_bookmarks: bool = False
+    include_foundations: bool = True
+    max_foundations: int = Field(default=10, ge=0, le=30)

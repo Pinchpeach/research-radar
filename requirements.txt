@@ -7,3 +7,4 @@ streamlit
 pydantic>=2
 python-dotenv
 openai>=1.40
+plotly

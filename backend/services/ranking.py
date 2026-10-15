@@ -103,7 +103,7 @@ def rank_papers(
 
     ranked = []
     for index, paper in enumerate(papers):
-        item = {key: value for key, value in paper.items() if key != "referenced_works"}
+        item = dict(paper)
         item.update(
             score=round(float(combined[index]) * 100, 1),
             relevance_score=round(float(tfidf[index]) * 100, 1),
