@@ -332,7 +332,10 @@ with flow_tab:
         view = st.radio("View", ["Tech tree", "Timeline chart"], horizontal=True, label_visibility="collapsed")
         if view == "Tech tree":
             poster = render_tech_tree(flow, state.get("flow_title", "My Research"))
-            st.caption("Drag to pan, scroll to zoom, click a paper to trace what it builds on and what built on it.")
+            st.caption(
+                "The big picture first: topic rails and how they branch and feed each other. "
+                "Hover a dot, rail, or curve for details · click a dot to trace its lineage · scroll to zoom (titles appear)."
+            )
             shape = tech_tree_layout(flow)
             # the main column is ~1000px wide; size the frame to the poster's shape
             frame_height = int(min(900, max(480, 1000 * shape["height"] / shape["width"])))

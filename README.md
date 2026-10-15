@@ -33,13 +33,13 @@ The Streamlit UI has three tabs:
 - **Storyline per topic:** *origin* (earliest paper), *hub* (most cited within the map), and *frontier* (newest papers).
 - **Key lineage:** the longest chain of papers that each cite the previous one.
 
-The **Tech tree** view (default) draws this as a poster in the style of *The Map of Physics*:
+The **Tech tree** view (default) is an interactive map in the spirit of *The Map of Physics*, built to show the big picture first and details on demand:
 
-- Each topic is a colored rail running left to right through time, starting from a glowing **ORIGINS** node. Columns are eras (1–10 years, chosen automatically to keep a poster shape).
-- Papers are cards hanging from stations on their rail. Hub papers and key foundational works glow.
-- Citations between topics are rounded orthogonal connectors routed between the columns. Same-topic citations appear when you focus a paper.
-- Each rail ends in a **Frontier** box listing its newest papers.
-- Interaction: drag to pan, scroll to zoom, hover for details, and click a card to light up what it builds on and what built on it. **핵심 계보** highlights the key lineage. **Download poster (HTML)** saves the map as one standalone file.
+- **At a glance:** each topic is a rail that starts where the topic emerges. A topic that grew out of an earlier one branches off that topic's rail; the others branch off a glowing **ORIGINS** node. Citations between topics are bundled into one soft curve per topic pair, thicker for more citations. Only topic names and one key paper per rail are labeled.
+- **Dots on the lines:** every paper is a dot on its rail. Bigger means more cited, glow marks a key paper, ○ is a foundational work, and ★ is bookmarked.
+- **Hover** a dot to see the paper and its own citation lines. Hover a rail for the topic's origin, key paper, and latest papers. Hover a curve to see how many citations link two topics, with examples.
+- **Click** a dot to trace what it builds on and what built on it. **핵심 계보** highlights the key lineage.
+- **Zoom** with the scroll wheel; paper titles appear next to the dots (or turn them on with **제목**). **Download poster (HTML)** saves the map as one file.
 
 The **Timeline chart** view is a compact Plotly version. There, a paper's role is shown by both color and shape: ● search result, ★ bookmarked, ◆ foundational. Marker size grows with total citations, and a table view lists every paper.
 
