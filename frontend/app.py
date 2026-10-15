@@ -19,7 +19,8 @@ from techtree import render_html as render_tech_tree  # noqa: E402
 
 API_URL = os.getenv("RADAR_API_URL", "http://localhost:8000")
 JUDGMENTS = {"—": None, "Relevant": "relevant", "Partial": "partial", "Not relevant": "not_relevant"}
-PAPER_FIELDS = ("id", "title", "abstract", "year", "doi", "url", "venue", "authors", "citations", "referenced_works")
+PAPER_FIELDS = ("id", "title", "abstract", "year", "doi", "url", "venue", "authors", "citations", "referenced_works",
+                "keywords", "topic")
 MAX_SEEDS = 10
 
 st.set_page_config(page_title="Research Radar", page_icon="📡", layout="wide")

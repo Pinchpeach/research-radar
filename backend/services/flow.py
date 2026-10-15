@@ -29,6 +29,12 @@ GENERIC_WORDS = {
     "recent", "recently", "report", "reported", "result", "results", "review", "show", "shown",
     "shows", "studied", "studies", "study", "use", "used", "using", "various", "work",
 }
+# Words that add nothing to a topic name on their own.
+NAME_FILLER = {
+    "advanced", "advances", "analysis", "application", "applications", "approach", "method",
+    "methods", "research", "studies", "study", "technique", "techniques", "theory",
+}
+TOPIC_WEIGHT = 0.8
 # At least 3 characters, starting with a letter; hyphenated terms such as "x-ray" stay whole.
 TOKEN_PATTERN = r"(?u)\b[^\W\d_][\w-]+[^\W_]\b"
 
@@ -106,9 +112,133 @@ def label_terms(scores: np.ndarray, terms: np.ndarray, size: int = 3) -> list[st
     return picked[:size]
 
 
+def title_case(phrase: str) -> str:
+    small = {"and", "or", "of", "in", "on", "for", "the", "a", "an", "to", "via", "with"}
+    words = phrase.split()
+    return " ".join(
+        w if (w.isupper() and len(w) > 1) or any(c.isupper() for c in w[1:])  # keep GNN, X-ray, k-NN as written
+        else (w if i and w.lower() in small else w[:1].upper() + w[1:])
+        for i, w in enumerate(words)
+    )
+
+
+def _words(phrase: str) -> set[str]:
+    return {_stem(w) for w in re.findall(r"[a-z0-9]+", phrase.lower())}
+
+
+TRAILING_FILLER = re.compile(
+    r"\s+(?:and\s+)?(?:research|studies|techniques|applications|methods|analysis)$", re.IGNORECASE
+)
+MAX_NAME_CHARS = 44
+
+
+def tidy_phrase(phrase: str) -> str:
+    """'Pulsars and Gravitational Waves Research' -> 'Pulsars and Gravitational Waves'."""
+    phrase = " ".join(phrase.split())
+    return TRAILING_FILLER.sub("", phrase) or phrase
+
+
+def name_clusters(
+    papers: list[dict], assignment: list[int], fallback: list[str], query: str | None = None
+) -> list[str]:
+    """Readable topic names from OpenAlex keywords and topics.
+
+    1. Lift: phrases that papers in the cluster carry more often than papers in the whole map,
+       covering at least two papers (or 15% of a large cluster). The best one names the
+       cluster; a second keyword is added when it says something new and the name stays short,
+       e.g. "Drug Discovery & Molecular Generation".
+    2. Otherwise the cluster's most common phrase that no other cluster uses.
+    3. Otherwise the word-statistics label.
+    Phrases that only repeat the search query ("Advanced Graph Neural Networks" for "graph
+    neural networks") are skipped, and each phrase names one cluster only.
+    """
+    query_set = _words(query or "")
+    filler = {_stem(w) for w in NAME_FILLER}
+    n_total = len(papers)
+    k = max(assignment) + 1 if assignment else 0
+    sizes = Counter(assignment)
+
+    display: dict[str, str] = {}  # lowercase key -> phrase as OpenAlex writes it (keeps "CRISPR")
+    topic_keys: set[str] = set()
+
+    def phrases(paper: dict) -> set[str]:
+        out = set()
+        for raw, is_topic in [(kw, False) for kw in paper.get("keywords") or []] + [(paper.get("topic"), True)]:
+            if not raw:
+                continue
+            shown = tidy_phrase(raw)
+            key = shown.lower()
+            if _words(key) <= query_set | filler:
+                continue
+            display.setdefault(key, shown)
+            if is_topic:
+                topic_keys.add(key)
+            out.add(key)
+        return out
+
+    per_paper = [phrases(paper) for paper in papers]
+    overall = Counter(ph for phs in per_paper for ph in phs)
+    per_cluster = [Counter() for _ in range(k)]
+    for phs, c in zip(per_paper, assignment):
+        per_cluster[c].update(phs)
+
+    def support(c: int) -> int:
+        return min(sizes[c], max(2, math.ceil(0.15 * sizes[c])))
+
+    candidates = []  # (score, cluster, phrase)
+    for c in range(k):
+        for ph, count in per_cluster[c].items():
+            if count < support(c):
+                continue
+            lift = count / sizes[c] - overall[ph] / n_total
+            if lift > 0:
+                # OpenAlex topics are broad; on a tie a specific keyword names the cluster better
+                weight = TOPIC_WEIGHT if ph in topic_keys else 1.0
+                candidates.append((weight * lift * math.sqrt(count), c, ph))
+
+    chosen: dict[int, list[str]] = {c: [] for c in range(k)}
+    used: list[set[str]] = []
+
+    def free(ph: str) -> bool:
+        words = _words(ph)
+        return not any(words <= u or u <= words for u in used)
+
+    def take(c: int, ph: str) -> None:
+        chosen[c].append(ph)
+        used.append(_words(ph))
+
+    ranked = sorted(candidates, key=lambda t: (-t[0], t[2]))
+    for _, c, ph in ranked:  # first name for every cluster that has one
+        if not chosen[c] and free(ph):
+            take(c, ph)
+    for _, c, ph in ranked:  # optional second keyword
+        if len(chosen[c]) != 1 or ph in topic_keys or not free(ph):
+            continue
+        first = chosen[c][0]
+        if _words(ph) & _words(first) or len(display[first]) + 3 + len(display[ph]) > MAX_NAME_CHARS:
+            continue
+        take(c, ph)
+    for c in range(k):  # fallback: the cluster's most common phrase nobody else uses
+        if chosen[c]:
+            continue
+        for ph, count in per_cluster[c].most_common():
+            if count >= min(2, sizes[c]) and free(ph):
+                take(c, ph)
+                break
+
+    names = []
+    for c in range(k):
+        if chosen[c]:
+            names.append(" & ".join(title_case(display[ph]) for ph in chosen[c]))
+        else:
+            label = fallback[c] if c < len(fallback) else f"topic {c + 1}"
+            names.append(title_case(label.replace(", ", " · ")))
+    return names
+
+
 def cluster_papers(papers: list[dict], query: str | None = None) -> tuple[list[int], list[str]]:
     """Return a cluster index per paper and a short label per cluster."""
-    texts = [paper_text(paper) for paper in papers]
+    texts = [" ".join([paper_text(paper), *(paper.get("keywords") or [])]) for paper in papers]
     k = cluster_count(len(papers))
     vectorizer = TfidfVectorizer(
         stop_words=list(ENGLISH_STOP_WORDS | GENERIC_WORDS | query_words(query)),
@@ -186,7 +316,8 @@ def build_flow(
 
     ids = list(unique)
     all_papers = [unique[nid] for nid in ids]
-    assignment, labels = cluster_papers(all_papers, query)
+    assignment, word_labels = cluster_papers(all_papers, query)
+    labels = name_clusters(all_papers, assignment, word_labels, query)
 
     edges = []
     for nid in ids:

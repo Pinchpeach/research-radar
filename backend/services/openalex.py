@@ -47,6 +47,9 @@ def normalize_work(work: dict) -> dict:
         "authors": authors,
         "citations": work.get("cited_by_count", 0) or 0,
         "referenced_works": [short_id(ref) for ref in work.get("referenced_works") or []],
+        # OpenAlex's own phrases for what the paper is about; used to name research topics
+        "keywords": [k["display_name"] for k in work.get("keywords") or [] if k.get("display_name")],
+        "topic": ((work.get("primary_topic") or {}).get("display_name")),
     }
 
 

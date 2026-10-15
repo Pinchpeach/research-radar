@@ -46,6 +46,8 @@ class PaperData(BaseModel):
     authors: list[str] = Field(default_factory=list)
     citations: int = 0
     referenced_works: list[str] = Field(default_factory=list)
+    keywords: list[str] = Field(default_factory=list)
+    topic: Optional[str] = None
 
 
 class Paper(PaperData):

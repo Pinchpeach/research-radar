@@ -34,6 +34,13 @@ CORPUS = [
 ]
 
 
+def label_parts(label: str) -> list[str]:
+    """Topic names join phrases with " & " (keywords) or " · " (word-statistics fallback)."""
+    import re
+
+    return [part for part in re.split(r" · | & ", label) if part]
+
+
 # ---------- storage ----------
 
 
@@ -87,7 +94,7 @@ def test_build_flow_clusters_edges_and_chain():
     assert nodes["W1"]["lane"] == nodes["W2"]["lane"] == nodes["W3"]["lane"]
     assert nodes["W5"]["lane"] == nodes["W6"]["lane"] == nodes["W7"]["lane"]
     assert nodes["W1"]["lane"] != nodes["W5"]["lane"]
-    labels = " ".join(c["label"] for c in result["clusters"])
+    labels = " ".join(c["label"] for c in result["clusters"]).lower()
     assert "optical" in labels and "gravitational" in labels
 
     # only edges inside the set; W90/W91 are not nodes
@@ -113,7 +120,7 @@ def test_build_flow_with_foundations_and_tiny_sets():
     assert len(single["clusters"]) == 1 and single["chain"] == []
     assert flow.build_flow([])["nodes"] == []
     no_text = flow.build_flow([p("W1", "", ""), p("W2", "", "")])
-    assert no_text["clusters"][0]["label"] == "all papers"
+    assert no_text["clusters"][0]["label"].lower() == "all papers"
 
 
 def test_longest_chain_ignores_cycles():
@@ -183,10 +190,10 @@ def test_flow_api_survives_openalex_failure(api, monkeypatch):
 
 def test_cluster_label_prefers_phrases():
     result = flow.build_flow(CORPUS)
-    labels = [c["label"] for c in result["clusters"]]
+    labels = [c["label"].lower() for c in result["clusters"]]
     assert any("gravitational wave" in label for label in labels)
     for label in labels:
-        parts = label.split(", ")
+        parts = label_parts(label)
         words = [w for part in parts for w in part.split()]
         assert len(words) == len(set(words)), label
 
@@ -212,7 +219,7 @@ def test_cluster_label_phrase_found_past_first_three_words():
     foundations = [
         {**p("W91", "Interferometer noise budget", "interferometer noise", 1995, 1500), "cited_by_in_set": 2},
     ]
-    labels = [c["label"] for c in flow.build_flow(CORPUS, foundations=foundations)["clusters"]]
+    labels = [c["label"].lower() for c in flow.build_flow(CORPUS, foundations=foundations)["clusters"]]
     assert any("gravitational wave" in label for label in labels), labels
 
 
@@ -242,7 +249,7 @@ def test_build_flow_merges_duplicates_and_keeps_query_out_of_labels():
     ids = {n["id"] for n in result["nodes"]}
     assert "W1b" not in ids and "W1" in ids
     for c in result["clusters"]:
-        words = set(c["label"].replace(",", " ").split())
+        words = {w for part in label_parts(c["label"].lower()) for w in part.split()}
         assert not words & {"neutron", "star", "stars", "optical", "observations"}, c["label"]
 
 
@@ -254,8 +261,8 @@ def test_labels_skip_generic_and_short_tokens():
         p(f"W{i + 10}", f"Gravitational wave search {i}", "we present interferometer gravitational wave searches", 2000 + i)
         for i in range(4)
     ]
-    labels = " ".join(c["label"] for c in flow.build_flow(papers)["clusters"])
-    words = set(labels.replace(",", " ").split())
+    labels = " ".join(c["label"] for c in flow.build_flow(papers)["clusters"]).lower()
+    words = {w for part in label_parts(labels) for w in part.split()}
     assert not words & {"gives", "results", "using", "rx", "paper", "present", "new"}, labels
     assert "magnetar" in labels and "gravitational wave" in labels
 
@@ -276,3 +283,42 @@ def test_credible_foundations_recounts_citers():
     bogus = p("W91", "From the future", "x", 2025, 3)
     kept = flow.credible_foundations(citers, [good, bogus])
     assert [k["id"] for k in kept] == [good["id"]] and kept[0]["cited_by_in_set"] == 3
+
+
+def test_topic_names_come_from_distinctive_openalex_keywords():
+    def kp(wid, kws, topic, year=2020):
+        return {**p(wid, f"Graph neural networks paper {wid}", "graph neural networks", year), "keywords": kws, "topic": topic}
+
+    drug = [kp(f"W{i}", ["graph neural networks", "drug discovery", "molecular generation"], "Advanced Graph Neural Networks")
+            for i in range(4)]
+    rec = [kp(f"W{i + 10}", ["graph neural networks", "social recommendation", "user-item interaction graph"],
+              "Recommender Systems and Techniques") for i in range(4)]
+    assignment = [0] * 4 + [1] * 4
+    names = flow.name_clusters(drug + rec, assignment, ["fallback a", "fallback b"], query="graph neural networks")
+    assert names[0] == "Drug Discovery & Molecular Generation"
+    assert "Recommend" in names[1] or "Social Recommendation" in names[1]
+    assert not any("Graph Neural Networks" == part for name in names for part in name.split(" & "))
+    assert names[0] != names[1]
+
+
+def test_topic_names_fall_back_without_keywords():
+    names = flow.name_clusters([p("W1", "a", "x"), p("W2", "b", "y")], [0, 0], ["magnetar, x-ray timing"])
+    assert names == ["Magnetar · X-ray Timing"]
+
+
+def test_title_case_keeps_acronyms_and_small_words():
+    assert flow.title_case("pulsars and gravitational waves") == "Pulsars and Gravitational Waves"
+    assert flow.title_case("GNN for x-ray data") == "GNN for X-ray Data"
+
+
+def test_topic_names_keep_acronyms_and_trim_filler():
+    assert flow.tidy_phrase("Pulsars and Gravitational Waves Research") == "Pulsars and Gravitational Waves"
+    assert flow.tidy_phrase("Recommender Systems and Techniques") == "Recommender Systems"
+    papers = [{**p(f"W{i}", "t", "x"), "keywords": ["off-target effects"], "topic": "CRISPR and Genetic Engineering"}
+              for i in range(3)]
+    other = [{**p(f"W{i + 5}", "t", "x"), "keywords": ["tomato"], "topic": "Plant Breeding"} for i in range(3)]
+    names = flow.name_clusters(papers + other, [0] * 3 + [1] * 3, ["a", "b"])
+    assert names[0] == "Off-target Effects"  # keyword beats the broad topic; second phrase only if short
+    assert names[1] == "Tomato"
+    lone = flow.name_clusters(papers, [0, 0, 0], ["a"], query="off-target effects")
+    assert lone == ["CRISPR and Genetic Engineering"]  # casing kept; query echo skipped
