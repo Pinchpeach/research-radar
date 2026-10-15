@@ -42,6 +42,12 @@
           <label class="wide">시드 논문 <small>DOI 또는 OpenAlex ID, 한 줄에 하나</small>
             <textarea id="seeds" rows="2" placeholder="10.1086/345493&#10;W2058532123"></textarea>
           </label>
+          <label title="핵심 논문 목록과 별도로, 최근 연구를 이만큼 더 보여줍니다 (결과 수 대비)">최신 연구 추가
+            <span class="row"><input id="recent-share" type="range" min="0" max="0.8" step="0.1" value="0.3"><output id="recent-share-out">30%</output></span>
+          </label>
+          <label>최신 기준
+            <select id="recent-years"><option value="3">최근 3년</option><option value="5" selected>최근 5년</option><option value="10">최근 10년</option></select>
+          </label>
           <label class="check"><input id="bookmark-seeds" type="checkbox"> 내 북마크를 시드로 사용 (최근 10개)</label>
           <label class="check"><input id="require-abstract" type="checkbox"> 초록이 있는 논문만</label>
           <fieldset class="wide weights">

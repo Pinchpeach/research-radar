@@ -355,3 +355,60 @@ def test_search_adds_core_references(monkeypatch):
     core = [p for p in body["papers"] if p["id"].endswith("W500")]
     assert core and core[0]["core_reference"] is True and core[0]["cited_by_results"] == 5
     assert body["papers"][0]["id"].endswith("W500")  # the paper every result builds on comes first
+
+
+# ---------- recent work (frontier) ----------
+
+
+def test_recent_group_is_added_on_top_and_skips_shown_and_stub_papers():
+    from backend.services.ranking import select_results
+
+    def item(wid, year, score, frontier=0.0, abstract="text"):
+        return {"id": wid, "year": year, "score": score, "abstract": abstract, "referenced_works": [],
+                "scores": {"frontier": frontier}}
+
+    ranked = [item("A", 2010, 90), item("B", 2024, 80, 0.9), item("C", 2012, 70),
+              item("D", 2025, 10, 0.8), item("E", 2026, 9, 0.95, abstract=""), item("F", 2023, 8, 0.5)]
+    out = select_results(ranked, limit=3, recent_share=0.67, since=2022)
+    assert [p["id"] for p in out] == ["A", "B", "C", "D", "F"]  # E is a stub; B is already shown
+    assert [p["group"] for p in out] == ["core"] * 3 + ["recent"] * 2
+    assert [p["id"] for p in select_results(ranked, 3, 0, 2022)] == ["A", "B", "C"]
+
+
+def test_frontier_prefers_fresh_relevant_work_building_on_key_papers():
+    from backend.services.ranking import frontier_scores
+
+    key = paper("W1", "Graph convolutional networks", "graph", 2016, 9000)
+    builder = paper("W2", "New graph model", "graph", 2025, 3, refs=["W1"])
+    loner = paper("W3", "New graph model", "graph", 2025, 3)
+    older_recent = paper("W4", "New graph model", "graph", 2022, 3, refs=["W1"])
+    papers = [key, builder, loner, older_recent]
+    frontier, key_cited = frontier_scores(papers, np.ones(4), np.array([1.0, 0, 0, 0]), 2026, since=2022)
+    assert frontier[0] == 0  # not recent
+    assert frontier[1] > frontier[2]  # builds on a key paper
+    assert frontier[1] > frontier[3]  # fresher
+    assert key_cited.tolist() == [0, 1, 0, 1]
+
+
+def test_search_fetches_recent_candidates_and_returns_groups(monkeypatch):
+    monkeypatch.setattr(embeddings, "enabled", lambda: False)
+    calls = []
+
+    def fake_get(url, params):
+        calls.append(params)
+        flt = params.get("filter", "")
+        if "from_publication_date" in flt:  # the recent-only search
+            return {"results": [work(f"W9{i}", f"New graph neural networks method {i}", "graph neural networks", 2026, 1)
+                                for i in range(3)]}
+        return {"results": [work(f"W{i}", f"Graph neural networks {i}", "graph neural networks", 2010 + i, 100) for i in range(5)]}
+
+    monkeypatch.setattr(openalex, "_get", fake_get)
+    body = api.post("/search", json={"query": "graph neural networks", "limit": 4, "recent_share": 0.5}).json()
+    assert any("from_publication_date" in c.get("filter", "") for c in calls)
+    groups = [p["group"] for p in body["papers"]]
+    assert groups.count("core") == 4 and groups.count("recent") == 2
+    assert all(p["year"] == 2026 for p in body["papers"] if p["group"] == "recent")
+
+    calls.clear()
+    api.post("/search", json={"query": "graph neural networks", "limit": 4, "recent_share": 0})
+    assert not any("from_publication_date" in c.get("filter", "") for c in calls)

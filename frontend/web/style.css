@@ -102,6 +102,10 @@ textarea { width: 100%; resize: vertical; }
 .weights output { width: 34px; text-align: right; color: var(--text-3); font-variant-numeric: tabular-nums; }
 small { color: var(--text-3); font-weight: 400; }
 
+.group-head { margin: 10px 0 0; font-size: 14px; color: var(--text-2); display: flex; gap: 8px; align-items: baseline; }
+.group-head small { font-weight: 400; }
+.chip.recent { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+#recent-share-out { width: 40px; text-align: right; color: var(--text-3); font-variant-numeric: tabular-nums; }
 .papers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .paper { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }
 .paper-head { display: flex; gap: 10px; align-items: baseline; }

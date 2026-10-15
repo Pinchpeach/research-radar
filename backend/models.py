@@ -19,6 +19,9 @@ class SearchRequest(BaseModel):
     seed_ids: list[str] = Field(default_factory=list, max_length=10)
     require_abstract: bool = False
     weights: Weights = Field(default_factory=Weights)
+    # share of the results kept for recent research, picked by frontier score (0 = off)
+    recent_share: float = Field(default=0.3, ge=0, le=0.8)
+    recent_years: int = Field(default=5, ge=1, le=30)
 
     @model_validator(mode="after")
     def check_years(self):
@@ -30,6 +33,7 @@ class SearchRequest(BaseModel):
 class Scores(BaseModel):
     relevance: float
     influence: float
+    frontier: float = 0.0
     seed: float
     recency: float
     impact: float
@@ -56,6 +60,8 @@ class Paper(PaperData):
     seed_link: bool = False
     core_reference: bool = False  # found because many results cite it, not by the text search
     cited_by_results: int = 0
+    builds_on_key_papers: int = 0
+    group: Literal["core", "recent"] = "core"
     score: float
     relevance_score: float
     scores: Scores
