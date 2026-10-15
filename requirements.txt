@@ -2,5 +2,8 @@ fastapi
 uvicorn[standard]
 requests
 scikit-learn
+numpy
 streamlit
-pydantic
+pydantic>=2
+python-dotenv
+openai>=1.40

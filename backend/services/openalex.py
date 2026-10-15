@@ -1,9 +1,13 @@
 import os
+import re
 
 import requests
 
-
 OPENALEX_URL = "https://api.openalex.org/works"
+MAX_PER_PAGE = 200
+TIMEOUT = 20
+
+_session = requests.Session()
 
 
 def reconstruct_abstract(inverted_index: dict | None) -> str:
@@ -19,34 +23,119 @@ def reconstruct_abstract(inverted_index: dict | None) -> str:
     return " ".join(word for _, word in words)
 
 
-def search_papers(query: str, limit: int = 20) -> list[dict]:
-    params = {"search": query, "per-page": limit}
+def short_id(openalex_id: str) -> str:
+    return openalex_id.rstrip("/").rsplit("/", 1)[-1]
+
+
+def normalize_work(work: dict) -> dict:
+    authors = [
+        authorship.get("author", {}).get("display_name")
+        for authorship in work.get("authorships", [])
+        if authorship.get("author", {}).get("display_name")
+    ]
+    location = work.get("primary_location") or {}
+    source = location.get("source") or {}
+
+    return {
+        "id": work.get("id") or "",
+        "title": work.get("title") or work.get("display_name") or "",
+        "abstract": reconstruct_abstract(work.get("abstract_inverted_index")),
+        "year": work.get("publication_year"),
+        "doi": work.get("doi"),
+        "url": location.get("landing_page_url") or work.get("doi") or work.get("id"),
+        "venue": source.get("display_name"),
+        "authors": authors,
+        "citations": work.get("cited_by_count", 0) or 0,
+        "referenced_works": [short_id(ref) for ref in work.get("referenced_works") or []],
+    }
+
+
+def _params(**params) -> dict:
     email = os.getenv("OPENALEX_EMAIL")
     if email:
         params["mailto"] = email
+    return params
 
-    response = requests.get(OPENALEX_URL, params=params, timeout=20)
+
+def _get(url: str, params: dict) -> dict:
+    response = _session.get(url, params=params, timeout=TIMEOUT)
     response.raise_for_status()
-    data = response.json()
+    return response.json()
 
+
+def year_filter(year_from: int | None, year_to: int | None) -> list[str]:
+    filters = []
+    if year_from:
+        filters.append(f"from_publication_date:{year_from}-01-01")
+    if year_to:
+        filters.append(f"to_publication_date:{year_to}-12-31")
+    return filters
+
+
+def _list(filters: list[str], limit: int, **extra) -> list[dict]:
+    params = _params(**{"per-page": min(limit, MAX_PER_PAGE)}, **extra)
+    if filters:
+        params["filter"] = ",".join(filters)
+    data = _get(OPENALEX_URL, params)
+    return [normalize_work(work) for work in data.get("results", [])]
+
+
+def search_papers(
+    query: str,
+    limit: int = 20,
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> list[dict]:
+    return _list(year_filter(year_from, year_to), limit, search=query)
+
+
+def citing_papers(
+    work_id: str,
+    limit: int = 25,
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> list[dict]:
+    filters = [f"cites:{short_id(work_id)}", *year_filter(year_from, year_to)]
+    return _list(filters, limit, sort="cited_by_count:desc")
+
+
+def papers_by_ids(
+    work_ids: list[str],
+    year_from: int | None = None,
+    year_to: int | None = None,
+) -> list[dict]:
     papers = []
-    for work in data.get("results", []):
-        authors = [
-            authorship.get("author", {}).get("display_name")
-            for authorship in work.get("authorships", [])
-            if authorship.get("author", {}).get("display_name")
-        ]
-
-        papers.append(
-            {
-                "id": work.get("id") or "",
-                "title": work.get("title") or "",
-                "abstract": reconstruct_abstract(work.get("abstract_inverted_index")),
-                "year": work.get("publication_year"),
-                "doi": work.get("doi"),
-                "authors": authors,
-                "citations": work.get("cited_by_count", 0),
-            }
-        )
-
+    ids = [short_id(work_id) for work_id in work_ids]
+    # OpenAlex accepts up to 100 OR-ed values per filter.
+    for start in range(0, len(ids), 50):
+        chunk = ids[start : start + 50]
+        filters = [f"ids.openalex:{'|'.join(chunk)}", *year_filter(year_from, year_to)]
+        papers.extend(_list(filters, len(chunk)))
     return papers
+
+
+_DOI = re.compile(r"^(?:https?://(?:dx\.)?doi\.org/|doi:)?(10\.\d{4,9}/\S+)$", re.IGNORECASE)
+_OPENALEX = re.compile(r"^(?:https?://openalex\.org/)?(W\d+)$", re.IGNORECASE)
+
+
+def work_path(identifier: str) -> str | None:
+    """Turn a DOI or OpenAlex work ID/URL into an OpenAlex /works path segment."""
+    identifier = identifier.strip()
+    if match := _OPENALEX.match(identifier):
+        return match.group(1).upper()
+    if match := _DOI.match(identifier):
+        return f"doi:{match.group(1)}"
+    return None
+
+
+def get_work(identifier: str) -> dict | None:
+    """Fetch one work by DOI or OpenAlex ID. Returns None if it is unknown or malformed."""
+    path = work_path(identifier)
+    if not path:
+        return None
+    try:
+        return normalize_work(_get(f"{OPENALEX_URL}/{path}", _params()))
+    except requests.HTTPError as exc:
+        if exc.response is not None and exc.response.status_code == 404:
+            return None
+        raise

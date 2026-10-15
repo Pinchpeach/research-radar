@@ -1,0 +1,250 @@
+import numpy as np
+import pytest
+from fastapi.testclient import TestClient
+
+from backend import main
+from backend.evaluation import ndcg_at_k, precision_at_k
+from backend.services import embeddings, openalex
+from backend.services.ranking import rank_papers, recency_score
+
+
+def work(wid, title, abstract="", year=2020, cites=0, refs=()):
+    words = abstract.split()
+    return {
+        "id": f"https://openalex.org/{wid}",
+        "title": title,
+        "abstract_inverted_index": {w: [i] for i, w in enumerate(words)} if words else None,
+        "publication_year": year,
+        "doi": f"https://doi.org/10.1/{wid}",
+        "cited_by_count": cites,
+        "authorships": [{"author": {"display_name": "A. Author"}}],
+        "primary_location": {"landing_page_url": f"https://ex.org/{wid}", "source": {"display_name": "ApJ"}},
+        "referenced_works": [f"https://openalex.org/{r}" for r in refs],
+    }
+
+
+def paper(wid, title, abstract="", year=2020, cites=0, refs=()):
+    return openalex.normalize_work(work(wid, title, abstract, year, cites, refs))
+
+
+# ---------- openalex ----------
+
+
+def test_reconstruct_abstract_orders_words():
+    assert openalex.reconstruct_abstract({"world": [1], "hello": [0, 2]}) == "hello world hello"
+
+
+def test_normalize_work_extracts_fields():
+    p = paper("W1", "Title", "some abstract", refs=["W9"])
+    assert p["venue"] == "ApJ"
+    assert p["url"] == "https://ex.org/W1"
+    assert p["referenced_works"] == ["W9"]
+    assert p["abstract"] == "some abstract"
+
+
+@pytest.mark.parametrize(
+    "identifier, expected",
+    [
+        ("W123", "W123"),
+        ("https://openalex.org/W123", "W123"),
+        ("10.1086/123456", "doi:10.1086/123456"),
+        ("https://doi.org/10.1086/123456", "doi:10.1086/123456"),
+        ("doi:10.1086/abc", "doi:10.1086/abc"),
+        ("not an id", None),
+    ],
+)
+def test_work_path(identifier, expected):
+    assert openalex.work_path(identifier) == expected
+
+
+def test_year_filter():
+    assert openalex.year_filter(2010, 2020) == ["from_publication_date:2010-01-01", "to_publication_date:2020-12-31"]
+    assert openalex.year_filter(None, None) == []
+
+
+# ---------- ranking ----------
+
+QUERY = "optical observations of isolated neutron stars"
+
+
+def candidates():
+    return [
+        paper("W1", "Optical observations of isolated neutron stars", "VLT photometry of isolated neutron stars", 2015, 50),
+        paper("W2", "Deep learning for images", "convolutional networks", 2023, 5000),
+        paper("W3", "X-ray thermal emission of neutron stars", "isolated neutron stars blackbody", 2005, 300),
+    ]
+
+
+def test_relevance_dominates_by_default():
+    ranked = rank_papers(QUERY, candidates(), current_year=2026)
+    assert [p["id"].rsplit("/", 1)[-1] for p in ranked][0] == "W1"
+    assert ranked[-1]["id"].endswith("W2")
+    assert "referenced_works" not in ranked[0]
+    for p in ranked:
+        assert 0 <= p["score"] <= 100
+        assert all(0 <= v <= 1 for v in p["scores"].values())
+
+
+def test_weights_change_order():
+    ranked = rank_papers(QUERY, candidates(), weights={"relevance": 0, "recency": 0, "impact": 1}, current_year=2026)
+    assert ranked[0]["id"].endswith("W2")
+
+
+def test_seed_link_boosts_citing_paper():
+    papers = candidates() + [paper("W4", "Unrelated title", "nothing shared", 2010, 1, refs=["W99"])]
+    seed = paper("W99", "Seed paper", "seed text")
+    ranked = rank_papers(QUERY, papers, seeds=[seed], weights={"relevance": 0, "seed": 1, "recency": 0, "impact": 0})
+    assert ranked[0]["id"].endswith("W4")
+    assert ranked[0]["seed_link"] is True
+    assert ranked[0]["scores"]["seed"] == 1.0
+
+
+def test_seed_weight_ignored_without_seeds():
+    a = rank_papers(QUERY, candidates(), current_year=2026)
+    b = rank_papers(QUERY, candidates(), weights={"seed": 100}, current_year=2026)
+    assert [p["score"] for p in a] == [p["score"] for p in b]
+
+
+def test_semantic_blends_into_relevance():
+    ranked = rank_papers(QUERY, candidates(), semantic=np.array([0.0, 1.0, 0.0]), weights={"recency": 0, "impact": 0})
+    w2 = next(p for p in ranked if p["id"].endswith("W2"))
+    assert w2["scores"]["relevance"] == 0.5
+
+
+def test_recency_half_life():
+    assert recency_score(2026, 2026) == 1
+    assert recency_score(2021, 2026) == pytest.approx(0.5)
+    assert recency_score(None, 2026) == 0
+
+
+def test_empty():
+    assert rank_papers(QUERY, []) == []
+
+
+# ---------- evaluation ----------
+
+
+def test_metrics():
+    judgments = ["relevant", "not_relevant", "partial", None]
+    assert precision_at_k(judgments, 4) == pytest.approx(2 / 3)
+    assert precision_at_k([None, None], 2) is None
+    assert ndcg_at_k(["relevant", "partial"], 2) == 1.0
+    assert ndcg_at_k(["not_relevant", "relevant"], 2) < 1.0
+
+
+# ---------- API ----------
+
+
+class FakeOpenAlex:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, url, params):
+        self.calls.append((url, params))
+        if url.endswith("/W99"):
+            return work("W99", "Seed about neutron stars", "isolated neutron stars optical", 2010, refs=["W7"])
+        if url.endswith("/doi:10.1/missing"):
+            raise _http_error(404)
+        flt = params.get("filter", "")
+        if "cites:W99" in flt:
+            return {"results": [work("W6", "Follow-up optical study", "neutron stars", 2022, refs=["W99"])]}
+        if "ids.openalex:W7" in flt:
+            return {"results": [work("W7", "Earlier catalog", "neutron star catalog", 2001)]}
+        return {
+            "results": [
+                work("W1", "Optical observations of isolated neutron stars", "VLT photometry", 2015, 50),
+                work("W2", "Deep learning", "", 2023, 10),
+                work("W99", "Seed about neutron stars", "dup of seed", 2010),
+            ]
+        }
+
+
+def _http_error(status):
+    import requests
+
+    response = requests.Response()
+    response.status_code = status
+    return requests.HTTPError(response=response)
+
+
+@pytest.fixture
+def fake(monkeypatch):
+    fake = FakeOpenAlex()
+    monkeypatch.setattr(openalex, "_get", fake)
+    monkeypatch.setattr(embeddings, "enabled", lambda: False)
+    return fake
+
+
+api = TestClient(main.app)
+
+
+def test_search_basic(fake):
+    res = api.post("/search", json={"query": QUERY, "limit": 2, "year_from": 2000, "year_to": 2024})
+    assert res.status_code == 200
+    body = res.json()
+    assert body["count"] == 2 and body["candidates"] == 3
+    assert body["semantic"] is False
+    assert body["papers"][0]["id"].endswith("W1")
+    params = fake.calls[0][1]
+    assert params["per-page"] == 50
+    assert "from_publication_date:2000-01-01" in params["filter"]
+
+
+def test_search_with_seeds_expands_and_excludes_seed(fake):
+    res = api.post(
+        "/search",
+        json={"query": QUERY, "seed_ids": ["W99", "10.1/missing", "garbage"], "require_abstract": True},
+    )
+    body = res.json()
+    ids = {p["id"].rsplit("/", 1)[-1] for p in body["papers"]}
+    assert ids == {"W1", "W6", "W7"}  # W2 has no abstract, W99 is the seed itself
+    assert body["seeds"][0]["title"].startswith("Seed")
+    assert body["unresolved_seeds"] == ["10.1/missing", "garbage"]
+    assert all(p["seed_link"] for p in body["papers"] if not p["id"].endswith("W1"))
+
+
+def test_search_openalex_failure_is_502(monkeypatch):
+    import requests
+
+    def boom(*_):
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(openalex, "_get", boom)
+    assert api.post("/search", json={"query": QUERY}).status_code == 502
+
+
+def test_search_rejects_inverted_years():
+    assert api.post("/search", json={"query": QUERY, "year_from": 2020, "year_to": 2010}).status_code == 422
+
+
+def test_embeddings_fall_back_on_error(monkeypatch):
+    monkeypatch.setattr(embeddings, "enabled", lambda: True)
+
+    def fail(_texts):
+        raise RuntimeError("quota")
+
+    monkeypatch.setattr(embeddings, "_embed", fail)
+    assert embeddings.similarities("q", ["doc"]) is None
+
+
+def test_embeddings_cosine(monkeypatch):
+    monkeypatch.setattr(embeddings, "enabled", lambda: True)
+    monkeypatch.setattr(embeddings, "_embed", lambda texts: np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]]))
+    assert embeddings.similarities("q", ["a", "b"]).tolist() == [1.0, 0.0]
+
+
+def test_judgments_roundtrip(tmp_path):
+    from backend.judgments import load_rows, save_run, summarize
+
+    path = tmp_path / "j.jsonl"
+    run = {
+        "run_id": "r1",
+        "query": "q",
+        "settings": {"limit": 3},
+        "papers": [{"id": f"W{i}", "title": "t", "score": 1.0} for i in range(3)],
+    }
+    assert save_run(run, {"W0": "relevant", "W2": "not_relevant"}, path) == 2
+    save_run(run, {"W2": "partial"}, path)  # re-judged later
+    [summary] = summarize(load_rows(path))
+    assert summary["judged"] == 2
+    assert summary["p@10"] == 1.0
