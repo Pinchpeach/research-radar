@@ -1,4 +1,4 @@
-"""Offline metrics for relevance judgments collected in the prototype UI."""
+"""Ranking-quality metrics for relevance judgments (mirrored in frontend/web/app.js for live display)."""
 
 import math
 

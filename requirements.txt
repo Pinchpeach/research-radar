@@ -1,10 +1,10 @@
+# Backend / development (the desktop app adds requirements-desktop.txt)
 fastapi
 uvicorn[standard]
 requests
 scikit-learn
 numpy
-streamlit
 pydantic>=2
 python-dotenv
 openai>=1.40
-plotly
+platformdirs

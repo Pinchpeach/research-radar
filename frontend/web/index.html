@@ -54,7 +54,25 @@
         </div>
       </details>
       <p id="search-status" class="status" role="status"></p>
+      <div id="eval-bar" class="eval-bar" hidden>
+        <label class="check" title="검색 결과마다 관련/부분/무관을 표시해 정렬 품질을 잽니다"><input id="eval-mode" type="checkbox"> 정렬 평가</label>
+        <span id="eval-metrics" class="metrics" hidden>
+          <span>판정 <b id="m-judged">0</b></span>
+          <span>Precision@10 <b id="m-p10">—</b></span>
+          <span>Precision@20 <b id="m-p20">—</b></span>
+          <span>nDCG@20 <b id="m-ndcg">—</b></span>
+          <button id="eval-save" disabled>판정 저장</button>
+        </span>
+      </div>
       <ol id="results" class="papers"></ol>
+      <details id="eval-history" class="options">
+        <summary>평가 기록 <small>설정을 바꿔 가며 정렬 품질을 비교합니다</small></summary>
+        <p id="eval-empty" class="empty">저장된 평가가 없습니다. 검색 후 ‘정렬 평가’를 켜고 결과를 판정해 저장하세요.</p>
+        <table id="eval-table" hidden>
+          <thead><tr><th>저장 시각</th><th>검색어</th><th>판정</th><th>P@10</th><th>P@20</th><th>nDCG@20</th><th>가중치 (관련·시드·최신·인용)</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </details>
     </section>
 
     <!-- ───────────── 북마크 ───────────── -->
@@ -134,6 +152,9 @@
       <div class="meta"></div>
       <div class="chips"></div>
       <details class="abstract"><summary>초록</summary><p></p></details>
+      <div class="judge" hidden>
+        <button data-j="relevant">관련</button><button data-j="partial">부분</button><button data-j="not_relevant">무관</button>
+      </div>
     </li>
   </template>
 

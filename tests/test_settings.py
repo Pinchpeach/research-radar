@@ -90,3 +90,25 @@ def test_bookmarks_live_in_the_data_folder(tmp_path, monkeypatch):
 
     monkeypatch.setenv("RADAR_HOME", str(tmp_path / "elsewhere"))
     assert BookmarkStore().path == tmp_path / "elsewhere" / "radar.db"
+
+
+def test_evaluation_runs_roundtrip():
+    run = {
+        "run_id": "2026-10-15T05:00:00Z",
+        "query": "graph neural networks",
+        "settings": {"weights": {"relevance": 0.6}},
+        "papers": [{"id": f"W{i}", "title": f"t{i}", "score": 90 - i} for i in range(4)],
+        "judgments": {"W0": "relevant", "W1": "not_relevant", "W3": "partial"},
+    }
+    assert api.post("/evaluations", json=run).json() == {"written": 3}
+    assert (settings.data_dir() / "judgments.jsonl").exists()  # in the app's data folder
+
+    [saved] = api.get("/evaluations").json()
+    assert saved["query"] == "graph neural networks" and saved["judged"] == 3
+    assert saved["p@10"] == 2 / 3 and saved["settings"]["weights"]["relevance"] == 0.6
+
+    assert api.post("/evaluations", json={**run, "judgments": {}}).status_code == 400
+    assert api.post("/evaluations", json={**run, "judgments": {"W0": "maybe"}}).status_code == 422
+    assert api.delete(f"/evaluations/{run['run_id']}").status_code == 204
+    assert api.get("/evaluations").json() == []
+    assert api.delete(f"/evaluations/{run['run_id']}").status_code == 404

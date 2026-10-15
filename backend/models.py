@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -118,3 +118,22 @@ class KeyTest(BaseModel):
 class PosterRequest(BaseModel):
     flow: dict
     title: str = Field(default="My Research", max_length=300)
+
+
+Judgment = Literal["relevant", "partial", "not_relevant"]
+
+
+class JudgedPaper(BaseModel):
+    id: str
+    title: str = ""
+    score: Optional[float] = None
+
+
+class EvaluationRun(BaseModel):
+    """Relevance judgments for one search, in the order the results were shown."""
+
+    run_id: str = Field(min_length=1, max_length=100)
+    query: str = Field(min_length=1, max_length=500)
+    settings: dict = Field(default_factory=dict)
+    papers: list[JudgedPaper] = Field(max_length=200)
+    judgments: dict[str, Judgment]

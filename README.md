@@ -10,7 +10,7 @@
 
 | 탭 | 하는 일 |
 |---|---|
-| 🔎 **탐색** | 연구 주제로 논문을 찾고 관련도 순으로 정렬합니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. |
+| 🔎 **탐색** | 연구 주제로 논문을 찾고 관련도 순으로 정렬합니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. **정렬 평가**를 켜면 결과마다 관련/부분/무관을 표시해 Precision@10·20과 nDCG@20을 보고, 저장한 평가를 설정별로 비교할 수 있습니다. |
 | ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그를 붙입니다. 태그별로 거르고 BibTeX로 내보낼 수 있습니다. |
 | 🧭 **연구 지도** | 검색 결과나 북마크를 *The Map of Physics* 스타일의 테크트리로 그립니다. 처음에는 큰 흐름만 보이고, 선 위의 점에 마우스를 올리거나 클릭하면 세부 정보가 나옵니다. 지도는 HTML 포스터로 저장할 수 있습니다. |
 | ⚙ **환경설정** | OpenAlex API 키를 입력하고 바로 확인합니다. 의미 기반 정렬용 OpenAI 키는 선택 사항입니다. |
@@ -131,6 +131,7 @@ PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 �
 | `POST /flow` | 연구 흐름 분석 (주제, 인용 연결, 기초 논문, 핵심 계보) |
 | `POST /poster` | `/flow` 결과로 만든 인터랙티브 테크트리 HTML |
 | `GET/PUT /settings`, `POST /settings/test-openalex` | 설정 조회·저장(키는 끝 네 글자만 반환)과 OpenAlex 키 확인 |
+| `POST/GET /evaluations`, `DELETE /evaluations/{run_id}` | 정렬 평가(관련도 판정) 저장, 실행별 Precision@k·nDCG 목록, 삭제 |
 
 ### 프로젝트 구조
 
@@ -149,8 +150,7 @@ research-radar/
 │       ├── flow.py          # 주제, 주제 이름, 인용 그래프, 계보
 │       └── techtree.py      # 인터랙티브 테크트리 지도
 ├── frontend/
-│   ├── web/                 # 데스크톱 앱 화면 (HTML/CSS/JS, 빌드 과정 없음)
-│   └── app.py               # 개발용 Streamlit 화면 (정렬 품질 평가 포함)
+│   └── web/                 # 데스크톱 앱 화면 (HTML/CSS/JS, 빌드 과정 없음)
 ├── desktop/
 │   ├── main.py              # 앱 실행기 (로컬 서버 + 네이티브 창)
 │   ├── research_radar.spec  # PyInstaller 빌드 설정
@@ -159,7 +159,7 @@ research-radar/
 └── tests/
 ```
 
-개발용 Streamlit 화면(`streamlit run frontend/app.py`)에서는 검색 결과마다 관련/부분/무관을 표시해 Precision@k와 nDCG를 볼 수 있습니다. 판정 결과는 `python -m scripts.evaluate`로 비교합니다.
+저장한 정렬 평가는 앱 데이터 폴더의 `judgments.jsonl`에 쌓이며, `python -m scripts.evaluate`로도 비교할 수 있습니다.
 
 ## 라이선스
 
