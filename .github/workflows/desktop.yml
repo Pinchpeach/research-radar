@@ -1,0 +1,65 @@
+name: Desktop app
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "frontend/web/**"
+      - "desktop/**"
+      - "tests/**"
+      - "requirements-desktop.txt"
+      - ".github/workflows/desktop.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-desktop.txt
+
+      - name: Install
+        run: pip install -r requirements-desktop.txt pytest httpx
+
+      - name: Test
+        run: python -m pytest -q
+
+      - name: Build
+        run: pyinstaller desktop/research_radar.spec --noconfirm
+
+      - name: Smoke test the built app
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) exe="dist/ResearchRadar/ResearchRadar.exe" ;;
+            macOS)   exe="dist/Research Radar.app/Contents/MacOS/ResearchRadar" ;;
+            *)       exe="dist/ResearchRadar/ResearchRadar" ;;
+          esac
+          python desktop/smoke.py "$exe"
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir -p out
+          case "$RUNNER_OS" in
+            Windows) (cd dist && 7z a -tzip ../out/ResearchRadar-windows.zip ResearchRadar > /dev/null) ;;
+            macOS)   ditto -c -k --keepParent "dist/Research Radar.app" out/ResearchRadar-macos.zip ;;
+            *)       tar -czf out/ResearchRadar-linux.tar.gz -C dist ResearchRadar ;;
+          esac
+          ls -lh out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ResearchRadar-${{ runner.os }}
+          path: out/*
+          retention-days: 30
