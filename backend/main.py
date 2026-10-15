@@ -1,5 +1,6 @@
 import logging
 import math
+from datetime import date
 import sys
 from functools import lru_cache
 from pathlib import Path
@@ -26,7 +27,7 @@ from backend.models import (
 from backend.services import embeddings, openalex
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
-from backend.services.ranking import paper_text, rank_papers
+from backend.services.ranking import paper_text, rank_papers, recent_since, select_results
 from backend.services.techtree import render_html as render_poster
 from backend.storage import BookmarkStore, to_bibtex
 
@@ -38,6 +39,8 @@ VERSION = "0.3.0"
 CITING_PER_SEED = 25
 CORE_REFERENCES = 25  # outside works cited by many candidates, added to the pool (some fail checks)
 CORE_MIN_CITERS = 3
+RECENT_FETCH_MIN = 20  # recent-only candidates fetched per search (more for larger result lists)
+FRESH_YEARS = 2  # the recent-only search covers this many latest years
 CORE_MIN_SHARE = 0.05
 REFERENCES_PER_SEED = 50
 
@@ -97,6 +100,29 @@ def core_references(candidates: list[dict], years: dict) -> list[dict]:
     return [{**paper, "core_reference": True} for paper in found if paper["id"] not in known]
 
 
+def recent_candidates(request: SearchRequest) -> list[dict]:
+    """A second, recent-only search, so new work is in the pool even when the relevance search
+    returns mostly older papers."""
+    if not request.recent_share:
+        return []
+    # the newest work is the most likely to be buried, so aim this search at the last two years
+    since = max(request.year_from or 0, recent_since(date.today().year, min(request.recent_years, FRESH_YEARS)))
+    if request.year_to and request.year_to < since:
+        return []
+    size = max(RECENT_FETCH_MIN, math.ceil(request.limit * request.recent_share * 3))
+    return openalex.search_papers(request.query, min(size, openalex.MAX_PER_PAGE), year_from=since, year_to=request.year_to)
+
+
+def merge_candidates(papers: list[dict], exclude: set[str]) -> list[dict]:
+    """Unique by OpenAlex ID, then preprint / conference / journal versions merged."""
+    unique: dict[str, dict] = {}
+    for paper in papers:
+        if paper["id"] and paper["id"] not in exclude and paper["id"] not in unique:
+            unique[paper["id"]] = paper
+    merged, _ = dedupe(list(unique.values()))
+    return merged
+
+
 def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
     years = {"year_from": request.year_from, "year_to": request.year_to}
     candidates = openalex.search_papers(request.query, candidate_pool_size(request.limit), **years)
@@ -111,13 +137,11 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
             logger.warning("Could not expand seed %s", seed["id"], exc_info=True)
 
     seed_ids = {seed["id"] for seed in seeds}
-    unique: dict[str, dict] = {}
-    for paper in candidates:
-        if paper["id"] and paper["id"] not in seed_ids and paper["id"] not in unique:
-            unique[paper["id"]] = paper
-
-    papers, _ = dedupe(list(unique.values()))  # preprint + journal versions count once
+    papers = merge_candidates(candidates, seed_ids)
+    # core references come from the main search alone, so fetching recent work doesn't change
+    # what counts as core
     papers += core_references(papers, years)
+    papers = merge_candidates(papers + recent_candidates(request), seed_ids)
     if request.require_abstract:
         papers = [paper for paper in papers if paper["abstract"]]
     return papers
@@ -141,9 +165,15 @@ def search(request: SearchRequest):
 
     semantic = embeddings.similarities(request.query, [paper_text(p) for p in candidates])
     ranked = rank_papers(
-        request.query, candidates, seeds, request.weights.model_dump(), semantic=semantic
+        request.query,
+        candidates,
+        seeds,
+        request.weights.model_dump(),
+        semantic=semantic,
+        recent_years=request.recent_years,
     )
-    papers = ranked[: request.limit]
+    since = recent_since(date.today().year, request.recent_years)
+    papers = select_results(ranked, request.limit, request.recent_share, since)
     return {
         "query": request.query,
         "count": len(papers),

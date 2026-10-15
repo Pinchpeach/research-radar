@@ -92,6 +92,74 @@ def citation_influence(papers: list[dict], start: np.ndarray, damping: float = 0
     return via_citations
 
 
+def recent_since(current_year: int, recent_years: int) -> int:
+    """First publication year that counts as recent: the last `recent_years` years, inclusive."""
+    return current_year - recent_years + 1
+
+
+def frontier_scores(
+    papers: list[dict], relevance: np.ndarray, influence: np.ndarray, current_year: int, since: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """How promising each *recent* paper is as the current front of the field (0 for older ones).
+
+    Recent work has not had time to be cited, so it can't show influence. Instead:
+    - relevance to the query (0.4)
+    - building on the field's key papers: the influence of the papers it cites (0.25)
+    - freshness within the recent window, so this year's work isn't buried under papers that
+      merely had longer to collect citations (0.2)
+    - citation momentum: citations per year, compared among recent papers only (0.15)
+    Also returns how many key papers (influence >= 0.5) each paper cites.
+    """
+    n = len(papers)
+    index = {_short(p["id"]): i for i, p in enumerate(papers)}
+    builds_on = np.zeros(n)
+    key_cited = np.zeros(n, dtype=int)
+    for i, paper in enumerate(papers):
+        for ref in set(paper.get("referenced_works") or []):
+            j = index.get(ref)
+            if j is None or j == i or not plausible_citation(paper.get("year"), papers[j].get("year")):
+                continue
+            builds_on[i] += influence[j]
+            key_cited[i] += influence[j] >= 0.5
+    recent = np.array([(p.get("year") or 0) >= since for p in papers])
+    if not recent.any():
+        return np.zeros(n), key_cited
+    momentum = np.zeros(n)
+    momentum[recent] = scale_to_max(impact_values([p for p, r in zip(papers, recent) if r], current_year))
+    builds = np.zeros(n)
+    builds[recent] = scale_to_max(np.sqrt(builds_on[recent]))
+    window = max(1, current_year - since + 1)
+    freshness = np.array([((p.get("year") or since) - since + 1) / window for p in papers]).clip(0, 1)
+    frontier = 0.4 * relevance + 0.25 * builds + 0.2 * freshness + 0.15 * momentum
+    return np.where(recent, frontier, 0.0), key_cited
+
+
+def substantive(paper: dict) -> bool:
+    """Skip stub records (index entries, chapter headings) that have neither an abstract nor
+    a real reference list; recent ones have no citations yet to vouch for them."""
+    return bool(paper.get("abstract")) or len(paper.get("referenced_works") or []) >= 5
+
+
+def select_results(ranked: list[dict], limit: int, recent_share: float, since: int) -> list[dict]:
+    """The best `limit` results by score (group "core"), followed by a "recent" group of
+    `recent_share` × `limit` more: the best recent papers by frontier score that are not
+    already in the core group.
+
+    The recent group comes on top of the core results, so key papers are never pushed out,
+    and it always shows new work: recent papers that already rank in the core group (often
+    well-cited surveys) do not use up its slots.
+    """
+    core = ranked[:limit]
+    taken = {p["id"] for p in core}
+    needed = round(limit * recent_share)
+    recent_pool = sorted(
+        (p for p in ranked if (p.get("year") or 0) >= since and p["id"] not in taken and substantive(p)),
+        key=lambda p: (p["scores"]["frontier"], p["score"]),
+        reverse=True,
+    )
+    return [{**p, "group": "core"} for p in core] + [{**p, "group": "recent"} for p in recent_pool[:needed]]
+
+
 def rank_papers(
     query: str,
     papers: list[dict],
@@ -99,6 +167,7 @@ def rank_papers(
     weights: dict | None = None,
     current_year: int | None = None,
     semantic: np.ndarray | None = None,
+    recent_years: int = 5,
 ) -> list[dict]:
     """Score and sort candidates.
 
@@ -155,6 +224,9 @@ def rank_papers(
     influence = np.sqrt(scale_to_max(citation_influence(papers, relevance))) * (0.3 + 0.7 * relevance)
     influence = scale_to_max(influence)
     cited_within = citation_counts_within(papers)
+    frontier, key_cited = frontier_scores(
+        papers, relevance, influence, current_year, recent_since(current_year, recent_years)
+    )
 
     total_weight = sum(weights.values()) or 1.0
     combined = (
@@ -173,12 +245,14 @@ def rank_papers(
             relevance_score=round(float(tfidf[index]) * 100, 1),
             seed_link=links[index],
             cited_by_results=int(cited_within[index]),
+            builds_on_key_papers=int(key_cited[index]),
             scores={
                 "relevance": round(float(relevance[index]), 3),
                 "influence": round(float(influence[index]), 3),
                 "seed": round(float(seed_scores[index]), 3),
                 "recency": round(float(recency[index]), 3),
                 "impact": round(float(impact[index]), 3),
+                "frontier": round(float(frontier[index]), 3),
             },
         )
         ranked.append(item)

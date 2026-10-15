@@ -107,6 +107,10 @@ function paperCard(paper, { rank, query, extra } = {}) {
     const why = paper.cited_by_results ? `검색 결과 ${paper.cited_by_results}편이 인용` : "관련 논문들이 바탕으로 삼는 논문";
     chips.append(el("span", { class: "chip key", text: "◆ 핵심 논문", title: `흐름 중요도 ${influence.toFixed(2)} · ${why}` }));
   }
+  if (paper.group === "recent") {
+    const links = paper.builds_on_key_papers ? ` · 핵심 논문 ${paper.builds_on_key_papers}편을 잇는 연구` : "";
+    chips.append(el("span", { class: "chip recent", text: `🆕 최신 연구${links}`, title: `최신 연구 점수 ${(paper.scores.frontier || 0).toFixed(2)}: 관련도, 핵심 논문을 바탕으로 하는 정도, 최신성, 인용 증가세` }));
+  }
   if (paper.core_reference) {
     chips.append(el("span", { class: "chip", text: "📌 검색어 밖 핵심 참고문헌", title: "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문" }));
   }
@@ -163,6 +167,7 @@ document.querySelectorAll("[data-weight]").forEach((range) => {
   const out = range.nextElementSibling;
   range.addEventListener("input", () => (out.value = Number(range.value).toFixed(2)));
 });
+$("recent-share").addEventListener("input", (e) => ($("recent-share-out").value = `${Math.round(e.target.value * 100)}%`));
 $("reset-weights").addEventListener("click", () => {
   document.querySelectorAll("[data-weight]").forEach((range) => {
     range.value = range.defaultValue;
@@ -182,6 +187,7 @@ $("search-form").addEventListener("submit", async (event) => {
   const payload = {
     query, limit: Number($("limit").value), year_from: yearFrom, year_to: yearTo,
     seed_ids: seeds.slice(0, MAX_SEEDS), require_abstract: $("require-abstract").checked, weights,
+    recent_share: Number($("recent-share").value), recent_years: Number($("recent-years").value),
   };
   setStatus("search-status", "검색 중…");
   $("results").replaceChildren();
@@ -202,7 +208,20 @@ function renderResults() {
   if (run.seeds.length) message += ` · 시드: ${run.seeds.map((s) => s.title).join("; ")}`;
   if (run.unresolved_seeds.length) message += ` · 찾지 못한 시드: ${run.unresolved_seeds.join(", ")}`;
   setStatus("search-status", message);
-  $("results").replaceChildren(...run.papers.map((p, i) => paperCard(p, { rank: i + 1, query: run.query })));
+  const core = run.papers.filter((p) => p.group !== "recent");
+  const recent = run.papers.filter((p) => p.group === "recent");
+  const cards = run.papers.map((p, i) => paperCard(p, { rank: i + 1, query: run.query }));
+  const items = [];
+  if (recent.length) {
+    items.push(el("li", { class: "group-head" }, "◆ 핵심 흐름", el("small", { text: `${core.length}편 · 흐름을 이해하는 데 중요한 논문 순` })));
+  }
+  items.push(...cards.slice(0, core.length));
+  if (recent.length) {
+    const years = run.settings.recent_years;
+    items.push(el("li", { class: "group-head" }, "🆕 최신 연구", el("small", { text: `${recent.length}편 · 최근 ${years}년, 위 목록에 없는 새 연구` })));
+    items.push(...cards.slice(core.length));
+  }
+  $("results").replaceChildren(...items);
   $("eval-bar").hidden = false;
   updateMetrics();
 }
