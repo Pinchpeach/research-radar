@@ -41,7 +41,13 @@ def cluster_papers(papers: list[dict]) -> tuple[list[int], list[str]]:
     """Return a cluster index per paper and a short label per cluster."""
     texts = [paper_text(paper) for paper in papers]
     k = cluster_count(len(papers))
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), sublinear_tf=True, max_df=0.9, min_df=1)
+    vectorizer = TfidfVectorizer(
+        stop_words="english",
+        ngram_range=(1, 2),
+        sublinear_tf=True,
+        max_df=0.9,
+        token_pattern=r"(?u)\b\w[\w-]*\w\b",  # keep hyphenated terms such as "x-ray" whole
+    )
     try:
         matrix = vectorizer.fit_transform(texts)
     except ValueError:  # empty vocabulary (no usable text)

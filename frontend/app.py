@@ -5,6 +5,7 @@ from pathlib import Path
 
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT.parent))
@@ -13,6 +14,8 @@ sys.path.insert(0, str(ROOT))
 from backend.evaluation import ndcg_at_k, precision_at_k  # noqa: E402
 from backend.judgments import save_run  # noqa: E402
 from flow_chart import build_figure, lineage_rows  # noqa: E402
+from techtree import layout as tech_tree_layout  # noqa: E402
+from techtree import render_html as render_tech_tree  # noqa: E402
 
 API_URL = os.getenv("RADAR_API_URL", "http://localhost:8000")
 JUDGMENTS = {"—": None, "Relevant": "relevant", "Partial": "partial", "Not relevant": "not_relevant"}
@@ -317,14 +320,32 @@ with flow_tab:
             try:
                 with st.spinner("Mapping the research flow..."):
                     state.flow = api("POST", "/flow", json=payload, timeout=60)
+                    state.flow_title = (
+                        state.run["query"] if state.run and source != "Bookmarks only" else "My Bookmarks"
+                    )
             except ApiError as exc:
                 st.error(f"Could not build the map: {exc}")
 
     flow = state.flow
     if flow and flow["nodes"]:
         nodes = {n["id"]: n for n in flow["nodes"]}
-        mode = "dark" if (st.context.theme.type or "light") == "dark" else "light"
-        st.plotly_chart(build_figure(flow, mode), use_container_width=True, theme="streamlit")
+        view = st.radio("View", ["Tech tree", "Timeline chart"], horizontal=True, label_visibility="collapsed")
+        if view == "Tech tree":
+            poster = render_tech_tree(flow, state.get("flow_title", "My Research"))
+            st.caption("Drag to pan, scroll to zoom, click a paper to trace what it builds on and what built on it.")
+            shape = tech_tree_layout(flow)
+            # the main column is ~1000px wide; size the frame to the poster's shape
+            frame_height = int(min(900, max(480, 1000 * shape["height"] / shape["width"])))
+            components.html(poster, height=frame_height)
+            st.download_button(
+                "Download poster (HTML)",
+                poster,
+                file_name="research-map.html",
+                mime="text/html",
+            )
+        else:
+            mode = "dark" if (st.context.theme.type or "light") == "dark" else "light"
+            st.plotly_chart(build_figure(flow, mode), use_container_width=True, theme="streamlit")
         undated = sum(1 for n in flow["nodes"] if not n["year"])
         st.caption(
             f"{len(nodes)} papers · {len(flow['edges'])} citation links · {len(flow['clusters'])} topics. "

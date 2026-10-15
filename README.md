@@ -33,7 +33,15 @@ The Streamlit UI has three tabs:
 - **Storyline per topic:** *origin* (earliest paper), *hub* (most cited within the map), and *frontier* (newest papers).
 - **Key lineage:** the longest chain of papers that each cite the previous one.
 
-In the chart, a paper's role is shown by both color and shape: ● search result, ★ bookmarked, ◆ foundational. Marker size grows with total citations, and a table view lists every paper.
+The **Tech tree** view (default) draws this as a poster in the style of *The Map of Physics*:
+
+- Each topic is a colored rail running left to right through time, starting from a glowing **ORIGINS** node. Columns are eras (1–10 years, chosen automatically to keep a poster shape).
+- Papers are cards hanging from stations on their rail. Hub papers and key foundational works glow.
+- Citations between topics are rounded orthogonal connectors routed between the columns. Same-topic citations appear when you focus a paper.
+- Each rail ends in a **Frontier** box listing its newest papers.
+- Interaction: drag to pan, scroll to zoom, hover for details, and click a card to light up what it builds on and what built on it. **핵심 계보** highlights the key lineage. **Download poster (HTML)** saves the map as one standalone file.
+
+The **Timeline chart** view is a compact Plotly version. There, a paper's role is shown by both color and shape: ● search result, ★ bookmarked, ◆ foundational. Marker size grows with total citations, and a table view lists every paper.
 
 ## Architecture
 
@@ -58,7 +66,8 @@ research-radar/
 │       └── embeddings.py    # optional semantic similarity
 ├── frontend/
 │   ├── app.py               # Streamlit UI
-│   └── flow_chart.py        # Plotly research-flow figure
+│   ├── techtree.py          # tech-tree poster (layout + interactive SVG)
+│   └── flow_chart.py        # Plotly timeline chart
 ├── scripts/evaluate.py      # metrics per saved run
 └── tests/
 ```
