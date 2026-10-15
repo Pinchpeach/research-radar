@@ -116,9 +116,29 @@ small { color: var(--text-3); font-weight: 400; }
 .chips:empty { display: none; }
 .chip { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--text-2); }
 .chip.seed { border-color: var(--accent); color: var(--accent); }
+.chip.key { border-color: var(--star); color: var(--star); font-weight: 600; }
 .abstract { margin-top: 6px; }
 .abstract summary { cursor: pointer; color: var(--text-3); font-size: 12.5px; }
 .abstract p { margin: 6px 0 0; line-height: 1.55; color: var(--text-2); }
+
+/* ── evaluation ── */
+.eval-bar { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; }
+.metrics { display: flex; gap: 16px; align-items: center; color: var(--text-2); flex-wrap: wrap; }
+.metrics b { color: var(--text); font-variant-numeric: tabular-nums; }
+.judge { display: flex; gap: 0; margin-top: 8px; }
+.judge button { border-radius: 0; padding: 4px 12px; font-size: 12.5px; }
+.judge button:first-child { border-radius: 8px 0 0 8px; }
+.judge button:last-child { border-radius: 0 8px 8px 0; }
+.judge button + button { border-left: 0; }
+.judge button.on[data-j=relevant] { background: var(--ok); border-color: var(--ok); color: #fff; }
+.judge button.on[data-j=partial] { background: var(--star); border-color: var(--star); color: #fff; }
+.judge button.on[data-j=not_relevant] { background: var(--text-3); border-color: var(--text-3); color: #fff; }
+#eval-table { width: 100%; border-collapse: collapse; margin-top: 8px; font-size: 12.5px; }
+#eval-table th, #eval-table td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+#eval-table th { color: var(--text-3); font-weight: 600; }
+#eval-table td.num { font-variant-numeric: tabular-nums; }
+#eval-table button { padding: 2px 8px; font-size: 12px; color: var(--danger); }
 
 /* ── bookmarks ── */
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

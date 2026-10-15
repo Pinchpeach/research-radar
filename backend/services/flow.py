@@ -16,7 +16,7 @@ from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 
 from backend.services.dedupe import dedupe
-from backend.services.ranking import paper_text
+from backend.services.ranking import paper_text, plausible_citation  # noqa: F401 - re-exported
 
 MAX_CLUSTERS = 6
 # Words common in abstracts that say nothing about a topic.
@@ -51,11 +51,6 @@ def outside_references(papers: list[dict], min_count: int = 2, limit: int = 10) 
     )
     return [(ref, count) for ref, count in counts.most_common() if count >= min_count][:limit]
 
-
-def plausible_citation(citing_year: int | None, cited_year: int | None) -> bool:
-    """A paper can't cite one published later. Allow a year of slack for preprints vs. journals;
-    anything beyond that is an error in the citation data."""
-    return not citing_year or not cited_year or cited_year <= citing_year + 1
 
 
 def credible_foundations(papers: list[dict], foundations: list[dict], min_count: int = 2) -> list[dict]:

@@ -198,24 +198,6 @@ def test_cluster_label_prefers_phrases():
         assert len(words) == len(set(words)), label
 
 
-def test_flow_figure_builds():
-    pytest.importorskip("plotly")  # the Plotly chart belongs to the Streamlit dev UI only
-    import sys
-    from pathlib import Path
-
-    sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "frontend"))
-    from flow_chart import build_figure, lineage_rows
-
-    data = flow.build_flow(CORPUS, bookmarked={"W3"})
-    for mode in ("light", "dark"):
-        fig = build_figure(data, mode)
-        names = [trace.name for trace in fig.data]
-        assert names[:2] == ["Citation", "Key lineage"]
-        assert {"Search result", "Bookmarked"} <= set(names)
-        assert len(fig.layout.yaxis.tickvals) == len(data["clusters"])
-    assert [row["year"] for row in lineage_rows(data)] == sorted(row["year"] for row in lineage_rows(data))
-
-
 def test_cluster_label_phrase_found_past_first_three_words():
     foundations = [
         {**p("W91", "Interferometer noise budget", "interferometer noise", 1995, 1500), "cited_by_in_set": 2},

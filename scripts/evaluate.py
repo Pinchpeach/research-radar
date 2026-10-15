@@ -6,7 +6,7 @@ Usage: python -m scripts.evaluate [path/to/judgments.jsonl]
 import sys
 from pathlib import Path
 
-from backend.judgments import DEFAULT_PATH, load_rows, summarize
+from backend.judgments import default_path, load_rows, summarize
 
 
 def fmt(value):
@@ -14,7 +14,7 @@ def fmt(value):
 
 
 def main() -> None:
-    path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_PATH
+    path = Path(sys.argv[1]) if len(sys.argv) > 1 else default_path()
     summary = summarize(load_rows(path))
     if not summary:
         print(f"No judgments found in {path}")

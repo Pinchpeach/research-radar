@@ -1,13 +1,14 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
 
 class Weights(BaseModel):
-    relevance: float = Field(default=0.6, ge=0)
+    relevance: float = Field(default=0.35, ge=0)
+    influence: float = Field(default=0.45, ge=0)  # how much the relevant literature builds on a paper
     seed: float = Field(default=0.2, ge=0)
-    recency: float = Field(default=0.1, ge=0)
-    impact: float = Field(default=0.1, ge=0)
+    recency: float = Field(default=0.05, ge=0)
+    impact: float = Field(default=0.15, ge=0)
 
 
 class SearchRequest(BaseModel):
@@ -28,6 +29,7 @@ class SearchRequest(BaseModel):
 
 class Scores(BaseModel):
     relevance: float
+    influence: float
     seed: float
     recency: float
     impact: float
@@ -52,6 +54,8 @@ class PaperData(BaseModel):
 
 class Paper(PaperData):
     seed_link: bool = False
+    core_reference: bool = False  # found because many results cite it, not by the text search
+    cited_by_results: int = 0
     score: float
     relevance_score: float
     scores: Scores
@@ -118,3 +122,22 @@ class KeyTest(BaseModel):
 class PosterRequest(BaseModel):
     flow: dict
     title: str = Field(default="My Research", max_length=300)
+
+
+Judgment = Literal["relevant", "partial", "not_relevant"]
+
+
+class JudgedPaper(BaseModel):
+    id: str
+    title: str = ""
+    score: Optional[float] = None
+
+
+class EvaluationRun(BaseModel):
+    """Relevance judgments for one search, in the order the results were shown."""
+
+    run_id: str = Field(min_length=1, max_length=100)
+    query: str = Field(min_length=1, max_length=500)
+    settings: dict = Field(default_factory=dict)
+    papers: list[JudgedPaper] = Field(max_length=200)
+    judgments: dict[str, Judgment]

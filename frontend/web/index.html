@@ -46,15 +46,35 @@
           <label class="check"><input id="require-abstract" type="checkbox"> 초록이 있는 논문만</label>
           <fieldset class="wide weights">
             <legend>정렬 가중치</legend>
-            <label>주제 관련도 <input type="range" data-weight="relevance" min="0" max="1" step="0.05" value="0.6"><output>0.60</output></label>
+            <label>주제 관련도 <input type="range" data-weight="relevance" min="0" max="1" step="0.05" value="0.35"><output>0.35</output></label>
+            <label title="관련 논문들이 계속 바탕으로 삼는 논문, 즉 흐름을 이해하는 데 핵심인 논문일수록 높습니다">흐름 중요도 <input type="range" data-weight="influence" min="0" max="1" step="0.05" value="0.45"><output>0.45</output></label>
+            <label>인용 영향력 <input type="range" data-weight="impact" min="0" max="1" step="0.05" value="0.15"><output>0.15</output></label>
+            <label>최신성 <input type="range" data-weight="recency" min="0" max="1" step="0.05" value="0.05"><output>0.05</output></label>
             <label>시드 연결 <input type="range" data-weight="seed" min="0" max="1" step="0.05" value="0.2"><output>0.20</output></label>
-            <label>최신성 <input type="range" data-weight="recency" min="0" max="1" step="0.05" value="0.1"><output>0.10</output></label>
-            <label>인용 영향력 <input type="range" data-weight="impact" min="0" max="1" step="0.05" value="0.1"><output>0.10</output></label>
+            <button type="button" id="reset-weights" class="link-button">기본값</button>
           </fieldset>
         </div>
       </details>
       <p id="search-status" class="status" role="status"></p>
+      <div id="eval-bar" class="eval-bar" hidden>
+        <label class="check" title="검색 결과마다 관련/부분/무관을 표시해 정렬 품질을 잽니다"><input id="eval-mode" type="checkbox"> 정렬 평가</label>
+        <span id="eval-metrics" class="metrics" hidden>
+          <span>판정 <b id="m-judged">0</b></span>
+          <span>Precision@10 <b id="m-p10">—</b></span>
+          <span>Precision@20 <b id="m-p20">—</b></span>
+          <span>nDCG@20 <b id="m-ndcg">—</b></span>
+          <button id="eval-save" disabled>판정 저장</button>
+        </span>
+      </div>
       <ol id="results" class="papers"></ol>
+      <details id="eval-history" class="options">
+        <summary>평가 기록 <small>설정을 바꿔 가며 정렬 품질을 비교합니다</small></summary>
+        <p id="eval-empty" class="empty">저장된 평가가 없습니다. 검색 후 ‘정렬 평가’를 켜고 결과를 판정해 저장하세요.</p>
+        <table id="eval-table" hidden>
+          <thead><tr><th>저장 시각</th><th>검색어</th><th>판정</th><th>P@10</th><th>P@20</th><th>nDCG@20</th><th>가중치 (관련·흐름·인용·최신·시드)</th><th></th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </details>
     </section>
 
     <!-- ───────────── 북마크 ───────────── -->
@@ -134,6 +154,9 @@
       <div class="meta"></div>
       <div class="chips"></div>
       <details class="abstract"><summary>초록</summary><p></p></details>
+      <div class="judge" hidden>
+        <button data-j="relevant">관련</button><button data-j="partial">부분</button><button data-j="not_relevant">무관</button>
+      </div>
     </li>
   </template>
 

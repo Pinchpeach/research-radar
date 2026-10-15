@@ -4,8 +4,9 @@ const $ = (id) => document.getElementById(id);
 const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "venue", "authors", "citations",
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
+const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
 
-const state = { run: null, bookmarks: [], flow: null, poster: null, posterTitle: "" };
+const state = { run: null, bookmarks: [], flow: null, poster: null, posterTitle: "", evalMode: false, judgments: {} };
 
 // ───────────── helpers ─────────────
 
@@ -101,6 +102,14 @@ function paperCard(paper, { rank, query, extra } = {}) {
   node.querySelector(".meta").textContent = metaLine(paper);
 
   const chips = node.querySelector(".chips");
+  const influence = paper.scores && paper.scores.influence;
+  if (influence >= KEY_PAPER) {
+    const why = paper.cited_by_results ? `검색 결과 ${paper.cited_by_results}편이 인용` : "관련 논문들이 바탕으로 삼는 논문";
+    chips.append(el("span", { class: "chip key", text: "◆ 핵심 논문", title: `흐름 중요도 ${influence.toFixed(2)} · ${why}` }));
+  }
+  if (paper.core_reference) {
+    chips.append(el("span", { class: "chip", text: "📌 검색어 밖 핵심 참고문헌", title: "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문" }));
+  }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: "🔗 시드와 연결" }));
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
@@ -129,6 +138,21 @@ function paperCard(paper, { rank, query, extra } = {}) {
       star.disabled = false;
     }
   });
+  const judge = node.querySelector(".judge");
+  if (rank && state.evalMode) {
+    judge.hidden = false;
+    const paint = () => judge.querySelectorAll("button").forEach((b) => b.classList.toggle("on", state.judgments[paper.id] === b.dataset.j));
+    paint();
+    judge.addEventListener("click", (event) => {
+      const value = event.target.dataset && event.target.dataset.j;
+      if (!value) return;
+      state.judgments[paper.id] = state.judgments[paper.id] === value ? undefined : value;  // click again to clear
+      paint();
+      updateMetrics();
+    });
+  } else {
+    judge.remove();
+  }
   if (extra) node.append(extra);
   return node;
 }
@@ -138,6 +162,12 @@ function paperCard(paper, { rank, query, extra } = {}) {
 document.querySelectorAll("[data-weight]").forEach((range) => {
   const out = range.nextElementSibling;
   range.addEventListener("input", () => (out.value = Number(range.value).toFixed(2)));
+});
+$("reset-weights").addEventListener("click", () => {
+  document.querySelectorAll("[data-weight]").forEach((range) => {
+    range.value = range.defaultValue;
+    range.nextElementSibling.value = Number(range.value).toFixed(2);
+  });
 });
 
 $("search-form").addEventListener("submit", async (event) => {
@@ -157,7 +187,9 @@ $("search-form").addEventListener("submit", async (event) => {
   $("results").replaceChildren();
   try {
     const body = await api("POST", "/search", payload);
-    state.run = { ...body, query };
+    const { query: _q, ...runSettings } = payload;
+    state.run = { ...body, query, runId: new Date().toISOString(), settings: { ...runSettings, semantic: body.semantic } };
+    state.judgments = {};
     renderResults();
   } catch (e) {
     setStatus("search-status", `검색 실패: ${e.message}`, true);
@@ -171,6 +203,84 @@ function renderResults() {
   if (run.unresolved_seeds.length) message += ` · 찾지 못한 시드: ${run.unresolved_seeds.join(", ")}`;
   setStatus("search-status", message);
   $("results").replaceChildren(...run.papers.map((p, i) => paperCard(p, { rank: i + 1, query: run.query })));
+  $("eval-bar").hidden = false;
+  updateMetrics();
+}
+
+// ───────────── ranking evaluation ─────────────
+// Same definitions as backend/evaluation.py, computed here for live feedback.
+
+const GAIN = { relevant: 2, partial: 1, not_relevant: 0 };
+
+function precisionAt(labels, k) {
+  const judged = labels.slice(0, k).filter(Boolean);
+  return judged.length ? judged.filter((j) => GAIN[j] > 0).length / judged.length : null;
+}
+
+function ndcgAt(labels, k) {
+  const top = labels.slice(0, k);
+  if (!top.some(Boolean)) return null;
+  const dcg = top.reduce((sum, j, i) => sum + (j ? GAIN[j] : 0) / Math.log2(i + 2), 0);
+  const ideal = labels.filter(Boolean).map((j) => GAIN[j]).sort((a, b) => b - a).slice(0, k);
+  const idcg = ideal.reduce((sum, g, i) => sum + g / Math.log2(i + 2), 0);
+  return idcg ? dcg / idcg : 0;
+}
+
+const fmt = (v) => (v == null ? "—" : v.toFixed(2));
+
+function updateMetrics() {
+  $("eval-metrics").hidden = !state.evalMode;
+  if (!state.run) return;
+  const labels = state.run.papers.map((p) => state.judgments[p.id]);
+  const judged = labels.filter(Boolean).length;
+  $("m-judged").textContent = `${judged} / ${labels.length}`;
+  $("m-p10").textContent = fmt(precisionAt(labels, 10));
+  $("m-p20").textContent = fmt(precisionAt(labels, 20));
+  $("m-ndcg").textContent = fmt(ndcgAt(labels, 20));
+  $("eval-save").disabled = judged === 0;
+}
+
+$("eval-mode").addEventListener("change", (event) => {
+  state.evalMode = event.target.checked;
+  if (state.run) renderResults();
+});
+
+$("eval-save").addEventListener("click", async () => {
+  const run = state.run;
+  const judgments = Object.fromEntries(Object.entries(state.judgments).filter(([, v]) => v));
+  try {
+    const res = await api("POST", "/evaluations", {
+      run_id: run.runId, query: run.query, settings: run.settings,
+      papers: run.papers.map((p) => ({ id: p.id, title: p.title, score: p.score })), judgments,
+    });
+    setStatus("search-status", `판정 ${res.written}개를 저장했습니다. 아래 ‘평가 기록’에서 비교할 수 있습니다.`);
+    $("eval-history").open = true;
+    loadEvaluations();
+  } catch (e) {
+    setStatus("search-status", `판정 저장 실패: ${e.message}`, true);
+  }
+});
+
+async function loadEvaluations() {
+  let runs = [];
+  try { runs = await api("GET", "/evaluations"); } catch { /* shown as empty */ }
+  $("eval-empty").hidden = runs.length > 0;
+  $("eval-table").hidden = runs.length === 0;
+  $("eval-table").querySelector("tbody").replaceChildren(...runs.map((r) => {
+    const w = (r.settings && r.settings.weights) || {};
+    const weights = ["relevance", "influence", "impact", "recency", "seed"].map((k) => (w[k] ?? 0).toFixed(2)).join(" · ");
+    const when = r.saved_at ? new Date(r.saved_at).toLocaleString() : "—";
+    const remove = el("button", { text: "삭제", title: "이 평가 기록 삭제" });
+    remove.addEventListener("click", async () => {
+      if (!confirm(`“${r.query}” 평가 기록을 삭제할까요?`)) return;
+      await api("DELETE", `/evaluations/${encodeURIComponent(r.run_id)}`);
+      loadEvaluations();
+    });
+    return el("tr", {},
+      el("td", { text: when }), el("td", { text: r.query }), el("td", { class: "num", text: String(r.judged) }),
+      el("td", { class: "num", text: fmt(r["p@10"]) }), el("td", { class: "num", text: fmt(r["p@20"]) }),
+      el("td", { class: "num", text: fmt(r["ndcg@20"]) }), el("td", { class: "num", text: weights }), el("td", {}, remove));
+  }));
 }
 
 // ───────────── bookmarks ─────────────
@@ -371,3 +481,4 @@ $("settings-form").addEventListener("submit", async (event) => {
 
 loadSettings();
 loadBookmarks();
+loadEvaluations();
