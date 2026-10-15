@@ -1,8 +1,14 @@
 name: Desktop app
 
+# Every push that touches the app: test, build and smoke-test on Windows, macOS and Linux.
+# Pushing a version tag (v1.2.3, must match backend/version.py) also publishes a GitHub
+# Release with the three packages.
 on:
   push:
-    paths:
+    # A push trigger that lists only tags would stop running for branches, so name both.
+    branches: ["**"]
+    tags: ["v*"]
+    paths: # not applied to tag pushes
       - "backend/**"
       - "frontend/web/**"
       - "desktop/**"
@@ -28,6 +34,11 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-desktop.txt
 
+      - name: Check the tag matches the app version
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: python desktop/release.py check-tag "$GITHUB_REF_NAME"
+
       - name: Install
         run: pip install -r requirements-desktop.txt pytest httpx
 
@@ -50,11 +61,12 @@ jobs:
       - name: Package
         shell: bash
         run: |
+          version="$(python desktop/release.py version)"
           mkdir -p out
           case "$RUNNER_OS" in
-            Windows) (cd dist && 7z a -tzip ../out/ResearchRadar-windows.zip ResearchRadar > /dev/null) ;;
-            macOS)   ditto -c -k --keepParent "dist/Research Radar.app" out/ResearchRadar-macos.zip ;;
-            *)       tar -czf out/ResearchRadar-linux.tar.gz -C dist ResearchRadar ;;
+            Windows) (cd dist && 7z a -tzip "../out/ResearchRadar-$version-windows.zip" ResearchRadar > /dev/null) ;;
+            macOS)   ditto -c -k --keepParent "dist/Research Radar.app" "out/ResearchRadar-$version-macos.zip" ;;
+            *)       tar -czf "out/ResearchRadar-$version-linux.tar.gz" -C dist ResearchRadar ;;
           esac
           ls -lh out
 
@@ -63,3 +75,36 @@ jobs:
           name: ResearchRadar-${{ runner.os }}
           path: out/*
           retention-days: 30
+
+  release:
+    name: Publish release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build # only when all three builds and smoke tests passed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Checksums
+        working-directory: release
+        run: |
+          sha256sum ResearchRadar-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Release notes
+        run: python desktop/release.py notes "$GITHUB_REF_NAME" > release-notes.md
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          name: Research Radar ${{ github.ref_name }}
+          body_path: release-notes.md
+          generate_release_notes: true # appends the merged PRs since the previous release
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          files: release/*
+          fail_on_unmatched_files: true

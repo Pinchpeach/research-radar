@@ -52,6 +52,7 @@ def main(executable: str) -> int:
             "/static/app.js": b"loadSettings",
             "/settings": b"openalex_api_key",
             "/bookmarks": b"[]",
+            "/version": b'"version"',
         }
         for path, needle in checks.items():
             status, body = get(base + path)

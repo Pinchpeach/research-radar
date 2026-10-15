@@ -15,6 +15,7 @@
       <button class="tab" data-tab="map" role="tab">🧭 연구 지도</button>
       <button class="tab" data-tab="settings" role="tab">⚙ 환경설정</button>
     </nav>
+    <a id="update-pill" class="pill update" target="_blank" rel="noopener" hidden></a>
     <button id="key-pill" class="pill" title="OpenAlex API 키 상태">키 확인 중…</button>
   </header>
 
@@ -145,6 +146,7 @@
           <span id="settings-status" class="status" role="status"></span>
         </div>
         <p class="hint">키는 이 컴퓨터의 데이터 폴더에만 저장됩니다: <code id="data-dir"></code></p>
+        <p class="hint">Research Radar <span id="app-version"></span> <span id="update-state"></span></p>
       </form>
     </section>
   </main>

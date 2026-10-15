@@ -35,15 +35,17 @@
 
 ### 다운로드
 
-[Actions → Desktop app](../../actions/workflows/desktop.yml)에서 가장 최근의 성공한 빌드를 열고, 아래 **Artifacts**에서 운영체제에 맞는 파일을 받으세요.
+[**Releases**](../../releases/latest)에서 운영체제에 맞는 파일을 받으세요.
 
 | 운영체제 | 파일 | 실행 방법 |
 |---|---|---|
-| Windows | `ResearchRadar-windows.zip` | 압축을 풀고 `ResearchRadar\ResearchRadar.exe`를 실행합니다. 처음 실행할 때 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요. |
-| macOS | `ResearchRadar-macos.zip` | 압축을 풀고 `Research Radar.app`을 응용 프로그램 폴더로 옮깁니다. 처음에는 **우클릭 → 열기**로 실행하세요. |
-| Linux | `ResearchRadar-linux.tar.gz` | 압축을 풀고 `ResearchRadar/ResearchRadar`를 실행합니다. 창을 띄우려면 GTK 또는 Qt WebView가 필요하고, 없으면 기본 브라우저로 열립니다. |
+| Windows | `ResearchRadar-<버전>-windows.zip` | 압축을 풀고 `ResearchRadar\ResearchRadar.exe`를 실행합니다. 처음 실행할 때 "Windows의 PC 보호" 창이 뜨면 **추가 정보 → 실행**을 누르세요. |
+| macOS | `ResearchRadar-<버전>-macos.zip` | 압축을 풀고 `Research Radar.app`을 응용 프로그램 폴더로 옮깁니다. 처음에는 **우클릭 → 열기**로 실행하세요. |
+| Linux | `ResearchRadar-<버전>-linux.tar.gz` | 압축을 풀고 `ResearchRadar/ResearchRadar`를 실행합니다. 창을 띄우려면 GTK 또는 Qt WebView가 필요하고, 없으면 기본 브라우저로 열립니다. |
 
-> 앱에 코드 서명이 되어 있지 않아 첫 실행 때 운영체제 경고가 나옵니다.
+> 앱에 코드 서명이 되어 있지 않아 첫 실행 때 운영체제 경고가 나옵니다. 내려받은 파일은 릴리스에 함께 올라가는 `SHA256SUMS.txt`로 확인할 수 있습니다.
+
+**업데이트:** 앱은 시작할 때 GitHub Releases에서 새 버전을 확인하고, 새 버전이 있으면 오른쪽 위에 **새 버전 vX.Y.Z**를 표시합니다. 눌러서 내려받은 뒤 기존 앱을 바꾸면 됩니다. 설정과 북마크는 데이터 폴더에 있어서 그대로 이어집니다. 현재 버전은 환경설정 아래에 나옵니다.
 
 ### 처음 실행: OpenAlex API 키 입력
 
@@ -141,7 +143,25 @@ pyinstaller desktop/research_radar.spec --noconfirm   # dist/ 에 생성
 python desktop/smoke.py dist/ResearchRadar/ResearchRadar   # 빌드 결과 점검
 ```
 
-PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop app 워크플로](.github/workflows/desktop.yml)가 Windows, macOS, Linux에서 테스트 → 빌드 → 실행 점검 → 업로드를 자동으로 합니다.
+PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop app 워크플로](.github/workflows/desktop.yml)가 앱 코드가 바뀐 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 자동으로 합니다.
+
+### 릴리스 배포
+
+버전 태그를 푸시하면 세 운영체제용 앱이 빌드·점검된 뒤 GitHub Release로 자동 배포됩니다.
+
+1. `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고 `main`에 병합합니다. 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다.
+2. `main`에서 같은 버전의 태그를 만들어 푸시합니다.
+   ```bash
+   git checkout main && git pull
+   git tag v0.5.0
+   git push origin v0.5.0
+   ```
+3. 워크플로가 다음을 합니다.
+   - 태그가 `backend/version.py`와 다르면 바로 실패합니다.
+   - 세 운영체제 빌드와 실행 점검이 **모두 통과해야** 릴리스를 만듭니다.
+   - 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
+
+`v0.5.0-rc1`처럼 `-`가 붙은 태그는 시험판(pre-release)으로 올라갑니다. 앱의 업데이트 알림은 시험판을 무시합니다.
 
 ### API
 
@@ -153,6 +173,7 @@ PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 �
 | `POST /poster` | `/flow` 결과로 만든 인터랙티브 테크트리 HTML |
 | `GET/PUT /settings`, `POST /settings/test-openalex` | 설정 조회·저장(키는 끝 네 글자만 반환)과 OpenAlex 키 확인 |
 | `POST/GET /evaluations`, `DELETE /evaluations/{run_id}` | 정렬 평가(관련도 판정) 저장, 실행별 Precision@k·nDCG 목록, 삭제 |
+| `GET /version` | 앱 버전과 GitHub Releases의 최신 버전(업데이트 알림용) |
 
 ### 프로젝트 구조
 
@@ -161,6 +182,8 @@ research-radar/
 ├── backend/
 │   ├── main.py              # FastAPI 앱: API + 화면 제공
 │   ├── settings.py          # API 키 등 사용자 설정
+│   ├── version.py           # 앱 버전 (릴리스 태그와 일치해야 함)
+│   ├── updates.py           # 새 버전 확인
 │   ├── storage.py           # 북마크 (SQLite), BibTeX
 │   ├── models.py
 │   └── services/
@@ -175,7 +198,8 @@ research-radar/
 ├── desktop/
 │   ├── main.py              # 앱 실행기 (로컬 서버 + 네이티브 창)
 │   ├── research_radar.spec  # PyInstaller 빌드 설정
-│   └── smoke.py             # 빌드 결과 점검
+│   ├── smoke.py             # 빌드 결과 점검
+│   └── release.py           # 릴리스: 버전·태그 확인, 릴리스 노트
 ├── scripts/                 # live_check.py, evaluate.py
 └── tests/
 ```
