@@ -334,7 +334,8 @@ with flow_tab:
             poster = render_tech_tree(flow, state.get("flow_title", "My Research"))
             st.caption(
                 "The big picture first: topic rails and how they branch and feed each other. "
-                "Hover a dot, rail, or curve for details · click a dot to trace its lineage · scroll to zoom (titles appear)."
+                "Hover a dot, rail, or curve for a quick look · click to pin its card (× or empty space closes it) · "
+                "scroll to zoom (titles appear)."
             )
             shape = tech_tree_layout(flow)
             # the main column is ~1000px wide; size the frame to the poster's shape

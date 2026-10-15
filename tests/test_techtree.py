@@ -119,3 +119,11 @@ def test_small_and_empty_maps():
     lay = techtree.layout(flow.build_flow(CORPUS[:1]))
     assert len(lay["nodes"]) == 1 and lay["edges"] == [] and lay["bundles"] == []
     techtree.render_html(flow.build_flow(CORPUS), "x")  # renders without error
+
+
+def test_pinned_card_markup_and_anchor_data(flow_data):
+    page = techtree.render_html(flow_data, "x")
+    assert 'id="pin"' in page and 'id="close"' in page
+    data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))
+    # cards anchor to the dot, so every paper carries its map position
+    assert all(isinstance(n["x"], float) and isinstance(n["y"], (int, float)) for n in data["nodes"])

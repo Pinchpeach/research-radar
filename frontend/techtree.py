@@ -361,13 +361,14 @@ def _svg(lay: dict, title: str) -> str:
     )
 
     # how to read
-    ly = H - 120
+    ly = H - 135
     notes = [
         "How to read this map",
         "· Each rail is a research topic; time runs left to right. A topic branches off the topic it grew from.",
         "· Soft curves between rails are citations between topics — thicker means more.",
         "· Dots are papers (bigger = more cited, glow = key paper, ○ = foundational work, ★ = bookmarked).",
-        "· Hover a dot, rail, or curve for details. Click a dot to trace its lineage. Zoom in to see titles.",
+        "· Hover a dot, rail, or curve for a quick look; click to pin its card (× or empty space closes it).",
+        "· A pinned paper also lights up its lineage. Zoom in to see titles.",
     ]
     for i, line in enumerate(notes):
         out.append(
@@ -412,11 +413,20 @@ TEMPLATE = """<!doctype html>
   #tip .k{color:#52514e}
   #tip .chip{display:inline-block;border-radius:999px;padding:0 7px;font-size:11px;color:#fff;margin-bottom:4px}
   #tip ul{margin:4px 0 0;padding-left:16px}
-  #info{position:absolute;left:12px;bottom:12px;max-width:420px;background:#1b1e26f2;color:#f0efec;
-    border:1px solid #3a3f4b;border-radius:10px;padding:12px 14px;font-size:12.5px;line-height:1.5;display:none}
-  #info a{color:#86b6ef}
-  #info .muted{color:#c3c2b7}
-  #info button{float:right;background:none;border:0;color:#c3c2b7;font-size:16px;cursor:pointer}
+  #pin{position:absolute;max-width:360px;background:#f0efec;color:#0e1015;border-radius:12px;padding:12px 14px 12px;
+    font-size:12.5px;line-height:1.5;box-shadow:0 12px 36px rgba(0,0,0,.6);display:none;cursor:auto;
+    border-top:4px solid var(--accent,#f0efec)}
+  #pin b{display:block;font-size:13.5px;margin:2px 22px 2px 0}
+  #pin .k{color:#52514e}
+  #pin .chip{display:inline-block;border-radius:999px;padding:0 7px;font-size:11px;color:#fff;margin:0 22px 4px 0}
+  #pin ul{margin:4px 0 0;padding-left:16px}
+  #pin a{color:#1c5cab;font-weight:600}
+  #pin .actions{margin-top:8px}
+  #pin #close{position:absolute;top:6px;right:8px;width:26px;height:26px;border:0;border-radius:6px;background:none;
+    color:#52514e;font-size:18px;line-height:1;cursor:pointer}
+  #pin #close:hover{background:#e0dfda;color:#0e1015}
+  #pinmark{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid #f0efec;border-radius:50%;
+    pointer-events:none;display:none;box-shadow:0 0 0 3px rgba(240,239,236,.25)}
 </style></head>
 <body><div id="wrap">
 __SVG__
@@ -427,7 +437,8 @@ __SVG__
   <button id="fit" title="Fit to screen">전체 보기</button>
 </div>
 <div id="tip" role="tooltip"></div>
-<div id="info"><button id="close" aria-label="Close">×</button><div id="infobody"></div></div>
+<div id="pinmark"></div>
+<div id="pin" role="dialog" aria-label="Details"><button id="close" aria-label="Close" title="Close (Esc)">×</button><div id="pinbody"></div></div>
 </div>
 <script>
 const DATA = __DATA__;
@@ -440,6 +451,7 @@ let s = 1, tx = 0, ty = 0, fitScale = 1, labelsOn = false;
 function apply() {
   vp.setAttribute("transform", `translate(${tx},${ty}) scale(${s})`);
   svg.classList.toggle("show-labels", labelsOn || s >= fitScale * LABEL_ZOOM);
+  placePin();
 }
 function fit() {
   const w = wrap.clientWidth, h = wrap.clientHeight;
@@ -454,7 +466,7 @@ function zoom(f, cx, cy) {
 wrap.addEventListener("wheel", e => { e.preventDefault(); const r = wrap.getBoundingClientRect();
   zoom(Math.exp(-e.deltaY * 0.0015), e.clientX - r.left, e.clientY - r.top); }, { passive: false });
 let drag = null, moved = false;
-wrap.addEventListener("pointerdown", e => { if (e.target.closest("#bar,#info")) return;
+wrap.addEventListener("pointerdown", e => { if (e.target.closest("#bar,#pin")) return;
   drag = { x: e.clientX, y: e.clientY, tx, ty }; moved = false; wrap.classList.add("drag"); });
 window.addEventListener("pointermove", e => { if (!drag) return; const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
   if (Math.abs(dx) + Math.abs(dy) > 3) { moved = true; hideTip(); } tx = drag.tx + dx; ty = drag.ty + dy; apply(); });
@@ -519,15 +531,57 @@ dotEls.forEach(el => {
   el.addEventListener("keydown", e => { if (e.key === "Enter") select(id); });
 });
 document.querySelectorAll(".rail-hit").forEach(el => {
-  el.addEventListener("pointerenter", e => !drag && showTip(laneTip(lanes[el.dataset.lane]), e));
+  const lane = lanes[el.dataset.lane];
+  el.addEventListener("pointerenter", e => !drag && showTip(laneTip(lane), e));
   el.addEventListener("pointermove", moveTip); el.addEventListener("pointerleave", hideTip);
+  el.addEventListener("click", e => { if (!moved) { e.stopPropagation(); clearFocus();
+    pin(laneTip(lane), toMap(e), lane.color, "lane:" + lane.lane); } });
 });
 document.querySelectorAll(".bundle-hit").forEach(el => {
-  const line = document.querySelector(`.bundle[data-i="${el.dataset.i}"]`);
-  el.addEventListener("pointerenter", e => { if (!drag) { showTip(bundleTip(DATA.bundles[el.dataset.i]), e); line.classList.add("hover"); } });
+  const line = document.querySelector(`.bundle[data-i="${el.dataset.i}"]`), b = DATA.bundles[el.dataset.i];
+  el.addEventListener("pointerenter", e => { if (!drag) { showTip(bundleTip(b), e); line.classList.add("hover"); } });
   el.addEventListener("pointermove", moveTip);
   el.addEventListener("pointerleave", () => { hideTip(); line.classList.remove("hover"); });
+  el.addEventListener("click", e => { if (!moved) { e.stopPropagation(); clearFocus();
+    pin(bundleTip(b), toMap(e), lanes[b.from_lane].color, "bundle:" + el.dataset.i); } });
 });
+
+// ---------- pinned card: opens on click, stays until background / × / Esc ----------
+let pinned = null; // { key, x, y } in map coordinates
+const pinEl = $("pin"), pinMark = $("pinmark");
+function toMap(e) { const r = wrap.getBoundingClientRect();
+  return { x: (e.clientX - r.left - tx) / s, y: (e.clientY - r.top - ty) / s }; }
+function pin(html, at, accent, key) {
+  hideTip();
+  $("pinbody").innerHTML = html;
+  pinEl.style.setProperty("--accent", accent);
+  pinned = { key, x: at.x, y: at.y, right: null, above: null };
+  pinEl.style.display = pinMark.style.display = "block";
+  placePin();
+  $("close").focus({ preventScroll: true });
+}
+function placePin() {
+  if (!pinned) return;
+  // follow the anchor as the map pans and zooms; flip to stay inside the frame
+  // keep the side the card opened on; flip only when it would leave the frame
+  const ax = pinned.x * s + tx, ay = pinned.y * s + ty, w = pinEl.offsetWidth, h = pinEl.offsetHeight;
+  const W2 = wrap.clientWidth, H2 = wrap.clientHeight;
+  const fitsRight = ax + 18 + w <= W2 - 8, fitsLeft = ax - 18 - w >= 8;
+  const fitsAbove = ay - 14 - h >= 8, fitsBelow = ay + 18 + h <= H2 - 8;
+  if (pinned.right === null) pinned.right = fitsRight || !fitsLeft;
+  else if (pinned.right && !fitsRight && fitsLeft) pinned.right = false;
+  else if (!pinned.right && !fitsLeft && fitsRight) pinned.right = true;
+  if (pinned.above === null) pinned.above = fitsAbove || !fitsBelow;
+  else if (pinned.above && !fitsAbove && fitsBelow) pinned.above = false;
+  else if (!pinned.above && !fitsBelow && fitsAbove) pinned.above = true;
+  let x = pinned.right ? ax + 18 : ax - w - 18, y = pinned.above ? ay - h - 14 : ay + 18;
+  x = Math.min(x, W2 - w - 8); y = Math.min(y, H2 - h - 8);
+  pinEl.style.left = Math.max(8, x) + "px"; pinEl.style.top = Math.max(8, y) + "px";
+  pinMark.style.left = ax + "px"; pinMark.style.top = ay + "px";
+  const inside = ax > -20 && ay > -20 && ax < W2 + 20 && ay < H2 + 20;
+  pinMark.style.display = inside ? "block" : "none";
+}
+function unpin() { pinned = null; pinEl.style.display = pinMark.style.display = "none"; }
 
 // ---------- focus: selected paper's lineage, or the key lineage ----------
 function focus(ids, edgeOk) {
@@ -539,26 +593,28 @@ function focus(ids, edgeOk) {
 function clearFocus() {
   svg.classList.remove("focus");
   [...dotEls, ...edgeEls, ...haloEls].forEach(el => el.classList.remove("on", "peek"));
-  $("info").style.display = "none"; $("lineage").classList.remove("active");
+  $("lineage").classList.remove("active");
 }
+function dismiss() { clearFocus(); unpin(); }
 function select(id) {
   const anc = reach(id, cites), desc = reach(id, citedBy), ids = new Set([id, ...anc, ...desc]);
   // s cites t: keep edges that run among the ancestors or among the descendants
   focus(ids, (s, t) => ((s === id || anc.has(s)) && anc.has(t)) || (desc.has(s) && (t === id || desc.has(t))));
   const n = nodes[id];
-  $("infobody").innerHTML = `<b>${esc(n.title)}</b><br><span class="muted">${esc((n.authors || []).join(", "))} · ` +
-    `${n.year} · ${n.citations.toLocaleString()} citations</span><br><span class="muted">Topic: ${esc(n.lane_label)}</span><br>` +
-    `Builds on <b>${anc.size}</b> · led to <b>${desc.size}</b> papers in this map<br>` +
-    (n.url ? `<a href="${esc(n.url)}" target="_blank" rel="noopener">Open paper ↗</a>` : "");
-  $("info").style.display = "block"; $("lineage").classList.remove("active"); hideTip();
+  $("lineage").classList.remove("active");
+  pin(paperTip(n) + `<div class="actions"><span class="k">Lineage highlighted on the map.</span>` +
+      (n.url ? ` <a href="${esc(n.url)}" target="_blank" rel="noopener">Open paper ↗</a>` : "") + `</div>`,
+      { x: n.x, y: n.y }, n.color, "dot:" + id);
 }
-wrap.addEventListener("click", e => { if (!moved && !e.target.closest(".dot,#bar,#info")) clearFocus(); });
-$("close").onclick = clearFocus;
+// a click on empty map (not a drag) closes the card
+wrap.addEventListener("click", e => { if (!moved && !e.target.closest(".dot,.rail-hit,.bundle-hit,#bar,#pin")) dismiss(); });
+$("close").onclick = e => { e.stopPropagation(); dismiss(); };
+window.addEventListener("keydown", e => { if (e.key === "Escape") dismiss(); });
 $("lineage").onclick = e => { e.stopPropagation();
   if (e.currentTarget.classList.contains("active")) return clearFocus();
   const c = DATA.chain, pairs = new Set(c.slice(1).map((id, i) => id + ">" + c[i]));
-  focus(new Set(c), (s, t) => pairs.has(s + ">" + t));
-  $("info").style.display = "none"; e.currentTarget.classList.add("active"); };
+  unpin(); focus(new Set(c), (s, t) => pairs.has(s + ">" + t));
+  e.currentTarget.classList.add("active"); };
 fit();
 </script></body></html>"""
 
@@ -572,7 +628,7 @@ def render_html(flow: dict, title: str) -> str:
         "edges": [{"s": e["s"], "t": e["t"]} for e in lay["edges"]],
         "nodes": [
             {key: n.get(key) for key in ("id", "title", "authors", "year", "citations", "url", "role",
-                                          "bookmarked", "cited_by_in_set", "lane_label", "color")}
+                                          "bookmarked", "cited_by_in_set", "lane_label", "color", "x", "y")}
             for n in lay["nodes"]
         ],
         "lanes": [

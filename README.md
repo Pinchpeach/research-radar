@@ -38,7 +38,7 @@ The **Tech tree** view (default) is an interactive map in the spirit of *The Map
 - **At a glance:** each topic is a rail that starts where the topic emerges. A topic that grew out of an earlier one branches off that topic's rail; the others branch off a glowing **ORIGINS** node. Citations between topics are bundled into one soft curve per topic pair, thicker for more citations. Only topic names and one key paper per rail are labeled.
 - **Dots on the lines:** every paper is a dot on its rail. Bigger means more cited, glow marks a key paper, ○ is a foundational work, and ★ is bookmarked.
 - **Hover** a dot to see the paper and its own citation lines. Hover a rail for the topic's origin, key paper, and latest papers. Hover a curve to see how many citations link two topics, with examples.
-- **Click** a dot to trace what it builds on and what built on it. **핵심 계보** highlights the key lineage.
+- **Click** a dot, rail, or curve to pin its card. The card floats next to what you clicked and follows it while you pan and zoom. Click empty space, the **×**, or press **Esc** to close it. A pinned paper also traces what it builds on and what built on it. **핵심 계보** highlights the key lineage.
 - **Zoom** with the scroll wheel; paper titles appear next to the dots (or turn them on with **제목**). **Download poster (HTML)** saves the map as one file.
 
 The **Timeline chart** view is a compact Plotly version. There, a paper's role is shown by both color and shape: ● search result, ★ bookmarked, ◆ foundational. Marker size grows with total citations, and a table view lists every paper.
