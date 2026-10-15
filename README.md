@@ -145,6 +145,17 @@ python -m scripts.evaluate
 
 First validation topic: *Optical observations of isolated neutron stars*. Judge the top 20 with the TF-IDF baseline, then repeat with embeddings, seeds, or other weights.
 
+## Live check with real papers
+
+Run the whole pipeline (search → seeds → ranking → research flow with foundational works → tech-tree poster) against live OpenAlex:
+
+```bash
+python -m scripts.live_check "optical observations of isolated neutron stars"
+python -m scripts.live_check "graph neural networks" --limit 40 --seed 10.48550/arXiv.1609.02907
+```
+
+It prints the top results, topics, cross-topic links, key lineage, and foundational works, runs sanity checks (abstracts and reference lists present, citation links found, topics branching), and writes the poster to `data/live-map.html`.
+
 ## Tests
 
 ```bash
