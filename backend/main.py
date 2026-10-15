@@ -1,5 +1,4 @@
 import logging
-import os
 from functools import lru_cache
 from pathlib import Path
 
@@ -8,13 +7,16 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import PlainTextResponse
 from requests import RequestException
 
+from backend import settings
 from backend.models import (
     Bookmark,
     BookmarkIn,
     BookmarkUpdate,
     FlowRequest,
+    KeyTest,
     SearchRequest,
     SearchResponse,
+    SettingsUpdate,
 )
 from backend.services import embeddings, openalex
 from backend.services.dedupe import dedupe
@@ -50,11 +52,11 @@ def health():
 
 def rate_limit_detail(exc: "openalex.RateLimited") -> str:
     hours = f" Try again in about {exc.retry_after // 3600 + 1} h." if exc.retry_after else ""
-    if os.getenv("OPENALEX_API_KEY"):
+    if settings.get("openalex_api_key"):
         return f"OpenAlex rate limit reached for your API key.{hours}"
     return (
-        "OpenAlex's shared free budget for this network is used up. Set OPENALEX_API_KEY "
-        f"(free at https://openalex.org) to use your own budget.{hours}"
+        "OpenAlex's shared free budget for this network is used up. Add your free OpenAlex API key "
+        f"in Settings (or set OPENALEX_API_KEY) to use your own budget.{hours}"
     )
 
 
@@ -175,3 +177,23 @@ def research_flow(request: FlowRequest, store: BookmarkStore = Depends(get_store
                 foundations = credible_foundations(papers, fetched)
 
     return build_flow(papers, bookmarked=store.ids(), foundations=foundations, query=request.query)
+
+
+# ---------- settings ----------
+
+
+@app.get("/settings")
+def read_settings():
+    return settings.public_view()
+
+
+@app.put("/settings")
+def update_settings(update: SettingsUpdate):
+    settings.save(update.model_dump(exclude_unset=True))
+    return settings.public_view()
+
+
+@app.post("/settings/test-openalex")
+def test_openalex_key(body: KeyTest):
+    """Check a key before saving it (or the saved key when none is given)."""
+    return openalex.check_key(body.api_key or None)

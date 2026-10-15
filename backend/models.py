@@ -101,3 +101,15 @@ class FlowRequest(BaseModel):
     include_bookmarks: bool = False
     include_foundations: bool = True
     max_foundations: int = Field(default=10, ge=0, le=30)
+
+
+class SettingsUpdate(BaseModel):
+    """Fields left out stay as they are; an empty string removes the saved value."""
+
+    openalex_api_key: Optional[str] = Field(default=None, max_length=200)
+    openalex_email: Optional[str] = Field(default=None, max_length=200)
+    openai_api_key: Optional[str] = Field(default=None, max_length=300)
+
+
+class KeyTest(BaseModel):
+    api_key: Optional[str] = Field(default=None, max_length=200)

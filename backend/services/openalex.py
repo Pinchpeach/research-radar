@@ -1,7 +1,8 @@
-import os
 import re
 
 import requests
+
+from backend import settings
 
 OPENALEX_URL = "https://api.openalex.org/works"
 MAX_PER_PAGE = 200
@@ -62,16 +63,36 @@ class RateLimited(requests.HTTPError):
 
 
 def _params(**params) -> dict:
-    email = os.getenv("OPENALEX_EMAIL")
+    email = settings.get("openalex_email")
     if email:
         params["mailto"] = email
     return params
 
 
-def _headers() -> dict:
+def _headers(key: str | None = None) -> dict:
     # Requests without a key share a small daily budget per IP address; a free key has its own.
-    key = os.getenv("OPENALEX_API_KEY")
+    key = key or settings.get("openalex_api_key")
     return {"Authorization": f"Bearer {key}"} if key else {}
+
+
+def check_key(key: str | None = None) -> dict:
+    """Try one tiny request with `key` (or the saved key) and report what OpenAlex says."""
+    try:
+        response = _session.get(
+            OPENALEX_URL, params={"per-page": 1, "select": "id"}, headers=_headers(key), timeout=TIMEOUT
+        )
+    except requests.RequestException as exc:
+        return {"ok": False, "message": f"OpenAlex에 연결할 수 없습니다: {exc.__class__.__name__}"}
+    remaining = response.headers.get("x-ratelimit-remaining-usd")
+    limit = response.headers.get("x-ratelimit-limit-usd")
+    budget = {"remaining_usd": float(remaining) if remaining else None, "limit_usd": float(limit) if limit else None}
+    if response.status_code == 200:
+        return {"ok": True, "message": "키가 정상 작동합니다.", **budget}
+    if response.status_code in (401, 403):
+        return {"ok": False, "message": "OpenAlex가 이 키를 거부했습니다. 키를 다시 확인하세요.", **budget}
+    if response.status_code == 429:
+        return {"ok": False, "message": "오늘 사용 한도를 모두 썼습니다. 자정(UTC)에 초기화됩니다.", **budget}
+    return {"ok": False, "message": f"OpenAlex 응답 {response.status_code}", **budget}
 
 
 def _get(url: str, params: dict) -> dict:

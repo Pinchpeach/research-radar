@@ -7,7 +7,8 @@ from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 
-DEFAULT_DB = Path(__file__).resolve().parent.parent / "data" / "radar.db"
+from backend import settings
+
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS bookmarks (
@@ -37,7 +38,7 @@ def clean_tags(tags: list[str]) -> list[str]:
 
 class BookmarkStore:
     def __init__(self, path: str | Path | None = None):
-        self.path = Path(path or os.getenv("RADAR_DB") or DEFAULT_DB)
+        self.path = Path(path or os.getenv("RADAR_DB") or settings.data_dir() / "radar.db")
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute(SCHEMA)
