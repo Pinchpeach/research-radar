@@ -147,19 +147,18 @@ PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 �
 
 ### 릴리스 배포
 
-버전 태그를 푸시하면 세 운영체제용 앱이 빌드·점검된 뒤 GitHub Release로 자동 배포됩니다.
+세 운영체제용 앱을 빌드·점검한 뒤 GitHub Release로 자동 배포합니다. 먼저 `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고 `main`에 병합합니다. 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다. 그다음 둘 중 하나로 배포합니다.
 
-1. `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고 `main`에 병합합니다. 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다.
-2. `main`에서 같은 버전의 태그를 만들어 푸시합니다.
-   ```bash
-   git checkout main && git pull
-   git tag v0.5.0
-   git push origin v0.5.0
-   ```
-3. 워크플로가 다음을 합니다.
-   - 태그가 `backend/version.py`와 다르면 바로 실패합니다.
-   - 세 운영체제 빌드와 실행 점검이 **모두 통과해야** 릴리스를 만듭니다.
-   - 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
+- **버튼으로 (권장)**: GitHub의 **Actions → Desktop app → Run workflow**에서 브랜치 `main`을 고르고 **release**에 체크한 뒤 실행합니다. 워크플로가 `v<버전>` 태그를 직접 만듭니다. 그 버전이 이미 배포됐다면 실패하니 버전을 먼저 올리세요.
+- **태그로**: `main`에서 같은 버전의 태그를 만들어 푸시합니다.
+  ```bash
+  git checkout main && git pull
+  git tag v0.5.0
+  git push origin v0.5.0
+  ```
+  태그가 `backend/version.py`와 다르면 바로 실패합니다.
+
+어느 쪽이든 세 운영체제 빌드와 실행 점검이 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
 
 `v0.5.0-rc1`처럼 `-`가 붙은 태그는 시험판(pre-release)으로 올라갑니다. 앱의 업데이트 알림은 시험판을 무시합니다.
 
