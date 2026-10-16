@@ -82,17 +82,18 @@ def check_key(key: str | None = None) -> dict:
             OPENALEX_URL, params={"per-page": 1, "select": "id"}, headers=_headers(key), timeout=TIMEOUT
         )
     except requests.RequestException as exc:
-        return {"ok": False, "message": f"OpenAlex에 연결할 수 없습니다: {exc.__class__.__name__}"}
+        return {"ok": False, "code": "unreachable", "message": f"OpenAlex에 연결할 수 없습니다: {exc.__class__.__name__}"}
     remaining = response.headers.get("x-ratelimit-remaining-usd")
     limit = response.headers.get("x-ratelimit-limit-usd")
     budget = {"remaining_usd": float(remaining) if remaining else None, "limit_usd": float(limit) if limit else None}
     if response.status_code == 200:
-        return {"ok": True, "message": "키가 정상 작동합니다.", **budget}
+        return {"ok": True, "code": "ok", "message": "키가 정상 작동합니다.", **budget}
     if response.status_code in (401, 403):
-        return {"ok": False, "message": "OpenAlex가 이 키를 거부했습니다. 키를 다시 확인하세요.", **budget}
+        return {"ok": False, "code": "rejected", "message": "OpenAlex가 이 키를 거부했습니다. 키를 다시 확인하세요.", **budget}
     if response.status_code == 429:
-        return {"ok": False, "message": "오늘 사용 한도를 모두 썼습니다. 자정(UTC)에 초기화됩니다.", **budget}
-    return {"ok": False, "message": f"OpenAlex 응답 {response.status_code}", **budget}
+        return {"ok": False, "code": "exhausted", "message": "오늘 사용 한도를 모두 썼습니다. 자정(UTC)에 초기화됩니다.", **budget}
+    return {"ok": False, "code": "status", "status": response.status_code,
+            "message": f"OpenAlex 응답 {response.status_code}", **budget}
 
 
 def _get(url: str, params: dict) -> dict:

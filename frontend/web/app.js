@@ -19,14 +19,14 @@ async function api(method, path, body) {
       body: body ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error("앱의 내부 서버에 연결할 수 없습니다.");
+    throw new Error(t("err.server"));
   }
   if (res.status === 204) return null;
   const type = res.headers.get("content-type") || "";
   const data = type.includes("json") ? await res.json() : await res.text();
   if (!res.ok) {
     const detail = data && data.detail;
-    throw new Error(typeof detail === "string" ? detail : `요청 실패 (${res.status})`);
+    throw new Error(typeof detail === "string" ? detail : t("err.request", { status: res.status }));
   }
   return data;
 }
@@ -54,12 +54,12 @@ const shortId = (id) => id.replace(/\/+$/, "").split("/").pop();
 const pick = (paper) => Object.fromEntries(PAPER_FIELDS.map((k) => [k, paper[k] ?? null]));
 
 function authorLine(authors) {
-  if (!authors || !authors.length) return "저자 정보 없음";
-  return authors.slice(0, 5).join(", ") + (authors.length > 5 ? " 외" : "");
+  if (!authors || !authors.length) return t("paper.noAuthors");
+  return authors.slice(0, 5).join(", ") + (authors.length > 5 ? t("paper.etAl") : "");
 }
 
 function metaLine(paper) {
-  return [paper.year || "—", paper.venue, `인용 ${Number(paper.citations || 0).toLocaleString()}`]
+  return [paper.year || "—", paper.venue, t("paper.citations", { n: Number(paper.citations || 0).toLocaleString() })]
     .filter(Boolean).join(" · ");
 }
 
@@ -67,7 +67,7 @@ function metaLine(paper) {
 async function saveFile(name, content, mime) {
   if (window.pywebview && window.pywebview.api && window.pywebview.api.save_file) {
     const saved = await window.pywebview.api.save_file(name, content);
-    return saved ? `저장했습니다: ${saved}` : "저장을 취소했습니다.";
+    return saved ? t("file.saved", { path: saved }) : t("file.cancelled");
   }
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
   const link = el("a", { href: url, download: name });
@@ -75,7 +75,7 @@ async function saveFile(name, content, mime) {
   link.click();
   link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
-  return `${name} 파일을 내려받았습니다.`;
+  return t("file.downloaded", { name });
 }
 
 // ───────────── tabs ─────────────
@@ -87,15 +87,22 @@ function showTab(name) {
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 $("key-pill").addEventListener("click", () => showTab("settings"));
+
+function showPane(name) {
+  document.querySelectorAll(".subtab").forEach((t) => t.classList.toggle("active", t.dataset.pane === name));
+  document.querySelectorAll(".pane").forEach((p) => (p.hidden = p.dataset.pane !== name));
+}
+document.querySelectorAll(".subtab").forEach((t) => t.addEventListener("click", () => showPane(t.dataset.pane)));
 $("banner-go").addEventListener("click", () => showTab("settings"));
 
 // ───────────── paper cards ─────────────
 
 function paperCard(paper, { rank, query, extra } = {}) {
   const node = $("paper-template").content.firstElementChild.cloneNode(true);
+  applyStaticText(node);
   node.querySelector(".rank").textContent = rank ? `#${rank} · ${paper.score}` : "";
   const title = node.querySelector(".title");
-  title.textContent = paper.title || "(제목 없음)";
+  title.textContent = paper.title || t("paper.noTitle");
   const link = paper.url || paper.doi;
   if (link) title.href = link; else title.removeAttribute("href");
   node.querySelector(".authors").textContent = authorLine(paper.authors);
@@ -104,17 +111,17 @@ function paperCard(paper, { rank, query, extra } = {}) {
   const chips = node.querySelector(".chips");
   const influence = paper.scores && paper.scores.influence;
   if (influence >= KEY_PAPER) {
-    const why = paper.cited_by_results ? `검색 결과 ${paper.cited_by_results}편이 인용` : "관련 논문들이 바탕으로 삼는 논문";
-    chips.append(el("span", { class: "chip key", text: "◆ 핵심 논문", title: `흐름 중요도 ${influence.toFixed(2)} · ${why}` }));
+    const why = paper.cited_by_results ? t("chip.keyCitedBy", { n: paper.cited_by_results }) : t("chip.keyGeneric");
+    chips.append(el("span", { class: "chip key", text: t("chip.key"), title: t("chip.keyTitle", { score: influence.toFixed(2), why }) }));
   }
   if (paper.group === "recent") {
-    const links = paper.builds_on_key_papers ? ` · 핵심 논문 ${paper.builds_on_key_papers}편을 잇는 연구` : "";
-    chips.append(el("span", { class: "chip recent", text: `🆕 최신 연구${links}`, title: `최신 연구 점수 ${(paper.scores.frontier || 0).toFixed(2)}: 관련도, 핵심 논문을 바탕으로 하는 정도, 최신성, 인용 증가세` }));
+    const links = paper.builds_on_key_papers ? t("chip.recentLinks", { n: paper.builds_on_key_papers }) : "";
+    chips.append(el("span", { class: "chip recent", text: t("chip.recent") + links, title: t("chip.recentTitle", { score: (paper.scores.frontier || 0).toFixed(2) }) }));
   }
   if (paper.core_reference) {
-    chips.append(el("span", { class: "chip", text: "📌 검색어 밖 핵심 참고문헌", title: "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문" }));
+    chips.append(el("span", { class: "chip", text: t("chip.coreRef"), title: t("chip.coreRefTitle") }));
   }
-  if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: "🔗 시드와 연결" }));
+  if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: t("chip.seed") }));
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
   const abstract = node.querySelector(".abstract");
@@ -126,7 +133,7 @@ function paperCard(paper, { rank, query, extra } = {}) {
     const on = isBookmarked(paper.id);
     star.textContent = on ? "★" : "☆";
     star.classList.toggle("on", on);
-    star.title = on ? "북마크 해제" : "북마크";
+    star.title = on ? t("paper.unbookmark") : t("paper.bookmark");
   };
   refreshStar();
   star.addEventListener("click", async () => {
@@ -137,7 +144,7 @@ function paperCard(paper, { rank, query, extra } = {}) {
       await loadBookmarks();
       refreshStar();
     } catch (e) {
-      alert(`북마크 실패: ${e.message}`);
+      alert(t("paper.bookmarkFailed", { error: e.message }));
     } finally {
       star.disabled = false;
     }
@@ -189,7 +196,7 @@ $("search-form").addEventListener("submit", async (event) => {
     seed_ids: seeds.slice(0, MAX_SEEDS), require_abstract: $("require-abstract").checked, weights,
     recent_share: Number($("recent-share").value), recent_years: Number($("recent-years").value),
   };
-  setStatus("search-status", "검색 중…");
+  setStatus("search-status", t("search.running"));
   $("results").replaceChildren();
   try {
     const body = await api("POST", "/search", payload);
@@ -198,27 +205,27 @@ $("search-form").addEventListener("submit", async (event) => {
     state.judgments = {};
     renderResults();
   } catch (e) {
-    setStatus("search-status", `검색 실패: ${e.message}`, true);
+    setStatus("search-status", t("search.failed", { error: e.message }), true);
   }
 });
 
 function renderResults() {
   const run = state.run;
-  let message = `${run.count}편 표시 (후보 ${run.candidates}편) · ${run.semantic ? "의미 기반 정렬" : "단어 기반 정렬"}`;
-  if (run.seeds.length) message += ` · 시드: ${run.seeds.map((s) => s.title).join("; ")}`;
-  if (run.unresolved_seeds.length) message += ` · 찾지 못한 시드: ${run.unresolved_seeds.join(", ")}`;
+  let message = t("search.summary", { count: run.count, candidates: run.candidates, mode: t(run.semantic ? "search.semantic" : "search.lexical") });
+  if (run.seeds.length) message += t("search.seeds", { seeds: run.seeds.map((s) => s.title).join("; ") });
+  if (run.unresolved_seeds.length) message += t("search.unresolved", { seeds: run.unresolved_seeds.join(", ") });
   setStatus("search-status", message);
   const core = run.papers.filter((p) => p.group !== "recent");
   const recent = run.papers.filter((p) => p.group === "recent");
   const cards = run.papers.map((p, i) => paperCard(p, { rank: i + 1, query: run.query }));
   const items = [];
   if (recent.length) {
-    items.push(el("li", { class: "group-head" }, "◆ 핵심 흐름", el("small", { text: `${core.length}편 · 흐름을 이해하는 데 중요한 논문 순` })));
+    items.push(el("li", { class: "group-head" }, t("group.core"), el("small", { text: t("group.coreHint", { n: core.length }) })));
   }
   items.push(...cards.slice(0, core.length));
   if (recent.length) {
     const years = run.settings.recent_years;
-    items.push(el("li", { class: "group-head" }, "🆕 최신 연구", el("small", { text: `${recent.length}편 · 최근 ${years}년, 위 목록에 없는 새 연구` })));
+    items.push(el("li", { class: "group-head" }, t("group.recent"), el("small", { text: t("group.recentHint", { n: recent.length, years }) })));
     items.push(...cards.slice(core.length));
   }
   $("results").replaceChildren(...items);
@@ -272,11 +279,11 @@ $("eval-save").addEventListener("click", async () => {
       run_id: run.runId, query: run.query, settings: run.settings,
       papers: run.papers.map((p) => ({ id: p.id, title: p.title, score: p.score })), judgments,
     });
-    setStatus("search-status", `판정 ${res.written}개를 저장했습니다. 아래 ‘평가 기록’에서 비교할 수 있습니다.`);
+    setStatus("search-status", t("eval.saved", { n: res.written }));
     $("eval-history").open = true;
     loadEvaluations();
   } catch (e) {
-    setStatus("search-status", `판정 저장 실패: ${e.message}`, true);
+    setStatus("search-status", t("eval.saveFailed", { error: e.message }), true);
   }
 });
 
@@ -289,9 +296,9 @@ async function loadEvaluations() {
     const w = (r.settings && r.settings.weights) || {};
     const weights = ["relevance", "influence", "impact", "recency", "seed"].map((k) => (w[k] ?? 0).toFixed(2)).join(" · ");
     const when = r.saved_at ? new Date(r.saved_at).toLocaleString() : "—";
-    const remove = el("button", { text: "삭제", title: "이 평가 기록 삭제" });
+    const remove = el("button", { text: t("eval.delete"), title: t("eval.deleteTitle") });
     remove.addEventListener("click", async () => {
-      if (!confirm(`“${r.query}” 평가 기록을 삭제할까요?`)) return;
+      if (!confirm(t("eval.deleteConfirm", { query: r.query }))) return;
       await api("DELETE", `/evaluations/${encodeURIComponent(r.run_id)}`);
       loadEvaluations();
     });
@@ -321,35 +328,35 @@ function renderBookmarks() {
   const select = $("tag-filter");
   const current = select.value;
   const tags = [...new Set(state.bookmarks.flatMap((b) => b.tags))].sort();
-  select.replaceChildren(el("option", { value: "", text: "전체" }), ...tags.map((t) => el("option", { value: t, text: t })));
+  select.replaceChildren(el("option", { value: "", text: t("bm.all") }), ...tags.map((t) => el("option", { value: t, text: t })));
   select.value = tags.includes(current) ? current : "";
 
   const shown = state.bookmarks.filter((b) => !select.value || b.tags.includes(select.value));
   $("bm-empty").hidden = state.bookmarks.length > 0;
   $("bookmarks").replaceChildren(...shown.map((b) => {
-    const note = el("textarea", { rows: 2, placeholder: "메모" });
+    const note = el("textarea", { rows: 2, placeholder: t("bm.note") });
     note.value = b.note;
-    const tagInput = el("input", { type: "text", placeholder: "태그 (쉼표로 구분)" });
+    const tagInput = el("input", { type: "text", placeholder: t("bm.tags") });
     tagInput.value = b.tags.join(", ");
-    const save = el("button", { text: "저장" });
-    const remove = el("button", { class: "danger", text: "삭제" });
+    const save = el("button", { text: t("bm.save") });
+    const remove = el("button", { class: "danger", text: t("bm.delete") });
     save.addEventListener("click", async () => {
       save.disabled = true;
       try {
         await api("PATCH", `/bookmarks/${b.id}`, { note: note.value, tags: tagInput.value.split(",").map((t) => t.trim()).filter(Boolean) });
         await loadBookmarks();
         renderBookmarks();
-      } catch (e) { alert(`저장 실패: ${e.message}`); } finally { save.disabled = false; }
+      } catch (e) { alert(t("bm.saveFailed", { error: e.message })); } finally { save.disabled = false; }
     });
     remove.addEventListener("click", async () => {
-      if (!confirm(`"${b.paper.title}" 북마크를 삭제할까요?`)) return;
+      if (!confirm(t("bm.deleteConfirm", { title: b.paper.title }))) return;
       await api("DELETE", `/bookmarks/${b.id}`);
       await loadBookmarks();
       renderBookmarks();
     });
     const edit = el("div", { class: "bm-edit" }, note, tagInput, el("div", { class: "buttons" }, save, remove));
     const card = paperCard(b.paper, { query: b.query, extra: edit });
-    if (b.query) card.querySelector(".meta").append(el("span", { class: "found-via", text: ` · “${b.query}”에서 찾음` }));
+    if (b.query) card.querySelector(".meta").append(el("span", { class: "found-via", text: t("bm.foundVia", { query: b.query }) }));
     return card;
   }));
 }
@@ -359,9 +366,9 @@ $("export-bib").addEventListener("click", async () => {
   const tag = $("tag-filter").value;
   try {
     const bib = await api("GET", `/bookmarks/export.bib${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`);
-    if (!bib.trim()) return alert("내보낼 북마크가 없습니다.");
+    if (!bib.trim()) return alert(t("bm.nothing"));
     alert(await saveFile("research-radar.bib", bib, "application/x-bibtex"));
-  } catch (e) { alert(`내보내기 실패: ${e.message}`); }
+  } catch (e) { alert(t("bm.exportFailed", { error: e.message })); }
 });
 
 // ───────────── research map ─────────────
@@ -369,9 +376,9 @@ $("export-bib").addEventListener("click", async () => {
 $("build-map").addEventListener("click", async () => {
   const source = document.querySelector("input[name=source]:checked").value;
   const useResults = source !== "bookmarks" && state.run;
-  if (source === "results" && !state.run) return setStatus("map-status", "먼저 탐색 탭에서 검색하세요.", true);
-  if (source === "bookmarks" && !state.bookmarks.length) return setStatus("map-status", "북마크가 없습니다.", true);
-  if (!useResults && !state.bookmarks.length) return setStatus("map-status", "검색하거나 논문을 북마크한 뒤 지도를 만들 수 있습니다.", true);
+  if (source === "results" && !state.run) return setStatus("map-status", t("flow.needSearch"), true);
+  if (source === "bookmarks" && !state.bookmarks.length) return setStatus("map-status", t("flow.noBookmarks"), true);
+  if (!useResults && !state.bookmarks.length) return setStatus("map-status", t("flow.needPapers"), true);
 
   const payload = {
     papers: useResults ? state.run.papers.map(pick) : [],
@@ -380,27 +387,33 @@ $("build-map").addEventListener("click", async () => {
     include_foundations: $("foundations").checked,
   };
   $("build-map").disabled = true;
-  setStatus("map-status", "연구 흐름을 분석하는 중…");
+  setStatus("map-status", t("flow.running"));
   try {
     const flow = await api("POST", "/flow", payload);
-    const title = useResults ? state.run.query : "My Bookmarks";
-    const poster = await api("POST", "/poster", { flow, title });
-    Object.assign(state, { flow, poster, posterTitle: title });
-    $("poster").srcdoc = poster;
-    $("poster").hidden = false;
-    $("save-poster").disabled = false;
-    setStatus("map-status", `${flow.nodes.length}편 · 인용 연결 ${flow.edges.length}개 · 주제 ${flow.clusters.length}개 — 점·레일·곡선에 마우스를 올리거나 클릭해 보세요.`);
-    renderStory(flow);
+    Object.assign(state, { flow, posterTitle: useResults ? state.run.query : null });
+    await showFlow();
   } catch (e) {
-    setStatus("map-status", `지도를 만들 수 없습니다: ${e.message}`, true);
+    setStatus("map-status", t("flow.failed", { error: e.message }), true);
   } finally {
     $("build-map").disabled = false;
   }
 });
 
+/** Draw the analyzed flow in the current language (again after a language switch). */
+async function showFlow() {
+  const flow = state.flow;
+  const title = state.posterTitle || t("flow.myBookmarks");
+  state.poster = await api("POST", "/poster", { flow, title, lang: LANG });
+  $("poster").srcdoc = state.poster;
+  $("poster").hidden = false;
+  $("save-poster").disabled = false;
+  setStatus("map-status", t("flow.done", { nodes: flow.nodes.length, edges: flow.edges.length, topics: flow.clusters.length }));
+  renderStory(flow);
+}
+
 $("save-poster").addEventListener("click", async () => {
   if (!state.poster) return;
-  const safe = state.posterTitle.replace(/[^\w가-힣 -]+/g, "").trim().replace(/\s+/g, "-") || "research-map";
+  const safe = (state.posterTitle || t("flow.myBookmarks")).replace(/[^\w가-힣 -]+/g, "").trim().replace(/\s+/g, "-") || "research-map";
   setStatus("map-status", await saveFile(`${safe}.html`, state.poster, "text/html"));
 });
 
@@ -414,17 +427,17 @@ function renderStory(flow) {
     const card = el("article", { class: "story-card" },
       el("h3", { text: c.label }),
       el("dl", {},
-        el("dt", { text: "논문" }), el("dd", { text: `${c.size}편 · ${c.year_min ?? "—"}–${c.year_max ?? "—"}` }),
-        el("dt", { text: "시작" }), el("dd", { text: label(c.origin) }),
-        el("dt", { text: "핵심" }), el("dd", { text: label(c.hub) }),
-        el("dt", { text: "최신" }), el("dd", {}, el("ol", {}, c.frontier.map((id) => el("li", { text: label(id) })))),
+        el("dt", { text: t("story.papers") }), el("dd", { text: t("story.papersValue", { n: c.size, from: c.year_min ?? "—", to: c.year_max ?? "—" }) }),
+        el("dt", { text: t("story.origin") }), el("dd", { text: label(c.origin) }),
+        el("dt", { text: t("story.hub") }), el("dd", { text: label(c.hub) }),
+        el("dt", { text: t("story.latest") }), el("dd", {}, el("ol", {}, c.frontier.map((id) => el("li", { text: label(id) })))),
       ));
     card.style.setProperty("--lane", LANE_COLORS[c.lane % LANE_COLORS.length]);
     return card;
   });
   if (flow.chain && flow.chain.length) {
     cards.push(el("article", { class: "story-card" },
-      el("h3", { text: "핵심 계보" }),
+      el("h3", { text: t("story.chain") }),
       el("ol", {}, flow.chain.map((id) => el("li", { text: label(id) })))));
   }
   $("story").replaceChildren(...cards);
@@ -432,29 +445,56 @@ function renderStory(flow) {
 
 // ───────────── settings ─────────────
 
-async function loadSettings() {
+async function loadSettings({ applyLanguage = false } = {}) {
   let s;
   try { s = await api("GET", "/settings"); } catch { return; }
   const key = s.openalex_api_key;
   $("openalex-key-state").textContent = key.set
-    ? `저장된 키: ${key.hint}${key.source === "environment" ? " (환경변수)" : ""} — 바꾸려면 새 키를 입력하세요.`
-    : "저장된 키가 없습니다.";
-  $("openai-key-state").textContent = s.openai_api_key.set ? `저장된 키: ${s.openai_api_key.hint}` : "사용 안 함";
+    ? t("set.keySaved", { hint: key.hint, env: key.source === "environment" ? t("set.keyEnv") : "" })
+    : t("set.noKey");
+  $("openai-key-state").textContent = s.openai_api_key.set ? t("set.openaiSaved", { hint: s.openai_api_key.hint }) : t("set.unused");
   // only keys saved in the app can be removed here; environment variables stay as they are
   $("clear-openalex-key").hidden = key.source !== "settings";
   $("clear-openai-key").hidden = s.openai_api_key.source !== "settings";
   $("openalex-email").value = s.openalex_email.value || "";
   $("data-dir").textContent = s.data_dir;
-  $("key-pill").textContent = key.set ? "OpenAlex 키 ✓" : "OpenAlex 키 없음";
+  $("key-pill").textContent = key.set ? t("pill.ok") : t("pill.missing");
   $("key-pill").className = `pill ${key.set ? "ok" : "warn"}`;
   $("banner").hidden = key.set;
+  // the saved language wins over this computer's last choice (e.g. after reinstalling)
+  if (applyLanguage && s.language && s.language.value && setLanguage(s.language.value)) refreshText();
+  document.querySelectorAll("input[name=language]").forEach((r) => (r.checked = r.value === LANG));
+  return s;
 }
+
+// ───────────── language ─────────────
+
+/** Re-render everything that was built with t() after the language changes. */
+function refreshText() {
+  if (state.run) renderResults();
+  renderBookmarks();
+  loadEvaluations();
+  loadSettings();
+  checkVersion();
+  const toggle = $("toggle-key");
+  toggle.textContent = t(toggle.dataset.i18n);
+  if (state.flow) showFlow().catch(() => {});
+}
+
+document.querySelectorAll("input[name=language]").forEach((radio) => radio.addEventListener("change", async () => {
+  if (!setLanguage(radio.value)) return;
+  let error = null;
+  try { await api("PUT", "/settings", { language: LANG }); } catch (e) { error = e; }
+  refreshText();
+  if (error) setStatus("language-status", t("set.saveFailed", { error: error.message }), true);
+  else setStatus("language-status", t("set.languageSaved"));
+}));
 
 for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key", "OpenAlex"], ["clear-openai-key", "openai_api_key", "OpenAI"]]) {
   $(button).addEventListener("click", async () => {
-    if (!confirm(`저장된 ${label} 키를 삭제할까요?`)) return;
+    if (!confirm(t("set.clearConfirm", { label }))) return;
     await api("PUT", "/settings", { [field]: "" });
-    setStatus("settings-status", `${label} 키를 삭제했습니다.`);
+    setStatus("settings-status", t("set.cleared", { label }));
     await loadSettings();
   });
 }
@@ -462,17 +502,19 @@ for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key",
 $("toggle-key").addEventListener("click", () => {
   const input = $("openalex-key");
   input.type = input.type === "password" ? "text" : "password";
-  $("toggle-key").textContent = input.type === "password" ? "보기" : "숨기기";
+  $("toggle-key").dataset.i18n = input.type === "password" ? "set.show" : "set.hide";
+  $("toggle-key").textContent = t($("toggle-key").dataset.i18n);
 });
 
 $("test-key").addEventListener("click", async () => {
   const result = $("test-result");
   result.className = "test-result";
-  result.textContent = "확인 중…";
+  result.textContent = t("set.testing");
   try {
     const r = await api("POST", "/settings/test-openalex", { api_key: $("openalex-key").value.trim() || null });
-    const budget = r.remaining_usd != null && r.limit_usd ? ` 오늘 남은 한도: $${r.remaining_usd.toFixed(3)} / $${r.limit_usd}` : "";
-    result.textContent = (r.ok ? "✓ " : "✗ ") + r.message + budget;
+    const budget = r.remaining_usd != null && r.limit_usd ? t("set.budget", { remaining: r.remaining_usd.toFixed(3), limit: r.limit_usd }) : "";
+    const message = r.code ? t(`key.${r.code}`, { status: r.status ?? "" }) : r.message;
+    result.textContent = (r.ok ? "✓ " : "✗ ") + message + budget;
     result.classList.add(r.ok ? "ok" : "bad");
   } catch (e) {
     result.textContent = `✗ ${e.message}`;
@@ -489,10 +531,10 @@ $("settings-form").addEventListener("submit", async (event) => {
     await api("PUT", "/settings", update);
     $("openalex-key").value = "";
     $("openai-key").value = "";
-    setStatus("settings-status", "저장했습니다.");
+    setStatus("settings-status", t("set.saved"));
     await loadSettings();
   } catch (e) {
-    setStatus("settings-status", `저장 실패: ${e.message}`, true);
+    setStatus("settings-status", t("set.saveFailed", { error: e.message }), true);
   }
 });
 
@@ -504,19 +546,21 @@ async function checkVersion() {
   $("app-version").textContent = `v${info.version}`;
   if (info.update_available) {
     const pill = $("update-pill");
-    pill.textContent = `새 버전 v${info.latest.version}`;
-    pill.title = "GitHub Releases에서 내려받기";
+    pill.textContent = t("update.pill", { version: info.latest.version });
+    pill.title = t("update.title");
     pill.href = info.latest.url;
     pill.hidden = false;
-    $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: `새 버전 v${info.latest.version}이 있습니다 ↗` }));
+    $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: t("set.newVersion", { version: info.latest.version }) }));
   } else {
-    $("update-state").textContent = info.latest ? "· 최신 버전입니다" : "";
+    $("update-state").textContent = info.latest ? t("set.latest") : "";
   }
 }
 
 // ───────────── start ─────────────
 
-loadSettings();
+applyStaticText();
+
+loadSettings({ applyLanguage: true });
 loadBookmarks();
 checkVersion();
 loadEvaluations();

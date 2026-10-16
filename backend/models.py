@@ -119,6 +119,7 @@ class SettingsUpdate(BaseModel):
     openalex_api_key: Optional[str] = Field(default=None, max_length=200)
     openalex_email: Optional[str] = Field(default=None, max_length=200)
     openai_api_key: Optional[str] = Field(default=None, max_length=300)
+    language: Optional[Literal["ko", "en", ""]] = None
 
 
 class KeyTest(BaseModel):
@@ -128,6 +129,7 @@ class KeyTest(BaseModel):
 class PosterRequest(BaseModel):
     flow: dict
     title: str = Field(default="My Research", max_length=300)
+    lang: Literal["ko", "en"] = "ko"
 
 
 Judgment = Literal["relevant", "partial", "not_relevant"]

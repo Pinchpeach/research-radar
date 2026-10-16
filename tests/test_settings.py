@@ -66,7 +66,7 @@ def test_saved_key_is_used_for_openalex_requests(monkeypatch):
     # testing a key before saving it uses that key, not the saved one
     res = api.post("/settings/test-openalex", json={"api_key": "candidate"}).json()
     assert seen["headers"] == {"Authorization": "Bearer candidate"}
-    assert res == {"ok": True, "message": res["message"], "remaining_usd": 0.75, "limit_usd": 1.0}
+    assert res == {"ok": True, "code": "ok", "message": res["message"], "remaining_usd": 0.75, "limit_usd": 1.0}
 
 
 def test_key_test_reports_rejection_and_network_errors(monkeypatch):
@@ -112,3 +112,18 @@ def test_evaluation_runs_roundtrip():
     assert api.delete(f"/evaluations/{run['run_id']}").status_code == 204
     assert api.get("/evaluations").json() == []
     assert api.delete(f"/evaluations/{run['run_id']}").status_code == 404
+
+
+def test_language_is_saved_and_validated():
+    assert api.get("/settings").json()["language"]["set"] is False
+    body = api.put("/settings", json={"language": "en"}).json()
+    assert body["language"] == {"set": True, "source": "settings", "value": "en"}
+    assert api.put("/settings", json={"language": "fr"}).status_code == 422
+    assert api.get("/settings").json()["language"]["value"] == "en"
+
+
+def test_poster_follows_the_requested_language():
+    flow = {"nodes": [], "edges": [], "clusters": []}
+    assert "연도가 있는 논문이 없습니다" in api.post("/poster", json={"flow": flow, "title": "x", "lang": "ko"}).text
+    assert "No dated papers" in api.post("/poster", json={"flow": flow, "title": "x", "lang": "en"}).text
+    assert api.post("/poster", json={"flow": flow, "title": "x", "lang": "de"}).status_code == 422

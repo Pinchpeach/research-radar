@@ -169,7 +169,14 @@ small { color: var(--text-3); font-weight: 400; }
 .story-card ol { margin: 4px 0 0; padding-left: 18px; font-size: 12.5px; color: var(--text-2); }
 
 /* ── settings ── */
+.subtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); max-width: 640px; }
+.subtab { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 12px;
+  color: var(--text-2); font-weight: 600; margin-bottom: -1px; }
+.subtab:hover:not(:disabled) { color: var(--text); border-color: transparent; border-bottom-color: var(--border); }
+.subtab.active { color: var(--text); border-bottom-color: var(--accent); }
 .settings { max-width: 640px; display: flex; flex-direction: column; gap: 14px; }
+.settings .segmented { align-self: flex-start; }
+.settings .segmented label { font-weight: 500; flex-direction: row; }
 .settings h2 { margin: 10px 0 0; font-size: 16px; }
 .settings label { display: flex; flex-direction: column; gap: 5px; font-weight: 600; }
 .settings label .row input { flex: 1; }

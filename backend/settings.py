@@ -1,4 +1,4 @@
-"""User settings (API keys and contact email) kept in a small JSON file.
+"""User settings (API keys, contact email and UI language) kept in a small JSON file.
 
 The file lives in the app's data folder: RADAR_HOME when set (the desktop app points it at
 the user's app-data directory), otherwise the repository's data/ folder. A saved value wins
@@ -17,6 +17,7 @@ FIELDS = {
     "openalex_api_key": "OPENALEX_API_KEY",
     "openalex_email": "OPENALEX_EMAIL",
     "openai_api_key": "OPENAI_API_KEY",
+    "language": "RADAR_LANG",
 }
 SECRETS = {"openalex_api_key", "openai_api_key"}
 

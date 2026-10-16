@@ -10,144 +10,165 @@
   <header class="topbar">
     <div class="brand"><span class="logo">◎</span> Research Radar</div>
     <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="discover" role="tab">🔎 탐색</button>
-      <button class="tab" data-tab="bookmarks" role="tab">★ 북마크 <span id="bm-count" class="count"></span></button>
-      <button class="tab" data-tab="map" role="tab">🧭 연구 지도</button>
-      <button class="tab" data-tab="settings" role="tab">⚙ 환경설정</button>
+      <button class="tab active" data-tab="discover" role="tab" data-i18n="tab.discover">🔎 탐색</button>
+      <button class="tab" data-tab="bookmarks" role="tab"><span data-i18n="tab.bookmarks">★ 북마크</span> <span id="bm-count" class="count"></span></button>
+      <button class="tab" data-tab="map" role="tab" data-i18n="tab.flow">🧭 연구 흐름</button>
+      <button class="tab" data-tab="settings" role="tab" data-i18n="tab.settings">⚙ 환경설정</button>
     </nav>
     <a id="update-pill" class="pill update" target="_blank" rel="noopener" hidden></a>
-    <button id="key-pill" class="pill" title="OpenAlex API 키 상태">키 확인 중…</button>
+    <button id="key-pill" class="pill" data-i18n="pill.checking" data-i18n-title="pill.title">키 확인 중…</button>
   </header>
 
   <div id="banner" class="banner" hidden>
-    OpenAlex API 키가 없습니다. 키 없이는 공용 한도를 나눠 써서 검색이 막힐 수 있어요.
-    <button id="banner-go" class="link-button">환경설정에서 키 입력 →</button>
+    <span data-i18n="banner.text">OpenAlex API 키가 없습니다. 키 없이는 공용 한도를 나눠 써서 검색이 막힐 수 있어요.</span>
+    <button id="banner-go" class="link-button" data-i18n="banner.go">환경설정에서 키 입력 →</button>
   </div>
 
   <main>
-    <!-- ───────────── 탐색 ───────────── -->
+    <!-- ───────────── 탐색 / Discover ───────────── -->
     <section id="tab-discover" class="panel">
       <form id="search-form" class="search">
-        <input id="query" type="search" placeholder="연구 주제를 입력하세요 (예: optical observations of isolated neutron stars)" required minlength="2" autocomplete="off">
-        <button class="primary" type="submit">검색</button>
+        <input id="query" type="search" data-i18n-placeholder="search.placeholder" required minlength="2" autocomplete="off">
+        <button class="primary" type="submit" data-i18n="search.button">검색</button>
       </form>
       <details class="options">
-        <summary>검색 옵션</summary>
+        <summary data-i18n="opt.summary">검색 옵션</summary>
         <div class="grid">
-          <label>결과 수
+          <label><span data-i18n="opt.limit">결과 수</span>
             <select id="limit"><option>10</option><option selected>20</option><option>30</option><option>50</option><option>100</option></select>
           </label>
-          <label>출판 연도
-            <span class="row"><input id="year-from" type="number" min="1800" max="2100" placeholder="시작"> – <input id="year-to" type="number" min="1800" max="2100" placeholder="끝"></span>
+          <label><span data-i18n="opt.years">출판 연도</span>
+            <span class="row"><input id="year-from" type="number" min="1800" max="2100" data-i18n-placeholder="opt.from"> – <input id="year-to" type="number" min="1800" max="2100" data-i18n-placeholder="opt.to"></span>
           </label>
-          <label class="wide">시드 논문 <small>DOI 또는 OpenAlex ID, 한 줄에 하나</small>
+          <label class="wide"><span><span data-i18n="opt.seeds">시드 논문</span> <small data-i18n="opt.seedsHint">DOI 또는 OpenAlex ID, 한 줄에 하나</small></span>
             <textarea id="seeds" rows="2" placeholder="10.1086/345493&#10;W2058532123"></textarea>
           </label>
-          <label title="핵심 논문 목록과 별도로, 최근 연구를 이만큼 더 보여줍니다 (결과 수 대비)">최신 연구 추가
+          <label data-i18n-title="opt.recentShareTitle"><span data-i18n="opt.recentShare">최신 연구 추가</span>
             <span class="row"><input id="recent-share" type="range" min="0" max="0.8" step="0.1" value="0.3"><output id="recent-share-out">30%</output></span>
           </label>
-          <label>최신 기준
-            <select id="recent-years"><option value="3">최근 3년</option><option value="5" selected>최근 5년</option><option value="10">최근 10년</option></select>
+          <label><span data-i18n="opt.recentYears">최신 기준</span>
+            <select id="recent-years"><option value="3" data-i18n="opt.recent3">최근 3년</option><option value="5" selected data-i18n="opt.recent5">최근 5년</option><option value="10" data-i18n="opt.recent10">최근 10년</option></select>
           </label>
-          <label class="check"><input id="bookmark-seeds" type="checkbox"> 내 북마크를 시드로 사용 (최근 10개)</label>
-          <label class="check"><input id="require-abstract" type="checkbox"> 초록이 있는 논문만</label>
+          <label class="check"><input id="bookmark-seeds" type="checkbox"> <span data-i18n="opt.bookmarkSeeds">내 북마크를 시드로 사용 (최근 10개)</span></label>
+          <label class="check"><input id="require-abstract" type="checkbox"> <span data-i18n="opt.requireAbstract">초록이 있는 논문만</span></label>
           <fieldset class="wide weights">
-            <legend>정렬 가중치</legend>
-            <label>주제 관련도 <input type="range" data-weight="relevance" min="0" max="1" step="0.05" value="0.35"><output>0.35</output></label>
-            <label title="관련 논문들이 계속 바탕으로 삼는 논문, 즉 흐름을 이해하는 데 핵심인 논문일수록 높습니다">흐름 중요도 <input type="range" data-weight="influence" min="0" max="1" step="0.05" value="0.45"><output>0.45</output></label>
-            <label>인용 영향력 <input type="range" data-weight="impact" min="0" max="1" step="0.05" value="0.15"><output>0.15</output></label>
-            <label>최신성 <input type="range" data-weight="recency" min="0" max="1" step="0.05" value="0.05"><output>0.05</output></label>
-            <label>시드 연결 <input type="range" data-weight="seed" min="0" max="1" step="0.05" value="0.2"><output>0.20</output></label>
-            <button type="button" id="reset-weights" class="link-button">기본값</button>
+            <legend data-i18n="w.legend">정렬 가중치</legend>
+            <label><span data-i18n="w.relevance">주제 관련도</span> <input type="range" data-weight="relevance" min="0" max="1" step="0.05" value="0.35"><output>0.35</output></label>
+            <label data-i18n-title="w.influenceTitle"><span data-i18n="w.influence">흐름 중요도</span> <input type="range" data-weight="influence" min="0" max="1" step="0.05" value="0.45"><output>0.45</output></label>
+            <label><span data-i18n="w.impact">인용 영향력</span> <input type="range" data-weight="impact" min="0" max="1" step="0.05" value="0.15"><output>0.15</output></label>
+            <label><span data-i18n="w.recency">최신성</span> <input type="range" data-weight="recency" min="0" max="1" step="0.05" value="0.05"><output>0.05</output></label>
+            <label><span data-i18n="w.seed">시드 연결</span> <input type="range" data-weight="seed" min="0" max="1" step="0.05" value="0.2"><output>0.20</output></label>
+            <button type="button" id="reset-weights" class="link-button" data-i18n="w.reset">기본값</button>
           </fieldset>
         </div>
       </details>
       <p id="search-status" class="status" role="status"></p>
       <div id="eval-bar" class="eval-bar" hidden>
-        <label class="check" title="검색 결과마다 관련/부분/무관을 표시해 정렬 품질을 잽니다"><input id="eval-mode" type="checkbox"> 정렬 평가</label>
+        <label class="check" data-i18n-title="eval.toggleTitle"><input id="eval-mode" type="checkbox"> <span data-i18n="eval.toggle">정렬 평가</span></label>
         <span id="eval-metrics" class="metrics" hidden>
-          <span>판정 <b id="m-judged">0</b></span>
+          <span><span data-i18n="eval.judged">판정</span> <b id="m-judged">0</b></span>
           <span>Precision@10 <b id="m-p10">—</b></span>
           <span>Precision@20 <b id="m-p20">—</b></span>
           <span>nDCG@20 <b id="m-ndcg">—</b></span>
-          <button id="eval-save" disabled>판정 저장</button>
+          <button id="eval-save" disabled data-i18n="eval.save">판정 저장</button>
         </span>
       </div>
       <ol id="results" class="papers"></ol>
       <details id="eval-history" class="options">
-        <summary>평가 기록 <small>설정을 바꿔 가며 정렬 품질을 비교합니다</small></summary>
-        <p id="eval-empty" class="empty">저장된 평가가 없습니다. 검색 후 ‘정렬 평가’를 켜고 결과를 판정해 저장하세요.</p>
+        <summary><span data-i18n="eval.history">평가 기록</span> <small data-i18n="eval.historyHint">설정을 바꿔 가며 정렬 품질을 비교합니다</small></summary>
+        <p id="eval-empty" class="empty" data-i18n="eval.empty">저장된 평가가 없습니다.</p>
         <table id="eval-table" hidden>
-          <thead><tr><th>저장 시각</th><th>검색어</th><th>판정</th><th>P@10</th><th>P@20</th><th>nDCG@20</th><th>가중치 (관련·흐름·인용·최신·시드)</th><th></th></tr></thead>
+          <thead><tr><th data-i18n="eval.colWhen">저장 시각</th><th data-i18n="eval.colQuery">검색어</th><th data-i18n="eval.colJudged">판정</th><th>P@10</th><th>P@20</th><th>nDCG@20</th><th data-i18n="eval.colWeights">가중치</th><th></th></tr></thead>
           <tbody></tbody>
         </table>
       </details>
     </section>
 
-    <!-- ───────────── 북마크 ───────────── -->
+    <!-- ───────────── 북마크 / Bookmarks ───────────── -->
     <section id="tab-bookmarks" class="panel" hidden>
       <div class="toolbar">
-        <label>태그 <select id="tag-filter"><option value="">전체</option></select></label>
+        <label><span data-i18n="bm.tag">태그</span> <select id="tag-filter"><option value="" data-i18n="bm.all">전체</option></select></label>
         <span class="spacer"></span>
-        <button id="export-bib">BibTeX 저장</button>
+        <button id="export-bib" data-i18n="bm.export">BibTeX 저장</button>
       </div>
-      <p id="bm-empty" class="empty">아직 북마크가 없습니다. 탐색 결과에서 ☆ 를 눌러 저장하세요.</p>
+      <p id="bm-empty" class="empty" data-i18n="bm.empty">아직 북마크가 없습니다.</p>
       <ol id="bookmarks" class="papers"></ol>
     </section>
 
-    <!-- ───────────── 연구 지도 ───────────── -->
+    <!-- ───────────── 연구 흐름 / Research flow ───────────── -->
     <section id="tab-map" class="panel" hidden>
       <div class="toolbar">
         <fieldset class="segmented" id="map-source">
-          <label><input type="radio" name="source" value="both" checked> 검색 결과 + 북마크</label>
-          <label><input type="radio" name="source" value="results"> 검색 결과만</label>
-          <label><input type="radio" name="source" value="bookmarks"> 북마크만</label>
+          <label><input type="radio" name="source" value="both" checked> <span data-i18n="flow.both">검색 결과 + 북마크</span></label>
+          <label><input type="radio" name="source" value="results"> <span data-i18n="flow.results">검색 결과만</span></label>
+          <label><input type="radio" name="source" value="bookmarks"> <span data-i18n="flow.bookmarks">북마크만</span></label>
         </fieldset>
-        <label class="check" title="결과 중 2편 이상이 인용한 오래된 핵심 논문을 함께 넣습니다"><input id="foundations" type="checkbox" checked> 기초 논문 추가</label>
+        <label class="check" data-i18n-title="flow.foundationsTitle"><input id="foundations" type="checkbox" checked> <span data-i18n="flow.foundations">기초 논문 추가</span></label>
         <span class="spacer"></span>
-        <button id="build-map" class="primary">지도 만들기</button>
-        <button id="save-poster" disabled>포스터 저장</button>
+        <button id="build-map" class="primary" data-i18n="flow.build">흐름 그리기</button>
+        <button id="save-poster" disabled data-i18n="flow.save">포스터 저장</button>
       </div>
       <p id="map-status" class="status" role="status"></p>
-      <iframe id="poster" title="연구 지도" hidden></iframe>
+      <iframe id="poster" data-i18n-title="flow.frame" hidden></iframe>
       <div id="story" class="story"></div>
     </section>
 
-    <!-- ───────────── 환경설정 ───────────── -->
+    <!-- ───────────── 환경설정 / Settings ───────────── -->
     <section id="tab-settings" class="panel" hidden>
-      <form id="settings-form" class="settings" autocomplete="off">
+      <nav class="subtabs" role="tablist">
+        <button type="button" class="subtab active" data-pane="keys" role="tab" data-i18n="set.navKeys">API 키</button>
+        <button type="button" class="subtab" data-pane="language" role="tab" data-i18n="set.navLanguage">언어</button>
+        <button type="button" class="subtab" data-pane="about" role="tab" data-i18n="set.navAbout">정보</button>
+      </nav>
+
+      <form id="settings-form" class="settings pane" data-pane="keys" autocomplete="off">
         <h2>OpenAlex</h2>
-        <p class="hint">논문 검색에 쓰는 무료 학술 데이터베이스입니다. 개인 API 키가 있으면 자신만의 하루 한도를 씁니다.
-          <a href="https://openalex.org/settings/api" target="_blank" rel="noopener">무료 키 발급 ↗</a></p>
-        <label>API 키
+        <p class="hint"><span data-i18n="set.openalexHint">논문 검색에 쓰는 무료 학술 데이터베이스입니다.</span>
+          <a href="https://openalex.org/settings/api" target="_blank" rel="noopener" data-i18n="set.getKey">무료 키 발급 ↗</a></p>
+        <label><span data-i18n="set.apiKey">API 키</span>
           <span class="row">
-            <input id="openalex-key" type="password" placeholder="새 키를 붙여 넣으세요" spellcheck="false">
-            <button type="button" id="toggle-key" title="키 보기/숨기기">보기</button>
-            <button type="button" id="test-key">키 확인</button>
+            <input id="openalex-key" type="password" data-i18n-placeholder="set.keyPlaceholder" spellcheck="false">
+            <button type="button" id="toggle-key" data-i18n="set.show" data-i18n-title="set.toggleTitle">보기</button>
+            <button type="button" id="test-key" data-i18n="set.test">키 확인</button>
           </span>
           <span class="row"><small id="openalex-key-state"></small>
-            <button type="button" id="clear-openalex-key" class="link-button small" hidden>저장된 키 삭제</button></span>
+            <button type="button" id="clear-openalex-key" class="link-button small" data-i18n="set.clearKey" hidden>저장된 키 삭제</button></span>
           <small id="test-result" class="test-result" role="status"></small>
         </label>
-        <label>연락용 이메일 <small>(선택) OpenAlex에 요청자를 알립니다</small>
+        <label><span><span data-i18n="set.email">연락용 이메일</span> <small data-i18n="set.emailHint">(선택) OpenAlex에 요청자를 알립니다</small></span>
           <input id="openalex-email" type="email" placeholder="you@university.edu">
         </label>
 
-        <h2>의미 기반 정렬 <small>(선택)</small></h2>
-        <p class="hint">OpenAI API 키를 넣으면 단어 일치뿐 아니라 의미가 비슷한 논문도 위로 올립니다.</p>
-        <label>OpenAI API 키
+        <h2><span data-i18n="set.semantic">의미 기반 정렬</span> <small data-i18n="set.optional">(선택)</small></h2>
+        <p class="hint" data-i18n="set.semanticHint">OpenAI API 키를 넣으면 의미가 비슷한 논문도 위로 올립니다.</p>
+        <label><span data-i18n="set.openaiKey">OpenAI API 키</span>
           <input id="openai-key" type="password" placeholder="sk-…" spellcheck="false">
           <span class="row"><small id="openai-key-state"></small>
-            <button type="button" id="clear-openai-key" class="link-button small" hidden>삭제</button></span>
+            <button type="button" id="clear-openai-key" class="link-button small" data-i18n="set.clear" hidden>삭제</button></span>
         </label>
 
         <div class="actions">
-          <button type="submit" class="primary">저장</button>
+          <button type="submit" class="primary" data-i18n="set.save">저장</button>
           <span id="settings-status" class="status" role="status"></span>
         </div>
-        <p class="hint">키는 이 컴퓨터의 데이터 폴더에만 저장됩니다: <code id="data-dir"></code></p>
-        <p class="hint">Research Radar <span id="app-version"></span> <span id="update-state"></span></p>
+        <p class="hint"><span data-i18n="set.dataDir">키는 이 컴퓨터의 데이터 폴더에만 저장됩니다:</span> <code id="data-dir"></code></p>
       </form>
+
+      <div class="settings pane" data-pane="language" hidden>
+        <h2 data-i18n="set.language">언어</h2>
+        <fieldset class="segmented" id="language">
+          <label><input type="radio" name="language" value="ko"> 한국어</label>
+          <label><input type="radio" name="language" value="en"> English</label>
+        </fieldset>
+        <p class="hint" data-i18n="set.languageHint">앱 화면과 연구 흐름 포스터의 언어입니다.</p>
+        <span id="language-status" class="status" role="status"></span>
+      </div>
+
+      <div class="settings pane" data-pane="about" hidden>
+        <h2>Research Radar</h2>
+        <p class="hint"><span data-i18n="set.version">버전</span> <span id="app-version"></span> <span id="update-state"></span></p>
+        <p class="hint"><a href="https://github.com/Pinchpeach/research-radar" target="_blank" rel="noopener">github.com/Pinchpeach/research-radar ↗</a> · Apache-2.0</p>
+      </div>
     </section>
   </main>
 
@@ -156,18 +177,19 @@
       <div class="paper-head">
         <span class="rank"></span>
         <a class="title" target="_blank" rel="noopener"></a>
-        <button class="star" title="북마크">☆</button>
+        <button class="star" data-i18n-title="paper.bookmark">☆</button>
       </div>
       <div class="authors"></div>
       <div class="meta"></div>
       <div class="chips"></div>
-      <details class="abstract"><summary>초록</summary><p></p></details>
+      <details class="abstract"><summary data-i18n="paper.abstract">초록</summary><p></p></details>
       <div class="judge" hidden>
-        <button data-j="relevant">관련</button><button data-j="partial">부분</button><button data-j="not_relevant">무관</button>
+        <button data-j="relevant" data-i18n="eval.relevant">관련</button><button data-j="partial" data-i18n="eval.partial">부분</button><button data-j="not_relevant" data-i18n="eval.notRelevant">무관</button>
       </div>
     </li>
   </template>
 
+  <script src="/static/i18n.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>
