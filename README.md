@@ -4,6 +4,16 @@
 
 논문 데이터는 무료 학술 데이터베이스 [OpenAlex](https://openalex.org)에서 가져옵니다.
 
+## ⬇ 다운로드
+
+최신 버전 **v0.5.0**:
+
+| Windows | macOS | Linux |
+|---|---|---|
+| [ResearchRadar-0.5.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.5.0/ResearchRadar-0.5.0-windows.zip) | [ResearchRadar-0.5.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.5.0/ResearchRadar-0.5.0-macos.zip) | [ResearchRadar-0.5.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.5.0/ResearchRadar-0.5.0-linux.tar.gz) |
+
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.5.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요.
+
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
 ## 주요 기능
@@ -36,7 +46,7 @@
 
 ### 다운로드
 
-[**Releases**](../../releases/latest)에서 운영체제에 맞는 파일을 받으세요.
+맨 위 [다운로드](#-다운로드) 링크나 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에서 운영체제에 맞는 파일을 받으세요.
 
 | 운영체제 | 파일 | 실행 방법 |
 |---|---|---|
@@ -148,7 +158,7 @@ PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 �
 
 ### 릴리스 배포
 
-세 운영체제용 앱을 빌드·점검한 뒤 GitHub Release로 자동 배포합니다. 먼저 `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고 `main`에 병합합니다. 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다. 그다음 둘 중 하나로 배포합니다.
+세 운영체제용 앱을 빌드·점검한 뒤 GitHub Release로 자동 배포합니다. 먼저 `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고, README 맨 위 **다운로드** 링크의 버전도 같이 바꾼 뒤 `main`에 병합합니다(둘이 다르면 테스트가 실패합니다). 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다. 그다음 둘 중 하나로 배포합니다.
 
 - **버튼으로 (권장)**: GitHub의 **Actions → Desktop app → Run workflow**에서 브랜치 `main`을 고르고 **release**에 체크한 뒤 실행합니다. 워크플로가 `v<버전>` 태그를 직접 만듭니다. 그 버전이 이미 배포됐다면 실패하니 버전을 먼저 올리세요.
 - **태그로**: `main`에서 같은 버전의 태그를 만들어 푸시합니다.
