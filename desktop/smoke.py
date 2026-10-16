@@ -50,6 +50,7 @@ def main(executable: str) -> int:
         checks = {
             "/": b"Research Radar",
             "/static/app.js": b"loadSettings",
+            "/static/i18n.js": b"setLanguage",
             "/settings": b"openalex_api_key",
             "/bookmarks": b"[]",
             "/version": b'"version"',

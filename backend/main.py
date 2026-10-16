@@ -267,7 +267,7 @@ def test_openalex_key(body: KeyTest):
 @app.post("/poster", response_class=HTMLResponse)
 def poster(request: PosterRequest):
     """The interactive tech-tree page for a map returned by /flow."""
-    return render_poster(request.flow, request.title)
+    return render_poster(request.flow, request.title, request.lang)
 
 
 # ---------- ranking evaluation ----------

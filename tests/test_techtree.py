@@ -90,7 +90,7 @@ def test_glow_marks_hubs_and_key_foundations(flow_data, lay):
 
 
 def test_render_html_is_self_contained_and_interactive(flow_data):
-    page = techtree.render_html(flow_data, "Neutron <Stars>")
+    page = techtree.render_html(flow_data, "Neutron <Stars>", "en")
     assert page.startswith("<!doctype html>")
     assert "THE MAP OF NEUTRON &lt;STARS&gt;" in page
     assert "<script src" not in page
@@ -110,7 +110,8 @@ def test_render_html_escapes_script_breakout():
 
 def test_small_and_empty_maps():
     assert techtree.layout(flow.build_flow([]))["nodes"] == []
-    assert "No dated papers" in techtree.render_html(flow.build_flow([]), "x")
+    assert "No dated papers" in techtree.render_html(flow.build_flow([]), "x", "en")
+    assert "연도가 있는 논문이 없습니다" in techtree.render_html(flow.build_flow([]), "x", "ko")
     lay = techtree.layout(flow.build_flow(CORPUS[:1]))
     assert len(lay["nodes"]) == 1 and lay["edges"] == [] and lay["bundles"] == []
     techtree.render_html(flow.build_flow(CORPUS), "x")  # renders without error
@@ -122,3 +123,22 @@ def test_pinned_card_markup_and_anchor_data(flow_data):
     data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))
     # cards anchor to the dot, so every paper carries its map position
     assert all(isinstance(n["x"], float) and isinstance(n["y"], (int, float)) for n in data["nodes"])
+
+
+def test_poster_speaks_the_chosen_language_but_keeps_titles(flow_data):
+    ko = techtree.render_html(flow_data, "Neutron Stars", "ko")
+    en = techtree.render_html(flow_data, "Neutron Stars", "en")
+    assert '<html lang="ko">' in ko and "연구 흐름" in ko and "읽는 법" in ko and "How to read" not in ko
+    assert '<html lang="en">' in en and "How to read this map" in en and "읽는 법" not in en
+    title = flow_data["nodes"][0]["title"]
+    for page in (ko, en):
+        data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))
+        assert title in [n["title"] for n in data["nodes"]]  # paper titles are never translated
+        assert {"x0", "ppy", "first"} <= set(data["axis"])  # the year ruler needs the axis scale
+        assert all("r" in n and "glow" in n for n in data["nodes"])  # the label placer needs size and rank
+
+
+def test_placeholders_in_titles_are_left_alone(flow_data):
+    page = techtree.render_html(flow_data, "__DATA__ __TEXT__", "en")
+    assert page.count("const DATA = {") == 1
+    assert "THE MAP OF __DATA__ __TEXT__" in page
