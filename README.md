@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.6.0**:
+최신 버전 **v0.6.1**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.6.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-windows.zip) | [ResearchRadar-0.6.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-macos.zip) | [ResearchRadar-0.6.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-linux.tar.gz) | [ResearchRadar-0.6.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-android.apk) |
+| [ResearchRadar-0.6.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-windows.zip) | [ResearchRadar-0.6.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-macos.zip) | [ResearchRadar-0.6.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-linux.tar.gz) | [ResearchRadar-0.6.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -209,7 +209,7 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
   ```
   태그가 `backend/version.py`와 다르면 바로 실패합니다.
 
-어느 쪽이든 세 운영체제 빌드와 실행 점검, Android 빌드가 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, (서명 키를 등록했다면) `-android.apk`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
+어느 쪽이든 세 운영체제 빌드와 실행 점검, Android 빌드가 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, (서명 키를 등록했다면) `-android.apk`, `SHA256SUMS.txt`가 올라가고, 릴리스 설명에는 터미널로 내려받는 명령만 들어갑니다.
 
 `v0.5.0-rc1`처럼 `-`가 붙은 태그는 시험판(pre-release)으로 올라갑니다. 앱의 업데이트 알림은 시험판을 무시합니다.
 

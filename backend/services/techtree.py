@@ -255,9 +255,9 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     letters = sum(2 if "\uac00" <= ch <= "\ud7a3" else 1 for ch in title)
     title_size = max(26, min(52, (W - 160) / max(1, letters) / 0.75))
     out.append(
-        f'<text x="{W / 2:.0f}" y="92" text-anchor="middle" fill="{TEXT}" font-size="{title_size:.0f}" font-weight="300" '
+        f'<text class="map-title" x="{W / 2:.0f}" y="92" text-anchor="middle" fill="{TEXT}" font-size="{title_size:.0f}" font-weight="300" '
         f'letter-spacing="6">{_t(title.upper())}</text>'
-        f'<text x="{W / 2:.0f}" y="128" text-anchor="middle" fill="{TEXT_2}" font-size="17" letter-spacing="2">'
+        f'<text class="map-title" x="{W / 2:.0f}" y="128" text-anchor="middle" fill="{TEXT_2}" font-size="17" letter-spacing="2">'
         + _t(text["subtitle"].format(papers=len(lay["nodes"]), topics=len(lay["lanes"]), first=first, last=last))
         + "</text>"
     )
@@ -375,7 +375,7 @@ def _svg(lay: dict, title: str, text: dict) -> str:
         out.append(
             f'<text x="{ROOT_X - 40}" y="{ly + i * 21}" fill="{TEXT if i == 0 else TEXT_3}" '
             f'font-size="{14 if i == 0 else 12.5}" font-weight="{700 if i == 0 else 400}" pointer-events="none" '
-            f'class="lane-label">{_t(line)}</text>'
+            f'class="note">{_t(line)}</text>'
         )
 
     # screen-space layer: paper titles and the year ruler, drawn by the script at a fixed size
