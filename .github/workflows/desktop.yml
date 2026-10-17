@@ -199,6 +199,14 @@ jobs:
           pattern: ResearchRadar-* # not the debug APK
           merge-multiple: true
 
+      - name: Android APK present when the README promises it
+        run: |
+          version="$(python3 desktop/release.py version)"
+          if grep -q "ResearchRadar-$version-android.apk" README.md && [ ! -f "release/ResearchRadar-$version-android.apk" ]; then
+            echo "::error::README links ResearchRadar-$version-android.apk but no signed APK was built. Add the ANDROID_KEYSTORE_* secrets (README, Android app build) or drop the Android link."
+            exit 1
+          fi
+
       - name: Checksums
         working-directory: release
         run: |
