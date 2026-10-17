@@ -101,23 +101,20 @@ function apply() {
   if (!frame) frame = requestAnimationFrame(() => { frame = 0; resizeMarks(); placeLabels(); drawRuler(); });
 }
 
-// ---------- marks stop growing past GROW_UNTIL × the overview zoom ----------
-// Zooming in then spreads dots, rails and topic names apart instead of blowing them up,
-// which leaves room for the titles.
+// ---------- rails and topic names stop growing past GROW_UNTIL × the overview zoom ----------
+// Zooming in then spreads them apart instead of blowing them up, which leaves room for the
+// titles. Paper dots are the exception: they grow with the map like the rest of it.
 const sized = [];
 const keep = (el, attr) => { const base = parseFloat(el.getAttribute(attr)); if (!isNaN(base)) sized.push([el, attr, base]); };
-document.querySelectorAll(".dot circle:not(.hit)").forEach(el => keep(el, "stroke-width"));
 document.querySelectorAll(".halo").forEach(el => keep(el, "r"));
 document.querySelectorAll(".rail,.rail-hit,.bundle,.bundle-hit,.edge").forEach(el => keep(el, "stroke-width"));
 document.querySelectorAll(".lane-label").forEach(el => keep(el, "font-size"));
 const anchored = [...document.querySelectorAll("[data-ax]")].map(el => [el, +el.dataset.ax, +el.dataset.ay,
   +el.getAttribute("x"), +el.getAttribute("y")]);
-// On touch screens dots are drawn bigger: at least 5-11 px on screen (more cited = bigger), so
-// they stay visible and tappable when zoomed in; the tap area is at least 18 px. On the whole-map
-// view the floor is about halved so crowded topics don't merge into blobs.
-const TOUCH = matchMedia("(pointer: coarse)").matches, TOUCH_BOOST = 1.5, TOUCH_MIN_HIT = 18;
-const touchFloor = r => (5 + (r - 4) * 0.9) * Math.min(1, Math.max(0.55, s / (fitScale * 2.4)));
-const dotRadius = r => (TOUCH ? Math.max(r * k * TOUCH_BOOST, touchFloor(r) / s) : r * k); // map units
+// Dots keep their size on the map and grow as you zoom in. On touch screens the invisible tap
+// area around a dot is at least 18 px, so small dots stay easy to hit.
+const TOUCH = matchMedia("(pointer: coarse)").matches, TOUCH_MIN_HIT = 18;
+const dotRadius = r => r; // map units
 const dotMarks = [...document.querySelectorAll(".dot")].map(g => ({
   mark: g.querySelector("circle:not(.hit)"), hit: g.querySelector("circle.hit"), star: g.querySelector("text"),
   r: parseFloat(g.querySelector("circle:not(.hit)").getAttribute("r")),
@@ -130,14 +127,9 @@ function resizeMarks() {
     for (const [el, attr, base] of sized) el.setAttribute(attr, (base * k).toFixed(2));
     for (const [el, ax, ay, x, y] of anchored) { el.setAttribute("x", (ax + (x - ax) * k).toFixed(1)); el.setAttribute("y", (ay + (y - ay) * k).toFixed(1)); }
   }
-  if (sizedAt === s) return; // dot sizes depend on the zoom itself (the touch minimum)
+  if (!TOUCH || sizedAt === s) return; // only the touch tap area depends on the zoom
   sizedAt = s;
-  for (const d of dotMarks) {
-    const r = dotRadius(d.r);
-    d.mark.setAttribute("r", r.toFixed(2));
-    d.hit.setAttribute("r", Math.max(r + 6 * k, TOUCH ? TOUCH_MIN_HIT / s : 0).toFixed(2));
-    if (d.star) { d.star.setAttribute("y", (d.cy - r - 4 * k).toFixed(1)); d.star.setAttribute("font-size", (11 * k).toFixed(1)); }
-  }
+  for (const d of dotMarks) d.hit.setAttribute("r", Math.max(d.r + 6, TOUCH_MIN_HIT / s).toFixed(2));
 }
 function fit(whole = true) {
   const w = wrap.clientWidth, h = wrap.clientHeight;
