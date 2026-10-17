@@ -111,8 +111,8 @@ def test_update_check_failures_are_silent(monkeypatch):
 
 def test_readme_download_links_point_at_this_version():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    links = re.findall(r"releases/download/(v[^/]+)/ResearchRadar-([^)]+?)-(windows\.zip|macos\.zip|linux\.tar\.gz)\)", readme)
-    assert {kind for _, _, kind in links} == {"windows.zip", "macos.zip", "linux.tar.gz"}
+    links = re.findall(r"releases/download/(v[^/]+)/ResearchRadar-([^)]+?)-(windows\.zip|macos\.zip|linux\.tar\.gz|android\.apk)\)", readme)
+    assert {"windows.zip", "macos.zip", "linux.tar.gz"} <= {kind for _, _, kind in links}
     for tag, version, _ in links:
         assert tag == f"v{__version__}" and version == __version__, "update the README download links"
     assert f"**v{__version__}**" in readme
