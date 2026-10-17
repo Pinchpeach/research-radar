@@ -52,7 +52,7 @@ def test_release_notes_name_the_versioned_files():
     assert "android.apk" not in notes
     assert f"ResearchRadar-{__version__}-android.apk" in release.notes(f"v{__version__}", android=True)
     cli = subprocess.run([sys.executable, "desktop/release.py", "notes", "v1.2.3", "--android"], cwd=ROOT,
-                         capture_output=True, text=True)
+                         capture_output=True, text=True, encoding="utf-8")  # release.py writes UTF-8
     assert cli.returncode == 0 and "ResearchRadar-1.2.3-android.apk" in cli.stdout
 
 
