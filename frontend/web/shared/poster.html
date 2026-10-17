@@ -106,21 +106,38 @@ function apply() {
 // which leaves room for the titles.
 const sized = [];
 const keep = (el, attr) => { const base = parseFloat(el.getAttribute(attr)); if (!isNaN(base)) sized.push([el, attr, base]); };
-document.querySelectorAll(".dot circle").forEach(el => { keep(el, "r"); keep(el, "stroke-width"); });
+document.querySelectorAll(".dot circle:not(.hit)").forEach(el => keep(el, "stroke-width"));
 document.querySelectorAll(".halo").forEach(el => keep(el, "r"));
 document.querySelectorAll(".rail,.rail-hit,.bundle,.bundle-hit,.edge").forEach(el => keep(el, "stroke-width"));
 document.querySelectorAll(".lane-label").forEach(el => keep(el, "font-size"));
 const anchored = [...document.querySelectorAll("[data-ax]")].map(el => [el, +el.dataset.ax, +el.dataset.ay,
   +el.getAttribute("x"), +el.getAttribute("y")]);
-const stars = [...document.querySelectorAll(".dot text")].map(el => [el, +el.closest(".dot").querySelector("circle").getAttribute("cy"),
-  +el.getAttribute("y")]);
+// On touch screens dots are drawn bigger: at least 5-11 px on screen (more cited = bigger), so
+// they stay visible and tappable when zoomed in; the tap area is at least 18 px. On the whole-map
+// view the floor is about halved so crowded topics don't merge into blobs.
+const TOUCH = matchMedia("(pointer: coarse)").matches, TOUCH_BOOST = 1.5, TOUCH_MIN_HIT = 18;
+const touchFloor = r => (5 + (r - 4) * 0.9) * Math.min(1, Math.max(0.55, s / (fitScale * 2.4)));
+const dotRadius = r => (TOUCH ? Math.max(r * k * TOUCH_BOOST, touchFloor(r) / s) : r * k); // map units
+const dotMarks = [...document.querySelectorAll(".dot")].map(g => ({
+  mark: g.querySelector("circle:not(.hit)"), hit: g.querySelector("circle.hit"), star: g.querySelector("text"),
+  r: parseFloat(g.querySelector("circle:not(.hit)").getAttribute("r")),
+  cy: parseFloat(g.querySelector("circle:not(.hit)").getAttribute("cy")) }));
+let sizedAt = null;
 function resizeMarks() {
   const nk = Math.min(1, fitScale * GROW_UNTIL / s);
-  if (Math.abs(nk - k) < 1e-3) return;
-  k = nk;
-  for (const [el, attr, base] of sized) el.setAttribute(attr, (base * k).toFixed(2));
-  for (const [el, ax, ay, x, y] of anchored) { el.setAttribute("x", (ax + (x - ax) * k).toFixed(1)); el.setAttribute("y", (ay + (y - ay) * k).toFixed(1)); }
-  for (const [el, cy, y] of stars) { el.setAttribute("y", (cy + (y - cy) * k).toFixed(1)); el.setAttribute("font-size", (11 * k).toFixed(1)); }
+  if (Math.abs(nk - k) >= 1e-3) {
+    k = nk;
+    for (const [el, attr, base] of sized) el.setAttribute(attr, (base * k).toFixed(2));
+    for (const [el, ax, ay, x, y] of anchored) { el.setAttribute("x", (ax + (x - ax) * k).toFixed(1)); el.setAttribute("y", (ay + (y - ay) * k).toFixed(1)); }
+  }
+  if (sizedAt === s) return; // dot sizes depend on the zoom itself (the touch minimum)
+  sizedAt = s;
+  for (const d of dotMarks) {
+    const r = dotRadius(d.r);
+    d.mark.setAttribute("r", r.toFixed(2));
+    d.hit.setAttribute("r", Math.max(r + 6 * k, TOUCH ? TOUCH_MIN_HIT / s : 0).toFixed(2));
+    if (d.star) { d.star.setAttribute("y", (d.cy - r - 4 * k).toFixed(1)); d.star.setAttribute("font-size", (11 * k).toFixed(1)); }
+  }
 }
 function fit(whole = true) {
   const w = wrap.clientWidth, h = wrap.clientHeight;
@@ -267,12 +284,12 @@ function placeLabels() {
   const taken = [];
   const takeRect = el => { const r = el.getBoundingClientRect();
     if (r.width) taken.push([r.left - wr.left - 3, r.top - wr.top - 2, r.right - wr.left + 3, r.bottom - wr.top + 2]); };
-  document.querySelectorAll(".lane-label").forEach(takeRect);
+  document.querySelectorAll(".lane-label,.note,.map-title").forEach(takeRect);
   takeRect($("bar"));
   if (pinned) takeRect($("pin"));
   const visible = [];
   for (const n of DATA.nodes) {
-    const x = n.x * s + tx, y = n.y * s + ty, r = Math.max(2, n.r * k * s);
+    const x = n.x * s + tx, y = n.y * s + ty, r = Math.max(2, dotRadius(n.r) * s);
     if (x < -20 || y < -20 || x > w + 20 || y > h + 20) continue;
     visible.push(n.id);
     taken.push([x - r - 1, y - r - 1, x + r + 1, y + r + 1]);
@@ -287,7 +304,7 @@ function placeLabels() {
     L.el.style.display = L.lead.style.display = "none";
     const eligible = shown.has(n.id) && (focused ? onLineage.has(n.id) : labelsOn || zoomed || hubs.has(n.id) || n.glow || n.bookmarked);
     if (!eligible) continue;
-    const x = n.x * s + tx, y = n.y * s + ty, r = Math.max(2, n.r * k * s), th = 14, g = 3;
+    const x = n.x * s + tx, y = n.y * s + ty, r = Math.max(2, dotRadius(n.r) * s), th = 14, g = 3;
     // the full title in the six spots around the dot, then a short one, then lifted a row or two
     // above or below with a thin leader line (only where the line itself crosses nothing)
     let placed = null;

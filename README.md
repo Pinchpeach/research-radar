@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.6.0**:
+최신 버전 **v0.6.1**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.6.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-windows.zip) | [ResearchRadar-0.6.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-macos.zip) | [ResearchRadar-0.6.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-linux.tar.gz) | [ResearchRadar-0.6.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/ResearchRadar-0.6.0-android.apk) |
+| [ResearchRadar-0.6.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-windows.zip) | [ResearchRadar-0.6.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-macos.zip) | [ResearchRadar-0.6.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-linux.tar.gz) | [ResearchRadar-0.6.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 

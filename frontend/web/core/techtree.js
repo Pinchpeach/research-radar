@@ -195,8 +195,8 @@ function svg(lay, title, text) {
   const [first, last] = lay.years;
   const letters = [...title].reduce((n, ch) => n + (ch >= "가" && ch <= "힣" ? 2 : 1), 0);
   const titleSize = Math.max(26, Math.min(52, (W - 160) / Math.max(1, letters) / 0.75));
-  out.push(`<text x="${f0(W / 2)}" y="92" text-anchor="middle" fill="${TEXT}" font-size="${f0(titleSize)}" font-weight="300" letter-spacing="6">${esc(title.toUpperCase())}</text>`
-    + `<text x="${f0(W / 2)}" y="128" text-anchor="middle" fill="${TEXT_2}" font-size="17" letter-spacing="2">`
+  out.push(`<text class="map-title" x="${f0(W / 2)}" y="92" text-anchor="middle" fill="${TEXT}" font-size="${f0(titleSize)}" font-weight="300" letter-spacing="6">${esc(title.toUpperCase())}</text>`
+    + `<text class="map-title" x="${f0(W / 2)}" y="128" text-anchor="middle" fill="${TEXT_2}" font-size="17" letter-spacing="2">`
     + esc(format(text.subtitle, { papers: lay.nodes.length, topics: lay.lanes.length, first, last })) + "</text>");
 
   // era grid; the year numbers live in the screen-space ruler so they stay readable
@@ -283,7 +283,7 @@ function svg(lay, title, text) {
   // how to read
   const ly = H - 135;
   text.notes.forEach((line, i) => {
-    out.push(`<text x="${ROOT_X - 40}" y="${ly + i * 21}" fill="${i === 0 ? TEXT : TEXT_3}" font-size="${i === 0 ? 14 : 12.5}" font-weight="${i === 0 ? 700 : 400}" pointer-events="none" class="lane-label">${esc(line)}</text>`);
+    out.push(`<text x="${ROOT_X - 40}" y="${ly + i * 21}" fill="${i === 0 ? TEXT : TEXT_3}" font-size="${i === 0 ? 14 : 12.5}" font-weight="${i === 0 ? 700 : 400}" pointer-events="none" class="note">${esc(line)}</text>`);
   });
 
   // screen-space layer: paper titles and the year ruler, drawn by the script at a fixed size
