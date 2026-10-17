@@ -225,7 +225,7 @@ jobs:
           target_commitish: ${{ github.sha }} # creates the tag here when run by hand
           name: Research Radar ${{ steps.tag.outputs.tag }}
           body_path: release-notes.md
-          generate_release_notes: true # appends the merged PRs since the previous release
+          generate_release_notes: false # the notes are just the download commands
           prerelease: ${{ contains(steps.tag.outputs.tag, '-') }}
           files: release/*
           fail_on_unmatched_files: true

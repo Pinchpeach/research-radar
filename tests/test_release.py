@@ -48,7 +48,8 @@ def test_release_notes_name_the_versioned_files():
     notes = release.notes(f"v{__version__}")
     for name in ("windows.zip", "macos.zip", "linux.tar.gz"):
         assert f"ResearchRadar-{__version__}-{name}" in notes
-    assert "시험판" in release.notes(f"v{__version__}-rc1") and "시험판" not in notes
+    assert f"releases/download/v{__version__}/ResearchRadar-{__version__}-windows.zip" in notes
+    assert notes.count("curl") >= 4 and "What's Changed" not in notes  # downloads only
     assert "android.apk" not in notes
     assert f"ResearchRadar-{__version__}-android.apk" in release.notes(f"v{__version__}", android=True)
     cli = subprocess.run([sys.executable, "desktop/release.py", "notes", "v1.2.3", "--android"], cwd=ROOT,

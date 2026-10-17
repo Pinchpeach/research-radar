@@ -209,7 +209,7 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
   ```
   태그가 `backend/version.py`와 다르면 바로 실패합니다.
 
-어느 쪽이든 세 운영체제 빌드와 실행 점검, Android 빌드가 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, (서명 키를 등록했다면) `-android.apk`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
+어느 쪽이든 세 운영체제 빌드와 실행 점검, Android 빌드가 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, (서명 키를 등록했다면) `-android.apk`, `SHA256SUMS.txt`가 올라가고, 릴리스 설명에는 터미널로 내려받는 명령만 들어갑니다.
 
 `v0.5.0-rc1`처럼 `-`가 붙은 태그는 시험판(pre-release)으로 올라갑니다. 앱의 업데이트 알림은 시험판을 무시합니다.
 
