@@ -49,6 +49,11 @@ def test_release_notes_name_the_versioned_files():
     for name in ("windows.zip", "macos.zip", "linux.tar.gz"):
         assert f"ResearchRadar-{__version__}-{name}" in notes
     assert "시험판" in release.notes(f"v{__version__}-rc1") and "시험판" not in notes
+    assert "android.apk" not in notes
+    assert f"ResearchRadar-{__version__}-android.apk" in release.notes(f"v{__version__}", android=True)
+    cli = subprocess.run([sys.executable, "desktop/release.py", "notes", "v1.2.3", "--android"], cwd=ROOT,
+                         capture_output=True, text=True)
+    assert cli.returncode == 0 and "ResearchRadar-1.2.3-android.apk" in cli.stdout
 
 
 # ---------- in-app update check ----------

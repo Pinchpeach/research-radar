@@ -1,0 +1,48 @@
+// Build the Android app's web content (www/) from the desktop app's screens in frontend/web.
+//   node build.mjs   (npm run sync also copies it into the Android project)
+//
+// The pages are the same; only the entry point changes: mobile.js answers the API in the page
+// (frontend/web/core) instead of the desktop app's local FastAPI server.
+
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const here = path.dirname(fileURLToPath(import.meta.url));
+const web = path.join(here, "..", "frontend", "web");
+const out = path.join(here, "www");
+
+fs.rmSync(out, { recursive: true, force: true });
+fs.cpSync(web, out, { recursive: true });
+
+let html = fs.readFileSync(path.join(web, "index.html"), "utf8");
+const replace = (from, to) => {
+  if (!html.includes(from)) throw new Error(`index.html no longer contains ${from}`);
+  html = html.replace(from, to);
+};
+replace('<link rel="stylesheet" href="/static/style.css">', '<link rel="stylesheet" href="style.css">');
+replace('content="width=device-width,initial-scale=1"', 'content="width=device-width,initial-scale=1,viewport-fit=cover"');
+replace('<script src="/static/i18n.js"></script>', '<script src="i18n.js"></script>');
+replace('<script src="/static/app.js"></script>', '<script type="module" src="mobile.js"></script>');
+if (html.includes("/static/")) throw new Error("index.html still points at /static/ (served by the desktop backend only)");
+fs.writeFileSync(path.join(out, "index.html"), html);
+
+// Older Android WebViews can't import JSON modules: ship each shared JSON file as a JS module too.
+for (const name of fs.readdirSync(path.join(out, "shared")).filter((f) => f.endsWith(".json"))) {
+  const data = fs.readFileSync(path.join(out, "shared", name), "utf8");
+  fs.writeFileSync(path.join(out, "shared", `${name}.js`), `export default ${data.trim()};\n`);
+}
+const jsonImport = /(import \w+ from "\.\.\/shared\/[\w-]+\.json)" with \{ type: "json" \};/g;
+for (const name of fs.readdirSync(path.join(out, "core"))) {
+  const file = path.join(out, "core", name);
+  const code = fs.readFileSync(file, "utf8");
+  if (jsonImport.test(code)) fs.writeFileSync(file, code.replace(jsonImport, '$1.js";'));
+  jsonImport.lastIndex = 0;
+}
+
+// version.js must match backend/version.py (also checked by tests/test_js_core.py)
+const py = fs.readFileSync(path.join(here, "..", "backend", "version.py"), "utf8");
+const js = fs.readFileSync(path.join(web, "core", "version.js"), "utf8");
+const version = /__version__ = "([^"]+)"/.exec(py)[1];
+if (!js.includes(`"${version}"`)) throw new Error(`frontend/web/core/version.js is not ${version}`);
+console.log(`www/ built for Research Radar ${version}`);

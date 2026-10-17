@@ -14,6 +14,8 @@
 
 모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.5.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요.
 
+**Android:** 준비 중입니다. 앱 서명 키를 등록하면 다음 릴리스부터 APK가 함께 올라갑니다([Android 앱](#android-앱) 참고).
+
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
 ## 주요 기능
@@ -55,6 +57,15 @@
 | Linux | `ResearchRadar-<버전>-linux.tar.gz` | 압축을 풀고 `ResearchRadar/ResearchRadar`를 실행합니다. 창을 띄우려면 GTK 또는 Qt WebView가 필요하고, 없으면 기본 브라우저로 열립니다. |
 
 > 앱에 코드 서명이 되어 있지 않아 첫 실행 때 운영체제 경고가 나옵니다. 내려받은 파일은 릴리스에 함께 올라가는 `SHA256SUMS.txt`로 확인할 수 있습니다.
+
+### Android 앱
+
+휴대폰에서도 같은 화면(탐색, 북마크, 연구 흐름, 환경설정)을 씁니다. PC 앱과 달리 앱 안에 서버가 없고, 검색·정렬·흐름 분석을 휴대폰에서 직접 계산합니다(아래 [작동 방식](#android-앱의-구조)).
+
+- **설치:** 릴리스의 `ResearchRadar-<버전>-android.apk`를 휴대폰에서 내려받아 엽니다. 처음에는 브라우저(또는 파일 앱)에 **출처를 알 수 없는 앱 설치**를 허용해야 합니다. Android 7 이상에서 동작합니다.
+- **사용법:** 연구 흐름은 한 손가락으로 끌어서 옮기고 두 손가락으로 확대합니다. 점을 누르면 카드가 뜹니다. BibTeX와 포스터 저장은 Android 공유 창(Drive, 메일, 파일 등)으로 보냅니다.
+- **데이터:** API 키, 북마크, 정렬 평가는 휴대폰의 앱 저장소에만 있습니다. 앱을 지우면 함께 지워지고, PC 앱과는 따로 저장됩니다.
+- **시험판 APK:** 코드가 바뀔 때마다 GitHub Actions가 시험용 APK(`android-debug-apk`)를 만듭니다. 이 APK는 빌드마다 서명이 달라서, 정식 APK 위에 덮어 설치할 수 없습니다.
 
 **업데이트:** 앱은 시작할 때 GitHub Releases에서 새 버전을 확인하고, 새 버전이 있으면 오른쪽 위에 **새 버전 vX.Y.Z**를 표시합니다. 눌러서 내려받은 뒤 기존 앱을 바꾸면 됩니다. 설정과 북마크는 데이터 폴더에 있어서 그대로 이어집니다. 현재 버전은 **환경설정 → 정보**에 나옵니다.
 
@@ -119,6 +130,14 @@ OpenAlex는 키 없는 요청을 **같은 인터넷 주소(IP)를 쓰는 모든 
    - **기초 논문:** 결과 중 2편 이상이 인용한 오래된 논문을 기초 논문으로 추가합니다.
    - **잘못된 인용 제외:** 인용하는 논문보다 1년 넘게 늦게 나온 논문을 인용한 경우는 데이터 오류로 보고 무시합니다.
 
+### Android 앱의 구조
+
+PC 앱은 파이썬 서버(FastAPI)를 앱 안에서 띄우고 화면이 그 서버에 요청합니다. Android 앱에는 서버가 없습니다. 위 1~5단계를 JavaScript로 옮긴 `frontend/web/core/`가 같은 요청을 화면 안에서 처리하고, OpenAlex에는 휴대폰이 직접 접속합니다.
+
+- **같은 결과:** TF-IDF는 scikit-learn과 같은 수식으로 계산합니다. 실제 검색 녹화로 확인하면 검색 결과의 순서와 점수가 PC 앱과 같습니다(점수는 반올림 차이 이내).
+- **한 가지 차이:** 주제 나누기(k-means)의 초기값을 정하는 난수만 달라서, 같은 논문이라도 주제 묶음이 PC 앱과 조금 다를 수 있습니다.
+- **함께 고치기:** 정렬이나 흐름 분석을 바꿀 때는 `backend/`와 `frontend/web/core/`를 같이 고쳐야 합니다. `tests/test_js_core.py`가 둘이 어긋나면 실패합니다.
+
 ## 개발
 
 ### 소스에서 실행
@@ -138,7 +157,10 @@ API 서버만 띄우려면 `uvicorn backend.main:app --reload`를 실행하세�
 ```bash
 pip install pytest httpx
 python -m pytest
+node --test tests/js/*.test.mjs   # Android 앱의 JavaScript 백엔드 (Node.js 22 이상)
 ```
+
+`python -m pytest`에는 `tests/test_js_core.py`도 들어 있습니다. 실제 OpenAlex 검색을 녹화한 `tests/fixtures/`를 파이썬 백엔드와 JavaScript 백엔드에 똑같이 넣고, 결과(검색 순서와 점수, 인용 연결, 핵심 계보, 주제 이름, 포스터)가 같은지 비교합니다. Node.js가 없으면 이 테스트는 건너뜁니다. 녹화는 `python tests/fixtures/record_openalex.py "<검색어>"`로 다시 만들 수 있습니다.
 
 실제 OpenAlex 데이터로 전체 과정(검색 → 연구 흐름 → 포스터)을 점검하려면 다음을 실행합니다. 결과 포스터는 `data/live-map.html`에 저장됩니다.
 
@@ -154,13 +176,33 @@ pyinstaller desktop/research_radar.spec --noconfirm   # dist/ 에 생성
 python desktop/smoke.py dist/ResearchRadar/ResearchRadar   # 빌드 결과 점검
 ```
 
-PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop app 워크플로](.github/workflows/desktop.yml)가 앱 코드가 바뀐 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 자동으로 합니다.
+PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop and Android apps 워크플로](.github/workflows/desktop.yml)가 앱 코드가 바뀐 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 하고, Android APK도 빌드합니다.
+
+### Android 앱 빌드
+
+```bash
+cd mobile
+npm ci
+npm run sync          # frontend/web → www/ → Android 프로젝트로 복사
+cd android && ./gradlew assembleDebug   # Android SDK와 JDK 21 필요
+```
+
+`mobile/`은 [Capacitor](https://capacitorjs.com) 프로젝트입니다. 화면은 `frontend/web`을 그대로 쓰고, `npm run sync`(`mobile/build.mjs`)가 시작점만 `mobile.js`로 바꿉니다. 앱 버전은 `backend/version.py`에서 읽습니다. Android Studio에서는 `mobile/android`를 열면 됩니다.
+
+**정식 APK 서명 (한 번만):** 릴리스에 APK를 넣으려면 서명 키가 필요합니다. 업데이트도 같은 키로 서명해야 하므로 키 파일과 비밀번호를 안전한 곳에 보관하세요.
+
+```bash
+keytool -genkeypair -v -keystore research-radar.keystore -alias research-radar -keyalg RSA -keysize 2048 -validity 10000
+base64 -w0 research-radar.keystore   # 출력 전체를 아래 ANDROID_KEYSTORE_BASE64에
+```
+
+GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 개를 등록합니다: `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`(위 예에서는 `research-radar`), `ANDROID_KEY_PASSWORD`. 등록한 뒤로는 릴리스에 `ResearchRadar-<버전>-android.apk`가 함께 올라갑니다. 등록하지 않으면 시험판 APK만 만듭니다.
 
 ### 릴리스 배포
 
-세 운영체제용 앱을 빌드·점검한 뒤 GitHub Release로 자동 배포합니다. 먼저 `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고, README 맨 위 **다운로드** 링크의 버전도 같이 바꾼 뒤 `main`에 병합합니다(둘이 다르면 테스트가 실패합니다). 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다. 그다음 둘 중 하나로 배포합니다.
+세 운영체제용 앱을 빌드·점검한 뒤 GitHub Release로 자동 배포합니다. 먼저 `backend/version.py`의 `__version__`을 새 버전(예: `0.5.0`)으로 올리고, Android 앱용 `frontend/web/core/version.js`와 README 맨 위 **다운로드** 링크의 버전도 같이 바꾼 뒤 `main`에 병합합니다(버전이 서로 다르면 테스트가 실패합니다). 앱 화면, 빌드 파일 이름, macOS 앱 정보가 모두 이 값을 씁니다. 그다음 둘 중 하나로 배포합니다.
 
-- **버튼으로 (권장)**: GitHub의 **Actions → Desktop app → Run workflow**에서 브랜치 `main`을 고르고 **release**에 체크한 뒤 실행합니다. 워크플로가 `v<버전>` 태그를 직접 만듭니다. 그 버전이 이미 배포됐다면 실패하니 버전을 먼저 올리세요.
+- **버튼으로 (권장)**: GitHub의 **Actions → Desktop and Android apps → Run workflow**에서 브랜치 `main`을 고르고 **release**에 체크한 뒤 실행합니다. 워크플로가 `v<버전>` 태그를 직접 만듭니다. 그 버전이 이미 배포됐다면 실패하니 버전을 먼저 올리세요.
 - **태그로**: `main`에서 같은 버전의 태그를 만들어 푸시합니다.
   ```bash
   git checkout main && git pull
@@ -169,7 +211,7 @@ PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 �
   ```
   태그가 `backend/version.py`와 다르면 바로 실패합니다.
 
-어느 쪽이든 세 운영체제 빌드와 실행 점검이 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
+어느 쪽이든 세 운영체제 빌드와 실행 점검, Android 빌드가 **모두 통과해야** 릴리스를 만듭니다. 릴리스에는 `ResearchRadar-<버전>-windows.zip`, `-macos.zip`, `-linux.tar.gz`, (서명 키를 등록했다면) `-android.apk`, `SHA256SUMS.txt`, 설치 안내, 그리고 이전 릴리스 이후 병합된 PR 목록이 들어갑니다.
 
 `v0.5.0-rc1`처럼 `-`가 붙은 태그는 시험판(pre-release)으로 올라갑니다. 앱의 업데이트 알림은 시험판을 무시합니다.
 
@@ -204,14 +246,18 @@ research-radar/
 │       ├── flow.py          # 주제, 주제 이름, 인용 그래프, 계보
 │       └── techtree.py      # 인터랙티브 테크트리 지도
 ├── frontend/
-│   └── web/                 # 데스크톱 앱 화면 (HTML/CSS/JS, 빌드 과정 없음)
+│   └── web/                 # 앱 화면 (HTML/CSS/JS, 빌드 과정 없음). PC와 Android가 같이 씀
+│       ├── core/            # Android용 백엔드: backend/의 JavaScript 이식판
+│       ├── shared/          # 두 백엔드가 같이 읽는 포스터 틀·문구·단어 목록
+│       └── mobile.js        # Android 앱 시작점
+├── mobile/                  # Android 앱 (Capacitor): build.mjs, android/
 ├── desktop/
 │   ├── main.py              # 앱 실행기 (로컬 서버 + 네이티브 창)
 │   ├── research_radar.spec  # PyInstaller 빌드 설정
 │   ├── smoke.py             # 빌드 결과 점검
 │   └── release.py           # 릴리스: 버전·태그 확인, 릴리스 노트
 ├── scripts/                 # live_check.py, evaluate.py
-└── tests/
+└── tests/                   # js/ 는 JavaScript 백엔드 테스트, fixtures/ 는 녹화한 OpenAlex 응답
 ```
 
 저장한 정렬 평가는 앱 데이터 폴더의 `judgments.jsonl`에 쌓이며, `python -m scripts.evaluate`로도 비교할 수 있습니다.

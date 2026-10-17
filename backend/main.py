@@ -1,7 +1,6 @@
 import logging
 import math
 from datetime import date
-import sys
 from functools import lru_cache
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
 from backend import judgments, settings, updates
+from backend.paths import WEB_DIR
 from backend.version import __version__
 from backend.models import (
     Bookmark,
@@ -53,9 +53,6 @@ def get_store() -> BookmarkStore:
     return BookmarkStore()
 
 
-# Files bundled with the app: next to the code, or unpacked by PyInstaller into sys._MEIPASS.
-APP_DIR = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
-WEB_DIR = APP_DIR / "frontend" / "web"
 app.mount("/static", StaticFiles(directory=WEB_DIR), name="static")
 
 

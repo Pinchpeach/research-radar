@@ -15,25 +15,16 @@ import numpy as np
 from sklearn.cluster import KMeans
 from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 
+from backend.paths import shared_json
 from backend.services.dedupe import dedupe
 from backend.services.ranking import paper_text, plausible_citation  # noqa: F401 - re-exported
 
 MAX_CLUSTERS = 6
+WORDS = shared_json("words.json")  # shared with the Android app
 # Words common in abstracts that say nothing about a topic.
-GENERIC_WORDS = {
-    "able", "achieve", "achieves", "albeit", "also", "analysis", "approach", "approaches", "based",
-    "demonstrate", "demonstrated", "effective", "identified", "identify", "introduce", "introduced",
-    "novel", "reviewed", "reviews", "different", "discuss", "discussed", "find", "findings",
-    "found", "give", "given", "gives", "however", "method", "methods", "new", "number", "obtain",
-    "obtained", "paper", "possible", "present", "presented", "presents", "propose", "proposed",
-    "recent", "recently", "report", "reported", "result", "results", "review", "show", "shown",
-    "shows", "studied", "studies", "study", "use", "used", "using", "various", "work",
-}
+GENERIC_WORDS = set(WORDS["generic_words"])
 # Words that add nothing to a topic name on their own.
-NAME_FILLER = {
-    "advanced", "advances", "analysis", "application", "applications", "approach", "method",
-    "methods", "research", "studies", "study", "technique", "techniques", "theory",
-}
+NAME_FILLER = set(WORDS["name_filler"])
 TOPIC_WEIGHT = 0.8
 # At least 3 characters, starting with a letter; hyphenated terms such as "x-ray" stay whole.
 TOKEN_PATTERN = r"(?u)\b[^\W\d_][\w-]+[^\W_]\b"
@@ -49,7 +40,9 @@ def outside_references(papers: list[dict], min_count: int = 2, limit: int = 10) 
     counts = Counter(
         ref for paper in papers for ref in set(paper.get("referenced_works") or []) if ref not in in_set
     )
-    return [(ref, count) for ref, count in counts.most_common() if count >= min_count][:limit]
+    # ties broken by ID, so the same works are picked every run
+    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return [(ref, count) for ref, count in ranked if count >= min_count][:limit]
 
 
 
