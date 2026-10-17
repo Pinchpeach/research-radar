@@ -318,6 +318,7 @@ export function renderHtml(flow, title, lang, template) {
     __TEXT__: JSON.stringify(text.js).replaceAll("</", "<\\/"),
     __DATA__: JSON.stringify(data).replaceAll("</", "<\\/"),
   };
-  // one pass, so text inside one value (a paper title, say) is never mistaken for a placeholder
-  return template.replace(new RegExp(Object.keys(values).join("|"), "g"), (m) => values[m]);
+  // one pass, so text inside one value (a paper title, say) is never mistaken for a placeholder;
+  // CRLF from a Windows checkout becomes LF, like Python's text mode reads it
+  return template.replace(/\r\n?/g, "\n").replace(new RegExp(Object.keys(values).join("|"), "g"), (m) => values[m]);
 }

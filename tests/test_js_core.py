@@ -101,6 +101,15 @@ def python_api(recorded, monkeypatch, tmp_path):
     main.app.dependency_overrides.clear()
 
 
+def approx_tree(value):
+    """`value` with every float wrapped in pytest.approx, for comparing nested JSON."""
+    if isinstance(value, dict):
+        return {k: approx_tree(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [approx_tree(v) for v in value]
+    return pytest.approx(value, rel=1e-12) if isinstance(value, float) else value
+
+
 def assert_same_ranking(py: list[dict], js: list[dict]):
     assert [p["id"] for p in py] == [p["id"] for p in js]
     for a, b in zip(py, js):
@@ -217,7 +226,8 @@ def test_poster_layout_and_page_match(real_flow):
     data = re.compile(r"const (?:DATA|T) = (\{.*?\});\n")
     py_page = techtree.render_html(built, "Graph Neural Networks", "ko")
     js_page = js["poster"]
-    assert [json.loads(m) for m in data.findall(py_page)] == [json.loads(m) for m in data.findall(js_page)]
+    # floats may differ in the last digit (each platform's log10), so compare them approximately
+    assert approx_tree([json.loads(m) for m in data.findall(py_page)]) == [json.loads(m) for m in data.findall(js_page)]
     assert stars.sub("", data.sub("", py_page)) == stars.sub("", data.sub("", js_page))
 
 

@@ -56,6 +56,8 @@ def notes(tag: str, android: bool = False) -> str:
 
 
 def main(argv: list[str]) -> int:
+    # the notes are Korean; a Windows console's code page can't print them
+    sys.stdout.reconfigure(encoding="utf-8")
     command = argv[1] if len(argv) > 1 else ""
     if command == "version":
         print(app_version())
