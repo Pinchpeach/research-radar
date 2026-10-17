@@ -11,6 +11,14 @@ const state = { run: null, bookmarks: [], flow: null, poster: null, posterTitle:
 // ───────────── helpers ─────────────
 
 async function api(method, path, body) {
+  // The Android app answers API calls in the page (frontend/web/core) instead of a local server.
+  if (window.radarLocalApi) {
+    try {
+      return await window.radarLocalApi(method, path, body);
+    } catch (e) {
+      throw new Error(e.status ? e.message : t("err.server"));
+    }
+  }
   let res;
   try {
     res = await fetch(path, {
@@ -65,6 +73,7 @@ function metaLine(paper) {
 
 /** Save text to a file: native dialog in the desktop app, download in a browser. */
 async function saveFile(name, content, mime) {
+  if (window.radarSaveFile) return window.radarSaveFile(name, content, mime);
   if (window.pywebview && window.pywebview.api && window.pywebview.api.save_file) {
     const saved = await window.pywebview.api.save_file(name, content);
     return saved ? t("file.saved", { path: saved }) : t("file.cancelled");
@@ -407,7 +416,8 @@ async function showFlow() {
   $("poster").srcdoc = state.poster;
   $("poster").hidden = false;
   $("save-poster").disabled = false;
-  setStatus("map-status", t("flow.done", { nodes: flow.nodes.length, edges: flow.edges.length, topics: flow.clusters.length }));
+  const touch = matchMedia("(pointer: coarse)").matches;
+  setStatus("map-status", t(touch ? "flow.doneTouch" : "flow.done", { nodes: flow.nodes.length, edges: flow.edges.length, topics: flow.clusters.length }));
   renderStory(flow);
 }
 
@@ -457,7 +467,8 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("clear-openalex-key").hidden = key.source !== "settings";
   $("clear-openai-key").hidden = s.openai_api_key.source !== "settings";
   $("openalex-email").value = s.openalex_email.value || "";
-  $("data-dir").textContent = s.data_dir;
+  if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
+  else $("data-dir").textContent = s.data_dir;
   $("key-pill").textContent = key.set ? t("pill.ok") : t("pill.missing");
   $("key-pill").className = `pill ${key.set ? "ok" : "warn"}`;
   $("banner").hidden = key.set;

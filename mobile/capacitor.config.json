@@ -1,0 +1,11 @@
+{
+  "appId": "io.github.pinchpeach.researchradar",
+  "appName": "Research Radar",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#f6f6f4"
+  },
+  "plugins": {
+    "CapacitorHttp": { "enabled": true }
+  }
+}

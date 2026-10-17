@@ -185,3 +185,31 @@ small { color: var(--text-3); font-weight: 400; }
 .test-result.bad { color: var(--danger); }
 .actions { display: flex; gap: 12px; align-items: center; }
 code { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; font-size: 12px; word-break: break-all; }
+
+/* ── phones (the Android app and narrow windows) ── */
+.mobile-app .topbar { padding-top: max(10px, env(safe-area-inset-top)); }
+@media (max-width: 640px) {
+  .topbar { flex-wrap: wrap; gap: 8px 12px; padding: 8px 12px; }
+  .mobile-app .topbar { padding-top: max(8px, env(safe-area-inset-top)); }
+  .brand { flex: 1; }
+  .tabs { order: 3; flex: 1 1 100%; overflow-x: auto; scrollbar-width: none; margin: 0 -4px; }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tab { flex: none; padding: 8px 10px; }
+  .banner { padding: 10px 12px; }
+  main { padding: 12px; }
+  .grid, .weights { grid-template-columns: minmax(0, 1fr); }
+  .search input { font-size: 16px; } /* 16px keeps Android/iOS from zooming into the field */
+  input, select, textarea { font-size: 16px; }
+  .paper { padding: 10px 12px; }
+  .title { font-size: 14.5px; }
+  .bm-edit { grid-template-columns: minmax(0, 1fr); }
+  .toolbar { gap: 8px; }
+  .segmented { flex-wrap: wrap; }
+  #poster { height: calc(100vh - 230px); height: calc(100dvh - 230px); min-height: 360px; border-radius: 8px; }
+  .story { grid-template-columns: minmax(0, 1fr); }
+  #eval-history { overflow-x: auto; }
+  .eval-bar { padding: 8px 10px; }
+  .metrics { gap: 10px; }
+  .settings label .row { flex-wrap: wrap; }
+  .judge button { padding: 8px 12px; }
+}
