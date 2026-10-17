@@ -1,3 +1,4 @@
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -101,3 +102,12 @@ def test_update_check_failures_are_silent(monkeypatch):
     updates._cache.update(at=0.0)
     monkeypatch.setattr(updates.requests, "get", lambda *a, **k: Resp(404))  # no releases yet / private repo
     assert updates.update_info()["latest"] is None
+
+
+def test_readme_download_links_point_at_this_version():
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    links = re.findall(r"releases/download/(v[^/]+)/ResearchRadar-([^)]+?)-(windows\.zip|macos\.zip|linux\.tar\.gz)\)", readme)
+    assert {kind for _, _, kind in links} == {"windows.zip", "macos.zip", "linux.tar.gz"}
+    for tag, version, _ in links:
+        assert tag == f"v{__version__}" and version == __version__, "update the README download links"
+    assert f"**v{__version__}**" in readme
