@@ -2,8 +2,15 @@
 <html lang="__LANG__"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>__TITLE__</title>
 <style>
-  html,body{margin:0;height:100%;background:__SURFACE__;overflow:hidden;font-family:Inter,system-ui,sans-serif}
-  #wrap{position:relative;width:100%;height:100%;cursor:grab;outline:none;touch-action:none;-webkit-user-select:none;user-select:none}
+  html,body{margin:0;height:100%;background:__SURFACE__;overflow:hidden;font-family:NanumSquareRound,Inter,system-ui,sans-serif}
+  body{display:flex;flex-direction:column}
+  /* the map's title stays put above the map while it pans and zooms */
+  #head{flex:none;padding:14px 16px 10px;text-align:center;color:#f0efec;border-bottom:1px solid rgba(255,255,255,.08)}
+  #head:empty{display:none}
+  #head .t{font-size:clamp(15px,2.4vw,22px);font-weight:300;letter-spacing:.22em;line-height:1.25;word-break:keep-all}
+  @media (max-width:560px){#head{padding:10px 12px 8px}#head .t{letter-spacing:.08em}#head .s{font-size:11px;letter-spacing:.02em}}
+  #head .s{margin-top:3px;font-size:12px;color:#8a8984;letter-spacing:.08em}
+  #wrap{position:relative;width:100%;flex:1;min-height:0;cursor:grab;outline:none;touch-action:none;-webkit-user-select:none;user-select:none}
   #wrap.drag{cursor:grabbing}
   svg{width:100%;height:100%;display:block}
   .dot{cursor:pointer;outline:none}
@@ -22,12 +29,12 @@
   .focus .dot.on,.focus .halo.on{opacity:1}
   #bar{position:absolute;top:12px;right:12px;display:flex;gap:6px}
   #bar button{background:#1f232c;color:#f0efec;border:1px solid #3a3f4b;border-radius:8px;padding:6px 10px;
-    font:600 12px Inter,system-ui,sans-serif;cursor:pointer}
+    font-weight:600;font-size:12px;font-family:inherit;cursor:pointer}
   #bar button.active{background:#f0efec;color:#0e1015}
-  #hint{position:absolute;top:12px;left:12px;color:#8a8984;font:12px Inter,system-ui,sans-serif;pointer-events:none;
+  #hint{position:absolute;top:12px;left:12px;color:#8a8984;font-size:12px;pointer-events:none;
     background:rgba(14,16,21,.75);border-radius:6px;padding:5px 9px;transition:opacity .6s}
   #ruler{position:absolute;left:0;right:0;bottom:16px;height:16px;pointer-events:none;overflow:hidden;
-    font:11px Inter,system-ui,sans-serif;color:#8a8984;text-shadow:0 0 4px #0e1015,0 0 4px #0e1015}
+    font-size:11px;color:#8a8984;text-shadow:0 0 4px #0e1015,0 0 4px #0e1015}
   #ruler span{position:absolute;top:0;transform:translateX(-50%)}
   #track{position:absolute;left:12px;right:12px;bottom:5px;height:8px;border-radius:4px;background:rgba(255,255,255,.07);
     display:none;cursor:pointer}
@@ -55,8 +62,36 @@
   @media (max-width:560px){#hint{display:none}#bar{top:8px;right:8px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 16px)}}
   #pinmark{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid #f0efec;border-radius:50%;
     pointer-events:none;display:none;box-shadow:0 0 0 3px rgba(240,239,236,.25)}
+  /* light: the app in a light theme shows the map on its own background (the saved poster keeps
+     whichever look was on screen). CSS outranks the SVG's colour attributes, so the drawing is shared. */
+  html.light,html.light body{background:#f6f6f4}
+  html.light #head{color:#1b1b1a;border-bottom-color:rgba(0,0,0,.08)}
+  html.light #head .s{color:#6b6a66}
+  html.light [fill="#0e1015"]{fill:#f6f6f4}
+  html.light [stroke="#0e1015"]{stroke:#f6f6f4}
+  html.light [fill="#f0efec"]{fill:#1b1b1a}
+  html.light [stroke="#f0efec"]{stroke:#1b1b1a}
+  html.light [fill="#c3c2b7"]{fill:#52514e}
+  html.light [stroke="#c3c2b7"]{stroke:#8a8984}
+  html.light [fill="#8a8984"]{fill:#6b6a66}
+  html.light g[fill="#fff"]{fill:#8a8984}
+  html.light [stroke="#fff"]{stroke:#1b1b1a}
+  html.light #glow stop{stop-color:#9cc0f0}
+  html.light #glow stop:first-child{stop-color:#d6e6fb}
+  html.light #titles text{fill:#52514e}
+  html.light #titles text.key{fill:#1b1b1a}
+  html.light .dot:hover circle:first-child,html.light .dot:focus circle:first-child{stroke:#1b1b1a}
+  html.light #bar button{background:#fff;color:#1b1b1a;border-color:#e2e1dc}
+  html.light #bar button.active{background:#1b1b1a;color:#fff}
+  html.light #hint{background:rgba(255,255,255,.85);color:#6b6a66}
+  html.light #ruler{color:#6b6a66;text-shadow:0 0 4px #f6f6f4,0 0 4px #f6f6f4}
+  html.light #track{background:rgba(0,0,0,.07)}
+  html.light #thumb{background:rgba(27,27,26,.25)}
+  html.light #thumb:hover,html.light #thumb.drag{background:rgba(27,27,26,.45)}
+  html.light #tip,html.light #pin{background:#fff;box-shadow:0 10px 30px rgba(20,30,50,.18);border:1px solid #e2e1dc}
+  html.light #pinmark{border-color:#1b1b1a;box-shadow:0 0 0 3px rgba(27,27,26,.15)}
 </style></head>
-<body><div id="wrap" tabindex="0">
+<body><header id="head"></header><div id="wrap" tabindex="0">
 __SVG__
 <div id="hint"></div>
 <div id="ruler"></div>
@@ -85,6 +120,12 @@ $("zin").title = T.zoomIn; $("zout").title = T.zoomOut; button("fit", T.fit, T.f
 $("close").title = T.close; $("close").setAttribute("aria-label", T.close); $("pin").setAttribute("aria-label", T.details);
 const coarse = matchMedia("(pointer: coarse)").matches;
 $("hint").textContent = coarse ? T.hintTouch : T.hint;
+
+// ---------- the title moves out of the map into the fixed header ----------
+document.querySelectorAll(".map-title").forEach((node, i) => {
+  $("head").append(Object.assign(document.createElement("div"), { className: i ? "s" : "t", textContent: node.textContent }));
+  node.remove();
+});
 
 // ---------- pan & zoom: scroll moves, Ctrl/⌘ + scroll (or a pinch) zooms ----------
 function clampPan() {
@@ -138,8 +179,8 @@ function fit(whole = true) {
   s = fitScale = Math.min(w / W, h / H); tx = (w - W * s) / 2; ty = (h - H * s) / 2;
   if (!whole && w / h < 1) {
     // a tall, narrow frame (a phone held upright) would show the wide map as a thin strip:
-    // start zoomed to the frame's height instead, at the beginning of the timeline
-    s = Math.min(h / H, fitScale * 2.4); tx = 0; ty = (h - H * s) / 2;
+    // start zoomed to the frame's height instead, at the latest work; swipe back through time
+    s = Math.min(h / H, fitScale * 2.4); tx = w - W * s; ty = (h - H * s) / 2;
   }
   apply();
 }
@@ -247,6 +288,9 @@ const hubs = new Set(DATA.lanes.map(l => l.hub));
 const importance = n => (hubs.has(n.id) ? 4e6 : 0) + (n.glow ? 2e6 : 0) + (n.bookmarked ? 1e6 : 0) + (n.citations || 0);
 const byImportance = [...DATA.nodes].sort((a, b) => importance(b) - importance(a));
 const measure = document.createElement("canvas").getContext("2d");
+const FONT = getComputedStyle(document.body).fontFamily;
+// titles were measured in a fallback font until the app's font arrives: measure again then
+if (document.fonts) document.fonts.ready.then(() => { for (const L of Object.values(labelEls)) L.sizes = {}; apply(); });
 const labelEls = {}, NS = "http://www.w3.org/2000/svg";
 for (const n of byImportance) {
   const lead = document.createElementNS(NS, "line"), el = document.createElementNS(NS, "text");
@@ -260,7 +304,7 @@ function titleSize(n, L, chars) {
   // [text, width] of a title cut to `chars` letters, measured once
   if (!L.sizes[chars]) {
     const text = `${n.year} · ${shorten(n.title, chars)}`;
-    measure.font = L.el.classList.contains("key") ? "600 12px Inter, system-ui, sans-serif" : "11px Inter, system-ui, sans-serif";
+    measure.font = (L.el.classList.contains("key") ? "600 12px " : "11px ") + FONT;
     L.sizes[chars] = [text, measure.measureText(text).width + 4];
   }
   return L.sizes[chars];

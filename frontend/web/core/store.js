@@ -1,9 +1,9 @@
-// What the desktop app keeps in its data folder (settings.json, radar.db, judgments.jsonl),
+// What the desktop app keeps in its data folder (settings.json, radar.db, judgments.jsonl, history.json),
 // kept here in a key-value store: localStorage in the Android app, a Map in tests.
 
 import { GAIN, ndcgAt, precisionAt } from "./evaluation.js";
 
-const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments" };
+const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments", history: "radar.history" };
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 const now = () => new Date().toISOString();
 
@@ -166,6 +166,27 @@ export class Judgments {
     });
     return summary.sort((a, b) => ((a.saved_at || "") < (b.saved_at || "") ? 1 : (a.saved_at || "") > (b.saved_at || "") ? -1 : 0));
   }
+}
+
+// ---------- recently searched topics (backend/history.py) ----------
+
+export const MAX_HISTORY = 20;
+
+export class History {
+  constructor(storage) { this.storage = storage; }
+  load() {
+    const data = read(this.storage, KEYS.history, []);
+    return Array.isArray(data) ? data.filter((e) => e && typeof e.query === "string") : [];
+  }
+  /** Put `query` first; an earlier search for the same topic (ignoring case and spacing) moves up. */
+  record(query) {
+    query = query.split(/\s+/).filter(Boolean).join(" ");
+    if (!query) return;
+    const entry = { query, searched_at: now().replace(/\.\d+Z$/, "+00:00") };
+    const others = this.load().filter((e) => e.query.toLowerCase() !== query.toLowerCase());
+    write(this.storage, KEYS.history, [entry, ...others].slice(0, MAX_HISTORY));
+  }
+  clear() { this.storage.removeItem(KEYS.history); }
 }
 
 export { GAIN };

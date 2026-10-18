@@ -10,8 +10,8 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import judgments, settings, updates
-from backend.paths import WEB_DIR
+from backend import history, judgments, settings, updates
+from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
     Bookmark,
@@ -170,6 +170,10 @@ def search(request: SearchRequest):
     )
     since = recent_since(date.today().year, request.recent_years)
     papers = select_results(ranked, request.limit, request.recent_share, since)
+    try:
+        history.record(request.query)
+    except OSError:
+        logger.warning("Could not save the search history.", exc_info=True)
     return {
         "query": request.query,
         "count": len(papers),
@@ -286,6 +290,26 @@ def list_evaluations():
 def delete_evaluation(run_id: str):
     if not judgments.delete_run(run_id):
         raise HTTPException(status_code=404, detail="Evaluation run not found")
+
+
+# ---------- home screen and news ----------
+
+
+@app.get("/history")
+def search_history(limit: int = 5):
+    """Recently searched topics, newest first."""
+    return history.load()[: max(0, limit)]
+
+
+@app.delete("/history", status_code=204)
+def clear_history():
+    history.clear()
+
+
+@app.get("/changelog")
+def changelog():
+    """What changed in each version, newest first (shared/changelog.json)."""
+    return shared_json("changelog.json")
 
 
 @app.get("/version")

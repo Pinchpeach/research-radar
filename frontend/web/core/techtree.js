@@ -164,7 +164,7 @@ const format = (template, values) => template.replace(/\{(\w+)\}/g, (m, k) => (k
 function svg(lay, title, text) {
   const W = lay.width, H = lay.height;
   const out = [
-    `<svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f0(W)} ${f0(H)}" font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">`,
+    `<svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f0(W)} ${f0(H)}" font-family="NanumSquareRound, Inter, system-ui, -apple-system, Segoe UI, sans-serif">`,
     "<defs>"
       + '<radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/>'
       + '<stop offset=".2" stop-color="#fff" stop-opacity=".45"/>'
@@ -314,7 +314,7 @@ export function renderHtml(flow, title, lang, template) {
     __LANG__: STRINGS[lang] ? lang : "en",
     __TITLE__: esc(pageTitle),
     __SURFACE__: SURFACE,
-    __SVG__: lay.nodes.length ? svg(lay, pageTitle, text) : `<p style='color:#fff'>${esc(text.no_papers)}</p>`,
+    __SVG__: lay.nodes.length ? svg(lay, title, text) : `<p style='color:#fff'>${esc(text.no_papers)}</p>`,
     __TEXT__: JSON.stringify(text.js).replaceAll("</", "<\\/"),
     __DATA__: JSON.stringify(data).replaceAll("</", "<\\/"),
   };

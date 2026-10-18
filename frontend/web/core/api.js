@@ -5,7 +5,8 @@ import { dedupe } from "./dedupe.js";
 import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
-import { Bookmarks, Judgments, Settings, toBibtex } from "./store.js";
+import CHANGELOG from "../shared/changelog.json" with { type: "json" };
+import { Bookmarks, History, Judgments, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
 
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -61,6 +62,7 @@ export function searchRequest(body) {
 
 export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date() }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
+  const history = new History(storage);
   const openalex = new OpenAlex({ fetch, setting: (name) => settings.get(name) });
   const updateCache = { at: 0, latest: null };
 
@@ -137,6 +139,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     const currentYear = today().getFullYear();
     const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years });
     const papers = selectResults(ranked, request.limit, request.recent_share, recentSince(currentYear, request.recent_years));
+    history.record(request.query);
     return {
       query: request.query,
       count: papers.length,
@@ -232,6 +235,9 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (!judgments.deleteRun(decodeURIComponent(id))) throw new ApiError(404, "Evaluation run not found");
       return null;
     }],
+    ["GET", /^\/history$/, (_, __, q) => history.load().slice(0, Math.max(0, Number(q.get("limit") ?? 5) || 0))],
+    ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
+    ["GET", /^\/changelog$/, () => CHANGELOG],
     ["GET", /^\/version$/, async () => {
       const latest = await latestRelease(), current = parseVersion(version);
       return { version, latest, update_available: Boolean(latest && current && newer(parseVersion(latest.version) || [0, 0, 0], current)) };
