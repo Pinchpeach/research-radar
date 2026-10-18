@@ -482,7 +482,10 @@ function autoDrawFlow() {
 async function showFlow() {
   const flow = state.flow;
   const title = state.posterTitle || t("flow.myBookmarks");
-  state.poster = await api("POST", "/poster", { flow, title, lang: LANG });
+  const poster = await api("POST", "/poster", { flow, title, lang: LANG });
+  // on the app's light background the map is light too (and saved the way it is shown)
+  const light = !matchMedia("(prefers-color-scheme: dark)").matches;
+  state.poster = light ? poster.replace("<html ", '<html class="light" ') : poster;
   $("poster").srcdoc = state.poster;
   $("poster").hidden = false;
   $("save-poster").disabled = false;

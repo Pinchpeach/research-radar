@@ -74,7 +74,10 @@ button.app-icon:hover { border: 0; transform: scale(1.06); }
 .drawer.open { transform: none; visibility: visible; transition: transform .22s ease; box-shadow: 8px 0 30px rgba(0, 0, 0, .18); }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(10, 12, 16, .38); animation: fade .2s ease; }
 @keyframes fade { from { opacity: 0; } }
-.drawer-head { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-size: 15px; }
+.drawer-head { padding: 6px 8px 16px; }
+.wordmark { display: inline-flex; flex-direction: column; padding: 6px 12px 7px; border: 2px solid var(--text); border-radius: 10px;
+  font-weight: 800; font-size: 17px; line-height: 1.05; letter-spacing: -.01em; }
+.wordmark span:last-child { padding-left: 1.1em; color: var(--accent); }
 .drawer .tab {
   display: flex; align-items: center; gap: 12px; border: 0; background: none; text-align: left;
   padding: 11px 12px; border-radius: 10px; color: var(--text-2); font-weight: 600; font-size: 15px;
@@ -221,7 +224,7 @@ small { color: var(--text-3); font-weight: 400; }
 .segmented label { padding: 6px 10px; cursor: pointer; display: flex; gap: 4px; align-items: center; }
 .segmented label:has(input:checked) { background: var(--surface-2); font-weight: 600; }
 .segmented input { display: none; }
-#poster { width: 100%; height: calc(100vh - 150px); height: calc(100dvh - 150px); min-height: 420px; border: 0; border-radius: 10px; background: #0e1015; }
+#poster { width: 100%; height: calc(100vh - 150px); height: calc(100dvh - 150px); min-height: 420px; border: 0; border-radius: 10px; background: var(--bg); }
 .story { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
 .story:empty { display: none; }
 .story-card { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--lane, var(--accent)); border-radius: 10px; padding: 12px 14px; }

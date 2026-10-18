@@ -55,6 +55,32 @@
   @media (max-width:560px){#hint{display:none}#bar{top:8px;right:8px;flex-wrap:wrap;justify-content:flex-end;max-width:calc(100% - 16px)}}
   #pinmark{position:absolute;width:12px;height:12px;margin:-6px 0 0 -6px;border:2px solid #f0efec;border-radius:50%;
     pointer-events:none;display:none;box-shadow:0 0 0 3px rgba(240,239,236,.25)}
+  /* light: the app in a light theme shows the map on its own background (the saved poster keeps
+     whichever look was on screen). CSS outranks the SVG's colour attributes, so the drawing is shared. */
+  html.light,html.light body{background:#f6f6f4}
+  html.light [fill="#0e1015"]{fill:#f6f6f4}
+  html.light [stroke="#0e1015"]{stroke:#f6f6f4}
+  html.light [fill="#f0efec"]{fill:#1b1b1a}
+  html.light [stroke="#f0efec"]{stroke:#1b1b1a}
+  html.light [fill="#c3c2b7"]{fill:#52514e}
+  html.light [stroke="#c3c2b7"]{stroke:#8a8984}
+  html.light [fill="#8a8984"]{fill:#6b6a66}
+  html.light g[fill="#fff"]{fill:#8a8984}
+  html.light [stroke="#fff"]{stroke:#1b1b1a}
+  html.light #glow stop{stop-color:#9cc0f0}
+  html.light #glow stop:first-child{stop-color:#d6e6fb}
+  html.light #titles text{fill:#52514e}
+  html.light #titles text.key{fill:#1b1b1a}
+  html.light .dot:hover circle:first-child,html.light .dot:focus circle:first-child{stroke:#1b1b1a}
+  html.light #bar button{background:#fff;color:#1b1b1a;border-color:#e2e1dc}
+  html.light #bar button.active{background:#1b1b1a;color:#fff}
+  html.light #hint{background:rgba(255,255,255,.85);color:#6b6a66}
+  html.light #ruler{color:#6b6a66;text-shadow:0 0 4px #f6f6f4,0 0 4px #f6f6f4}
+  html.light #track{background:rgba(0,0,0,.07)}
+  html.light #thumb{background:rgba(27,27,26,.25)}
+  html.light #thumb:hover,html.light #thumb.drag{background:rgba(27,27,26,.45)}
+  html.light #tip,html.light #pin{background:#fff;box-shadow:0 10px 30px rgba(20,30,50,.18);border:1px solid #e2e1dc}
+  html.light #pinmark{border-color:#1b1b1a;box-shadow:0 0 0 3px rgba(27,27,26,.15)}
 </style></head>
 <body><div id="wrap" tabindex="0">
 __SVG__
