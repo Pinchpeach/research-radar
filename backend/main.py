@@ -25,10 +25,10 @@ from backend.models import (
     SearchResponse,
     SettingsUpdate,
 )
-from backend.services import embeddings, openalex
+from backend.services import openalex
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
-from backend.services.ranking import paper_text, rank_papers, recent_since, select_results
+from backend.services.ranking import rank_papers, recent_since, select_results
 from backend.services.techtree import render_html as render_poster
 from backend.storage import BookmarkStore, to_bibtex
 
@@ -63,7 +63,7 @@ def index():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "version": VERSION, "semantic": embeddings.enabled()}
+    return {"status": "ok", "version": VERSION}
 
 
 def rate_limit_detail(exc: "openalex.RateLimited") -> str:
@@ -161,13 +161,11 @@ def search(request: SearchRequest):
     except RequestException as exc:
         raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
 
-    semantic = embeddings.similarities(request.query, [paper_text(p) for p in candidates])
     ranked = rank_papers(
         request.query,
         candidates,
         seeds,
         request.weights.model_dump(),
-        semantic=semantic,
         recent_years=request.recent_years,
     )
     since = recent_since(date.today().year, request.recent_years)
@@ -176,7 +174,6 @@ def search(request: SearchRequest):
         "query": request.query,
         "count": len(papers),
         "candidates": len(candidates),
-        "semantic": semantic is not None,
         "seeds": [{"id": s["id"], "title": s["title"], "year": s["year"]} for s in seeds],
         "unresolved_seeds": unresolved,
         "papers": papers,

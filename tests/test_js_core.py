@@ -163,18 +163,18 @@ def real_flow(recorded):
     return papers, flow.build_flow(papers, bookmarked={openalex.short_id(papers[0]["id"])}, query="graph neural networks")
 
 
-def test_ranking_matches_with_seeds_and_semantic_scores(real_flow):
+def test_ranking_matches_with_seeds_and_citation_context(real_flow):
     papers, _ = real_flow
-    rng = np.random.default_rng(3)
     cases = [
-        {"query": "graph neural networks", "papers": papers, "seeds": [], "weights": {}, "current_year": 2026, "semantic": None},
+        {"query": "graph neural networks", "papers": papers, "seeds": [], "weights": {}, "current_year": 2026},
         {"query": "message passing on molecules", "papers": papers, "seeds": papers[:2], "weights": {"seed": 0.5},
-         "current_year": 2024, "semantic": rng.random(len(papers)).round(4).tolist()},
+         "current_year": 2024},
+        {"query": "graph neural networks", "papers": [{**p, "referenced_works": []} for p in papers], "seeds": [],
+         "weights": {}, "current_year": 2026},
     ]
     js = run_js({"rank": cases})["rank"]
     for case, js_ranked in zip(cases, js):
-        semantic = np.array(case["semantic"]) if case["semantic"] else None
-        py = ranking.rank_papers(case["query"], case["papers"], case["seeds"], case["weights"], case["current_year"], semantic)
+        py = ranking.rank_papers(case["query"], case["papers"], case["seeds"], case["weights"], case["current_year"])
         for p in py:
             p.setdefault("group", None)
             p.setdefault("core_reference", None)

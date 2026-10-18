@@ -6,5 +6,4 @@ scikit-learn
 numpy
 pydantic>=2
 python-dotenv
-openai>=1.40
 platformdirs

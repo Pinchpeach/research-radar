@@ -86,3 +86,9 @@ export function meanRow(rows, size) {
   for (let i = 0; i < size; i++) mean[i] /= rows.length || 1;
   return mean;
 }
+
+/** Python's round(x, digits): ties go to the even digit. */
+export function pyRound(x, digits = 0) {
+  const f = 10 ** digits, y = x * f, r = Math.round(y);
+  return (Math.abs(y % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r) / f;
+}

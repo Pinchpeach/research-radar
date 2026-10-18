@@ -30,7 +30,7 @@ if (input.fixture) {
   for (const body of input.searches) out.searches.push(await api("POST", "/search", body));
   out.flow = await api("POST", "/flow", input.flow_request);
 }
-if (input.rank) out.rank = input.rank.map((c) => rankPapers(c.query, c.papers, { seeds: c.seeds, weights: c.weights, currentYear: c.current_year, semantic: c.semantic }));
+if (input.rank) out.rank = input.rank.map((c) => rankPapers(c.query, c.papers, { seeds: c.seeds, weights: c.weights, currentYear: c.current_year }));
 if (input.layout) out.layout = layout(input.layout);
 if (input.poster) out.poster = renderHtml(input.poster.flow, input.poster.title, input.poster.lang, template);
 if (input.names) out.names = nameClusters(input.names.papers, input.names.assignment, input.names.fallback, input.names.query);

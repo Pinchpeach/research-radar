@@ -34,7 +34,6 @@ def test_api_never_returns_full_key():
     assert "0123456789abcdefWXYZ" not in res.text
     assert body["openalex_api_key"] == {"set": True, "source": "settings", "hint": "••••••WXYZ"}
     assert body["openalex_email"]["value"] == "me@uni.edu"
-    assert body["openai_api_key"]["set"] is False
     # leaving a field out keeps it; an empty string clears it
     api.put("/settings", json={"openalex_email": ""})
     body = api.get("/settings").json()

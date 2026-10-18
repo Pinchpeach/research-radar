@@ -16,10 +16,9 @@ REPO_DATA = Path(__file__).resolve().parent.parent / "data"
 FIELDS = {
     "openalex_api_key": "OPENALEX_API_KEY",
     "openalex_email": "OPENALEX_EMAIL",
-    "openai_api_key": "OPENAI_API_KEY",
     "language": "RADAR_LANG",
 }
-SECRETS = {"openalex_api_key", "openai_api_key"}
+SECRETS = {"openalex_api_key"}
 
 
 def data_dir() -> Path:

@@ -267,7 +267,8 @@ def longest_chain(nodes: dict[str, dict], edges: list[tuple[str, str]]) -> list[
     prev: dict[str, str | None] = {}
     for nid in order:
         best[nid], prev[nid] = 1, None
-        for cited in cites[nid]:
+        # by position, so ties go to the older paper whatever order the edges came in
+        for cited in sorted(cites[nid], key=position.__getitem__):
             if best[cited] + 1 > best[nid]:
                 best[nid], prev[nid] = best[cited] + 1, cited
     if not best:

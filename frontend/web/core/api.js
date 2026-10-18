@@ -4,7 +4,7 @@
 import { dedupe } from "./dedupe.js";
 import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
-import { DEFAULT_WEIGHTS, paperText, rankPapers, recentSince, selectResults } from "./ranking.js";
+import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import { Bookmarks, Judgments, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
 
@@ -70,26 +70,6 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return `OpenAlex's shared free budget for this network is used up. Add your free OpenAlex API key in Settings to use your own budget.${hours}`;
   };
 
-  async function semanticScores(query, docs) {
-    const key = settings.get("openai_api_key");
-    if (!key || !docs.length) return null;
-    try {
-      const response = await fetch("https://api.openai.com/v1/embeddings", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: "text-embedding-3-small", input: [query, ...docs].map((t) => t.slice(0, 8000) || " ") }),
-      });
-      if (!response.ok) return null;
-      const vectors = (await response.json()).data.map((d) => {
-        const v = d.embedding, n = Math.hypot(...v) || 1;
-        return v.map((x) => x / n);
-      });
-      return vectors.slice(1).map((v) => v.reduce((s, x, i) => s + x * vectors[0][i], 0));
-    } catch {
-      return null; // network, auth, quota: TF-IDF only
-    }
-  }
-
   function mergeCandidates(papers, exclude) {
     const unique = new Map();
     for (const p of papers) if (p.id && !exclude.has(p.id) && !unique.has(p.id)) unique.set(p.id, p);
@@ -154,15 +134,13 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (error instanceof RequestError) throw new ApiError(502, "OpenAlex request failed");
       throw error;
     }
-    const semantic = await semanticScores(request.query, candidates.map(paperText));
     const currentYear = today().getFullYear();
-    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, semantic, recentYears: request.recent_years });
+    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years });
     const papers = selectResults(ranked, request.limit, request.recent_share, recentSince(currentYear, request.recent_years));
     return {
       query: request.query,
       count: papers.length,
       candidates: candidates.length,
-      semantic: semantic !== null,
       seeds: seeds.map((s) => ({ id: s.id, title: s.title, year: s.year })),
       unresolved_seeds: unresolved,
       papers: papers.map((p) => ({ core_reference: false, ...p })),
@@ -206,7 +184,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
   const newer = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i]; return false; };
 
   const settingsUpdate = (body) => {
-    const limits = { openalex_api_key: 200, openalex_email: 200, openai_api_key: 300 };
+    const limits = { openalex_api_key: 200, openalex_email: 200 };
     const update = {};
     for (const [name, value] of Object.entries(body || {})) {
       if (name === "language") {
@@ -222,7 +200,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
   };
 
   const routes = [
-    ["GET", /^\/health$/, () => ({ status: "ok", version, semantic: Boolean(settings.get("openai_api_key")) })],
+    ["GET", /^\/health$/, () => ({ status: "ok", version })],
     ["POST", /^\/search$/, (_, body) => search(body)],
     ["GET", /^\/bookmarks$/, (_, __, q) => bookmarks.all(q.get("tag"))],
     ["PUT", /^\/bookmarks$/, (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null)],

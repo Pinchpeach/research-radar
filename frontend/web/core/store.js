@@ -25,8 +25,8 @@ const write = (storage, key, value) => storage.setItem(key, JSON.stringify(value
 
 // ---------- settings ----------
 
-export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "openai_api_key", "language"];
-const SECRETS = new Set(["openalex_api_key", "openai_api_key"]);
+export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "language"];
+const SECRETS = new Set(["openalex_api_key"]);
 
 export const mask = (secret) => (secret.length > 8 ? "•".repeat(6) + secret.slice(-4) : "•".repeat(secret.length));
 

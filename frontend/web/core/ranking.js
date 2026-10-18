@@ -1,18 +1,13 @@
 // Port of backend/services/ranking.py. See that file for the reasoning behind each score.
 
-import { cosine, tfidf } from "./text.js";
+import { cosine, pyRound, tfidf } from "./text.js";
+import { citationContext } from "./context.js";
 
 export const RECENCY_HALF_LIFE_YEARS = 5;
 export const DEFAULT_WEIGHTS = { relevance: 0.35, influence: 0.45, seed: 0.2, recency: 0.05, impact: 0.15 };
 
 export const paperText = (paper) => `${paper.title || ""} ${paper.abstract || ""}`.trim();
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
-
-/** Python's round(x, digits): ties go to the even digit. */
-export function pyRound(x, digits = 0) {
-  const f = 10 ** digits, y = x * f, r = Math.round(y);
-  return (Math.abs(y % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r) / f;
-}
 
 export function scaleToMax(values) {
   const v = Array.from(values, (x) => Math.max(0, x));
@@ -118,7 +113,7 @@ export function selectResults(ranked, limit, recentShare, since) {
   return [...core.map((p) => ({ ...p, group: "core" })), ...pool.slice(0, needed).map((p) => ({ ...p, group: "recent" }))];
 }
 
-export function rankPapers(query, papers, { seeds = [], weights = {}, currentYear, semantic = null, recentYears = 5 } = {}) {
+export function rankPapers(query, papers, { seeds = [], weights = {}, currentYear, recentYears = 5 } = {}) {
   if (!papers.length) return [];
   weights = { ...DEFAULT_WEIGHTS, ...weights };
   if (!seeds.length) weights.seed = 0;
@@ -135,9 +130,10 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
 
   const tfidfScores = paperVecs.map((v) => cosine(queryVec, v));
   let relevance = scaleToMax(tfidfScores);
-  if (semantic) {
-    const sem = scaleToMax(semantic);
-    relevance = relevance.map((r, i) => 0.5 * r + 0.5 * sem[i]);
+  const context = citationContext(papers, relevance);
+  if (Math.max(...context) > 0) {
+    const c = scaleToMax(context);
+    relevance = relevance.map((r, i) => 0.5 * r + 0.5 * c[i]);
   }
 
   let seedScores = new Array(papers.length).fill(0);
