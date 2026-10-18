@@ -3,7 +3,14 @@
 <title>__TITLE__</title>
 <style>
   html,body{margin:0;height:100%;background:__SURFACE__;overflow:hidden;font-family:Inter,system-ui,sans-serif}
-  #wrap{position:relative;width:100%;height:100%;cursor:grab;outline:none;touch-action:none;-webkit-user-select:none;user-select:none}
+  body{display:flex;flex-direction:column}
+  /* the map's title stays put above the map while it pans and zooms */
+  #head{flex:none;padding:14px 16px 10px;text-align:center;color:#f0efec;border-bottom:1px solid rgba(255,255,255,.08)}
+  #head:empty{display:none}
+  #head .t{font-size:clamp(15px,2.4vw,22px);font-weight:300;letter-spacing:.22em;line-height:1.25;word-break:keep-all}
+  @media (max-width:560px){#head{padding:10px 12px 8px}#head .t{letter-spacing:.08em}#head .s{font-size:11px;letter-spacing:.02em}}
+  #head .s{margin-top:3px;font-size:12px;color:#8a8984;letter-spacing:.08em}
+  #wrap{position:relative;width:100%;flex:1;min-height:0;cursor:grab;outline:none;touch-action:none;-webkit-user-select:none;user-select:none}
   #wrap.drag{cursor:grabbing}
   svg{width:100%;height:100%;display:block}
   .dot{cursor:pointer;outline:none}
@@ -58,6 +65,8 @@
   /* light: the app in a light theme shows the map on its own background (the saved poster keeps
      whichever look was on screen). CSS outranks the SVG's colour attributes, so the drawing is shared. */
   html.light,html.light body{background:#f6f6f4}
+  html.light #head{color:#1b1b1a;border-bottom-color:rgba(0,0,0,.08)}
+  html.light #head .s{color:#6b6a66}
   html.light [fill="#0e1015"]{fill:#f6f6f4}
   html.light [stroke="#0e1015"]{stroke:#f6f6f4}
   html.light [fill="#f0efec"]{fill:#1b1b1a}
@@ -82,7 +91,7 @@
   html.light #tip,html.light #pin{background:#fff;box-shadow:0 10px 30px rgba(20,30,50,.18);border:1px solid #e2e1dc}
   html.light #pinmark{border-color:#1b1b1a;box-shadow:0 0 0 3px rgba(27,27,26,.15)}
 </style></head>
-<body><div id="wrap" tabindex="0">
+<body><header id="head"></header><div id="wrap" tabindex="0">
 __SVG__
 <div id="hint"></div>
 <div id="ruler"></div>
@@ -111,6 +120,12 @@ $("zin").title = T.zoomIn; $("zout").title = T.zoomOut; button("fit", T.fit, T.f
 $("close").title = T.close; $("close").setAttribute("aria-label", T.close); $("pin").setAttribute("aria-label", T.details);
 const coarse = matchMedia("(pointer: coarse)").matches;
 $("hint").textContent = coarse ? T.hintTouch : T.hint;
+
+// ---------- the title moves out of the map into the fixed header ----------
+document.querySelectorAll(".map-title").forEach((node, i) => {
+  $("head").append(Object.assign(document.createElement("div"), { className: i ? "s" : "t", textContent: node.textContent }));
+  node.remove();
+});
 
 // ---------- pan & zoom: scroll moves, Ctrl/⌘ + scroll (or a pinch) zooms ----------
 function clampPan() {
