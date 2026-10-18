@@ -10,6 +10,7 @@ import { tfidf, TOPIC_TOKENS } from "../../frontend/web/core/text.js";
 import { kmeans } from "../../frontend/web/core/kmeans.js";
 import { buildFlow } from "../../frontend/web/core/flow.js";
 import { citationContext } from "../../frontend/web/core/context.js";
+import { VERSION } from "../../frontend/web/core/version.js";
 
 const template = fs.readFileSync(new URL("../../frontend/web/shared/poster.html", import.meta.url), "utf8");
 const reply = (status, body, headers = {}) => ({ status, ok: status >= 200 && status < 300, headers: new Headers(headers), json: async () => body });
@@ -187,6 +188,16 @@ test("flow of an empty or one-paper set", () => {
   const one = buildFlow([{ id: "W1", title: "Alone", year: 2000 }]);
   assert.equal(one.nodes.length, 1);
   assert.deepEqual(one.chain, []);
+});
+
+test("searches are remembered newest first, like backend/history.py", async () => {
+  const { api } = setup();
+  for (const query of ["neutron star", "gravitational waves", "Neutron  Star"]) await api("POST", "/search", { query });
+  assert.deepEqual((await api("GET", "/history")).map((e) => e.query), ["Neutron Star", "gravitational waves"]);
+  assert.equal((await api("GET", "/history?limit=1")).length, 1);
+  assert.equal(await api("DELETE", "/history"), null);
+  assert.deepEqual(await api("GET", "/history"), []);
+  assert.equal((await api("GET", "/changelog"))[0].version, VERSION);
 });
 
 test("unknown routes are 404", async () => {

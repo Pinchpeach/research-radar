@@ -8,16 +8,25 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">◎</span> Research Radar</div>
-    <nav class="tabs" role="tablist">
-      <button class="tab active" data-tab="discover" role="tab" data-i18n="tab.discover">🔎 탐색</button>
-      <button class="tab" data-tab="bookmarks" role="tab"><span data-i18n="tab.bookmarks">★ 북마크</span> <span id="bm-count" class="count"></span></button>
-      <button class="tab" data-tab="map" role="tab" data-i18n="tab.flow">🧭 연구 흐름</button>
-      <button class="tab" data-tab="settings" role="tab" data-i18n="tab.settings">⚙ 환경설정</button>
-    </nav>
-    <a id="update-pill" class="pill update" target="_blank" rel="noopener" hidden></a>
-    <button id="key-pill" class="pill" data-i18n="pill.checking" data-i18n-title="pill.title">키 확인 중…</button>
+    <button id="menu-button" class="icon-button" type="button" aria-controls="drawer" aria-expanded="false" data-i18n-title="nav.menu">
+      <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg><span id="menu-dot" class="dot" hidden></span>
+    </button>
+    <h1 id="page-title" class="page-title"></h1>
+    <button id="home-logo" class="app-icon" type="button" data-i18n-title="nav.home"><svg viewBox="0 0 108 108" aria-hidden="true"><defs><radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="#cfe0ff" stop-opacity=".35"/><stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/></radialGradient></defs><rect width="108" height="108" rx="24" fill="#0e1015"/><circle cx="31" cy="54" r="14" fill="url(#glow)"/><g fill="none" stroke-width="5" stroke-linecap="round"><path d="M31 54 C42 54 42 37 53 37 H78" stroke="#3987e5"/><path d="M31 54 H80" stroke="#d95926"/><path d="M31 54 C42 54 42 71 53 71 H78" stroke="#199e70"/></g><g stroke="#0e1015" stroke-width="1.5"><circle cx="61" cy="37" r="5" fill="#3987e5"/><circle cx="56" cy="54" r="5.5" fill="#d95926"/><circle cx="64" cy="71" r="5" fill="#199e70"/></g><circle cx="31" cy="54" r="4.5" fill="#fff"/></svg></button>
   </header>
+
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <nav id="drawer" class="drawer" aria-hidden="true" inert>
+    <div class="drawer-head"><span class="app-icon"><svg viewBox="0 0 108 108" aria-hidden="true"><defs><radialGradient id="glow2"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".35" stop-color="#cfe0ff" stop-opacity=".35"/><stop offset="1" stop-color="#cfe0ff" stop-opacity="0"/></radialGradient></defs><rect width="108" height="108" rx="24" fill="#0e1015"/><circle cx="31" cy="54" r="14" fill="url(#glow2)"/><g fill="none" stroke-width="5" stroke-linecap="round"><path d="M31 54 C42 54 42 37 53 37 H78" stroke="#3987e5"/><path d="M31 54 H80" stroke="#d95926"/><path d="M31 54 C42 54 42 71 53 71 H78" stroke="#199e70"/></g><g stroke="#0e1015" stroke-width="1.5"><circle cx="61" cy="37" r="5" fill="#3987e5"/><circle cx="56" cy="54" r="5.5" fill="#d95926"/><circle cx="64" cy="71" r="5" fill="#199e70"/></g><circle cx="31" cy="54" r="4.5" fill="#fff"/></svg></span><b>Research Radar</b></div>
+    <button class="tab" data-tab="discover" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span data-i18n="tab.discover">연구 탐색</span></button>
+    <button class="tab" data-tab="bookmarks" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg><span data-i18n="tab.bookmarks">북마크</span> <span id="bm-count" class="count"></span></button>
+    <button class="tab" data-tab="map" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h5m0 0c2 0 3-6 5-6M12 12c2 0 3 6 5 6"/></svg><span data-i18n="tab.flow">연구 흐름</span></button>
+    <button class="tab" data-tab="news" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/></svg><span data-i18n="tab.news">새소식</span> <span id="news-badge" class="badge" hidden></span></button>
+    <button class="tab" data-tab="home" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/></svg><span data-i18n="tab.home">홈</span></button>
+    <span class="spacer"></span>
+    <button id="key-pill" class="pill" type="button" data-i18n="pill.checking" data-i18n-title="pill.title">키 확인 중…</button>
+    <button class="tab" data-tab="settings" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></svg><span data-i18n="tab.settings">설정</span></button>
+  </nav>
 
   <div id="banner" class="banner" hidden>
     <span data-i18n="banner.text">OpenAlex API 키가 없습니다. 키 없이는 공용 한도를 나눠 써서 검색이 막힐 수 있어요.</span>
@@ -25,10 +34,22 @@
   </div>
 
   <main>
+    <!-- ───────────── 홈 / Home ───────────── -->
+    <section id="tab-home" class="panel home">
+      <h2 id="greeting" class="greeting"></h2>
+      <form id="home-form" class="search big" role="search">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+        <input id="home-query" type="search" data-i18n-placeholder="home.placeholder" required minlength="2" autocomplete="off" enterkeyhint="search">
+      </form>
+      <p id="recent-label" class="recent-label"></p>
+      <ul id="recent-topics" class="topics"></ul>
+    </section>
+
     <!-- ───────────── 탐색 / Discover ───────────── -->
-    <section id="tab-discover" class="panel">
-      <form id="search-form" class="search">
-        <input id="query" type="search" data-i18n-placeholder="search.placeholder" required minlength="2" autocomplete="off">
+    <section id="tab-discover" class="panel" hidden>
+      <form id="search-form" class="search" role="search">
+        <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg>
+        <input id="query" type="search" data-i18n-placeholder="search.placeholder" required minlength="2" autocomplete="off" enterkeyhint="search">
         <button class="primary" type="submit" data-i18n="search.button">검색</button>
       </form>
       <details class="options">
@@ -113,6 +134,12 @@
       <div id="story" class="story"></div>
     </section>
 
+    <!-- ───────────── 새소식 / News ───────────── -->
+    <section id="tab-news" class="panel news" hidden>
+      <a id="update-card" class="update-card" target="_blank" rel="noopener" hidden></a>
+      <ol id="changelog" class="changelog"></ol>
+    </section>
+
     <!-- ───────────── 환경설정 / Settings ───────────── -->
     <section id="tab-settings" class="panel" hidden>
       <nav class="subtabs" role="tablist">
@@ -160,6 +187,10 @@
         <h2>Research Radar</h2>
         <p class="hint"><span data-i18n="set.version">버전</span> <span id="app-version"></span> <span id="update-state"></span></p>
         <p class="hint"><a href="https://github.com/Pinchpeach/research-radar" target="_blank" rel="noopener">github.com/Pinchpeach/research-radar ↗</a> · Apache-2.0</p>
+        <h2 data-i18n="set.history">검색 기록</h2>
+        <p class="hint" data-i18n="set.historyHint">홈 화면에 최근 찾아본 주제를 보여 줍니다.</p>
+        <span class="row"><button type="button" id="clear-history" data-i18n="set.clearHistory">검색 기록 지우기</button>
+          <span id="history-status" class="status" role="status"></span></span>
       </div>
     </section>
   </main>

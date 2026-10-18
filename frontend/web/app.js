@@ -6,7 +6,8 @@ const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "venue", 
 const MAX_SEEDS = 10;
 const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
 
-const state = { run: null, bookmarks: [], flow: null, poster: null, posterTitle: "", evalMode: false, judgments: {} };
+const state = { run: null, bookmarks: [], flow: null, flowRun: null, poster: null, posterTitle: "", evalMode: false, judgments: {},
+  version: null, changelog: null };
 
 // ───────────── helpers ─────────────
 
@@ -87,14 +88,39 @@ async function saveFile(name, content, mime) {
   return t("file.downloaded", { name });
 }
 
-// ───────────── tabs ─────────────
+// ───────────── navigation: the ☰ drawer and pages ─────────────
+
+const PAGE_TITLES = { home: "", discover: "tab.discover", bookmarks: "tab.bookmarks", map: "tab.flow", news: "tab.news", settings: "tab.settings" };
+let currentTab = "home";
+
+function setDrawer(open) {
+  const drawer = $("drawer");
+  drawer.classList.toggle("open", open);
+  drawer.toggleAttribute("inert", !open);
+  drawer.setAttribute("aria-hidden", String(!open));
+  $("drawer-backdrop").hidden = !open;
+  $("menu-button").setAttribute("aria-expanded", String(open));
+  if (open) drawer.querySelector(`.tab[data-tab=${currentTab}]`)?.focus();
+}
 
 function showTab(name) {
+  currentTab = name;
+  setDrawer(false);
   document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((p) => (p.hidden = p.id !== `tab-${name}`));
+  document.body.dataset.page = name;
+  $("page-title").textContent = PAGE_TITLES[name] ? t(PAGE_TITLES[name]) : "";
+  window.scrollTo(0, 0);
+  if (name === "home") renderHome();
   if (name === "bookmarks") renderBookmarks();
+  if (name === "map") autoDrawFlow();
+  if (name === "news") renderNews();
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
+$("menu-button").addEventListener("click", () => setDrawer(!$("drawer").classList.contains("open")));
+$("drawer-backdrop").addEventListener("click", () => setDrawer(false));
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("drawer").classList.contains("open")) setDrawer(false); });
+$("home-logo").addEventListener("click", () => showTab("home"));
 $("key-pill").addEventListener("click", () => showTab("settings"));
 
 function showPane(name) {
@@ -103,6 +129,42 @@ function showPane(name) {
 }
 document.querySelectorAll(".subtab").forEach((t) => t.addEventListener("click", () => showPane(t.dataset.pane)));
 $("banner-go").addEventListener("click", () => showTab("settings"));
+
+// ───────────── home ─────────────
+
+const GREETINGS = 8;
+const EXAMPLE_TOPICS = ["graph neural networks", "CRISPR gene editing", "optical observations of isolated neutron stars",
+  "microplastics in freshwater", "protein structure prediction"];
+const greeting = Math.floor(Math.random() * GREETINGS); // one per app start, so it doesn't change under you
+
+async function renderHome() {
+  $("greeting").textContent = t(`greet.${greeting}`);
+  let recent = [];
+  try { recent = (await api("GET", "/history?limit=5")).map((e) => e.query); } catch { /* shown as suggestions */ }
+  const topics = recent.length ? recent : EXAMPLE_TOPICS.slice(0, 3);
+  $("recent-label").textContent = t(recent.length ? "home.recent" : "home.try");
+  $("recent-topics").replaceChildren(...topics.map((query, i) => {
+    const chip = el("button", { type: "button", class: recent.length ? "topic recent" : "topic", text: query, title: query });
+    chip.style.setProperty("--i", i);
+    chip.addEventListener("click", () => searchFor(query));
+    return el("li", {}, chip);
+  }));
+}
+
+/** Open Discover and search for `query` there. */
+function searchFor(query) {
+  $("query").value = query;
+  showTab("discover");
+  $("search-form").requestSubmit();
+}
+
+$("home-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  const query = $("home-query").value.trim();
+  if (query.length < 2) return;
+  $("home-query").value = "";
+  searchFor(query);
+});
 
 // ───────────── paper cards ─────────────
 
@@ -382,7 +444,7 @@ $("export-bib").addEventListener("click", async () => {
 
 // ───────────── research map ─────────────
 
-$("build-map").addEventListener("click", async () => {
+async function drawFlow() {
   const source = document.querySelector("input[name=source]:checked").value;
   const useResults = source !== "bookmarks" && state.run;
   if (source === "results" && !state.run) return setStatus("map-status", t("flow.needSearch"), true);
@@ -399,14 +461,22 @@ $("build-map").addEventListener("click", async () => {
   setStatus("map-status", t("flow.running"));
   try {
     const flow = await api("POST", "/flow", payload);
-    Object.assign(state, { flow, posterTitle: useResults ? state.run.query : null });
+    Object.assign(state, { flow, posterTitle: useResults ? state.run.query : null, flowRun: state.run && state.run.runId });
     await showFlow();
   } catch (e) {
     setStatus("map-status", t("flow.failed", { error: e.message }), true);
   } finally {
     $("build-map").disabled = false;
   }
-});
+}
+$("build-map").addEventListener("click", drawFlow);
+
+/** Opening the flow page draws the latest search (and bookmarks) without another click. */
+function autoDrawFlow() {
+  if ($("build-map").disabled) return;
+  const fresh = state.run && state.flowRun !== state.run.runId;
+  if (fresh || (!state.flow && state.bookmarks.length)) drawFlow();
+}
 
 /** Draw the analyzed flow in the current language (again after a language switch). */
 async function showFlow() {
@@ -488,6 +558,9 @@ function refreshText() {
   const toggle = $("toggle-key");
   toggle.textContent = t(toggle.dataset.i18n);
   if (state.flow) showFlow().catch(() => {});
+  $("page-title").textContent = PAGE_TITLES[currentTab] ? t(PAGE_TITLES[currentTab]) : "";
+  if (currentTab === "home") renderHome();
+  if (currentTab === "news") renderNews();
 }
 
 document.querySelectorAll("input[name=language]").forEach((radio) => radio.addEventListener("change", async () => {
@@ -507,6 +580,16 @@ for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key",
     await loadSettings();
   });
 }
+
+$("clear-history").addEventListener("click", async () => {
+  if (!confirm(t("set.historyConfirm"))) return;
+  try {
+    await api("DELETE", "/history");
+    setStatus("history-status", t("set.historyCleared"));
+  } catch (e) {
+    setStatus("history-status", t("set.saveFailed", { error: e.message }), true);
+  }
+});
 
 $("toggle-key").addEventListener("click", () => {
   const input = $("openalex-key");
@@ -550,22 +633,44 @@ $("settings-form").addEventListener("submit", async (event) => {
 async function checkVersion() {
   let info;
   try { info = await api("GET", "/version"); } catch { return; }
+  state.version = info;
   $("app-version").textContent = `v${info.version}`;
-  if (info.update_available) {
-    const pill = $("update-pill");
-    pill.textContent = t("update.pill", { version: info.latest.version });
-    pill.title = t("update.title");
-    pill.href = info.latest.url;
-    pill.hidden = false;
+  const update = info.update_available;
+  $("menu-dot").hidden = !update;
+  $("news-badge").hidden = !update;
+  $("news-badge").textContent = t("news.new");
+  if (update) {
     $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: t("set.newVersion", { version: info.latest.version }) }));
   } else {
     $("update-state").textContent = info.latest ? t("set.latest") : "";
   }
+  if (currentTab === "news") renderNews();
+}
+
+// ───────────── news ─────────────
+
+async function renderNews() {
+  const info = state.version;
+  const card = $("update-card");
+  card.hidden = !(info && info.update_available);
+  if (!card.hidden) {
+    card.href = info.latest.url;
+    card.textContent = t("news.update", { version: info.latest.version });
+  }
+  if (!state.changelog) {
+    try { state.changelog = await api("GET", "/changelog"); } catch { return; }
+  }
+  const current = info ? info.version : null;
+  $("changelog").replaceChildren(...state.changelog.map((release) => el("li", { class: "release" },
+    el("h3", {}, `v${release.version}`, release.version === current ? el("span", { class: "chip", text: t("news.current") }) : null,
+      el("small", { text: release.date || "" })),
+    el("ul", {}, (release[LANG] || release.ko).map((line) => el("li", { text: line }))))));
 }
 
 // ───────────── start ─────────────
 
 applyStaticText();
+showTab("home");
 
 loadSettings({ applyLanguage: true });
 loadBookmarks();

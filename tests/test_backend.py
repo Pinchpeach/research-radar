@@ -209,6 +209,35 @@ def test_search_basic(fake):
     assert "from_publication_date:2000-01-01" in params["filter"]
 
 
+def test_searches_are_remembered_newest_first(fake):
+    for query in ["neutron stars", "graph neural networks", "Neutron  Stars"]:
+        assert api.post("/search", json={"query": query, "limit": 2}).status_code == 200
+    assert [e["query"] for e in api.get("/history").json()] == ["Neutron Stars", "graph neural networks"]
+    assert len(api.get("/history?limit=1").json()) == 1
+    assert api.delete("/history").status_code == 204
+    assert api.get("/history").json() == []
+
+
+def test_history_keeps_the_latest_entries(tmp_path):
+    from backend import history
+
+    path = tmp_path / "history.json"
+    for i in range(history.MAX_ENTRIES + 5):
+        history.record(f"topic {i}", path)
+    entries = history.load(path)
+    assert len(entries) == history.MAX_ENTRIES and entries[0]["query"] == f"topic {history.MAX_ENTRIES + 4}"
+    path.write_text("not json", encoding="utf-8")
+    assert history.load(path) == []
+
+
+def test_changelog_starts_with_this_version():
+    from backend.version import __version__
+
+    releases = api.get("/changelog").json()
+    assert releases[0]["version"] == __version__
+    assert all(r["ko"] and len(r["ko"]) == len(r["en"]) for r in releases)
+
+
 def test_search_with_seeds_expands_and_excludes_seed(fake):
     res = api.post(
         "/search",

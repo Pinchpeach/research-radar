@@ -1,0 +1,48 @@
+[
+  {
+    "version": "0.8.0",
+    "date": "2026-10-18",
+    "ko": [
+      "새 홈 화면: 인사말과 함께 주제를 바로 검색하고, 최근에 찾아본 주제를 다시 열 수 있습니다.",
+      "왼쪽 위 ☰ 메뉴로 연구 탐색·북마크·연구 흐름·새소식·홈·설정을 오갑니다.",
+      "연구 흐름은 화면을 꽉 채우고, 휴대폰에서는 가장 최근 연구부터 보여 줘 옆으로 넘기며 거슬러 올라갑니다.",
+      "새소식: 버전마다 바뀐 점과 새 버전 알림을 한곳에서 봅니다."
+    ],
+    "en": [
+      "New home screen: a greeting, a topic search box and your recent topics, one tap away.",
+      "The ☰ menu at the top left switches between Discover, Bookmarks, Research flow, News, Home and Settings.",
+      "The research flow fills the screen; on phones it opens on the latest work and you swipe back through time.",
+      "News: what changed in each version, and new versions as they come out."
+    ]
+  },
+  {
+    "version": "0.7.0",
+    "date": "2026-10-18",
+    "ko": [
+      "논문 정렬에 언어 모델(LLM)을 쓰지 않습니다. 검색어와 가장 잘 맞는 논문들과 참고문헌을 얼마나 공유하는지(인용 맥락)를 함께 봐서, 표현이 달라도 같은 주제의 논문이 올라옵니다.",
+      "OpenAI 키 설정이 없어졌습니다."
+    ],
+    "en": [
+      "Ranking no longer uses a language model. It also looks at how much each paper shares references with the best matches (citation context), so papers on the topic rise even when worded differently.",
+      "The OpenAI key setting is gone."
+    ]
+  },
+  {
+    "version": "0.6.1",
+    "date": "2026-10-17",
+    "ko": ["확대하면 연구 흐름의 점도 함께 커지고, 읽는 법 안내가 작아지지 않습니다.", "새 앱 아이콘."],
+    "en": ["Dots on the research flow grow as you zoom in, and the map guide stays readable.", "New app icon."]
+  },
+  {
+    "version": "0.6.0",
+    "date": "2026-10-17",
+    "ko": ["Android 앱: 서버 없이 휴대폰에서 검색·북마크·연구 흐름을 모두 씁니다."],
+    "en": ["Android app: search, bookmarks and the research flow all run on the phone, no server needed."]
+  },
+  {
+    "version": "0.5.0",
+    "date": "2026-10-16",
+    "ko": ["'연구 흐름' 탭과 한국어/영어 전환.", "연구 흐름의 논문 제목이 겹치지 않고, 확대·스크롤로 더 많이 보입니다."],
+    "en": ["The Research flow tab and a Korean/English switch.", "Paper titles on the flow never overlap; zoom and scroll to see more."]
+  }
+]

@@ -138,8 +138,8 @@ function fit(whole = true) {
   s = fitScale = Math.min(w / W, h / H); tx = (w - W * s) / 2; ty = (h - H * s) / 2;
   if (!whole && w / h < 1) {
     // a tall, narrow frame (a phone held upright) would show the wide map as a thin strip:
-    // start zoomed to the frame's height instead, at the beginning of the timeline
-    s = Math.min(h / H, fitScale * 2.4); tx = 0; ty = (h - H * s) / 2;
+    // start zoomed to the frame's height instead, at the latest work; swipe back through time
+    s = Math.min(h / H, fitScale * 2.4); tx = w - W * s; ty = (h - H * s) / 2;
   }
   apply();
 }
