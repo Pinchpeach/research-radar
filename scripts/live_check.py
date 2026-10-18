@@ -70,8 +70,7 @@ def main_cli() -> int:
     papers = body["papers"]
     search_s = time.time() - started
 
-    print(f"\nSearch ({search_s:.1f}s): {body['count']} shown of {body['candidates']} candidates, "
-          f"semantic={body['semantic']}")
+    print(f"\nSearch ({search_s:.1f}s): {body['count']} shown of {body['candidates']} candidates")
     for i, p in enumerate(papers[:10], 1):
         print(f"  {i:>2}. {p['score']:5.1f}  {p['year'] or '----'}  {p['citations']:>6} cites  {p['title'][:90]}")
     if body["seeds"] or body["unresolved_seeds"]:

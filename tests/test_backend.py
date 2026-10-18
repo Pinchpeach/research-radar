@@ -4,7 +4,8 @@ from fastapi.testclient import TestClient
 
 from backend import main
 from backend.evaluation import ndcg_at_k, precision_at_k
-from backend.services import embeddings, openalex
+from backend.services import openalex
+from backend.services.context import citation_context
 from backend.services.ranking import rank_papers, recency_score
 
 
@@ -105,10 +106,30 @@ def test_seed_weight_ignored_without_seeds():
     assert [p["score"] for p in a] == [p["score"] for p in b]
 
 
-def test_semantic_blends_into_relevance():
-    ranked = rank_papers(QUERY, candidates(), semantic=np.array([0.0, 1.0, 0.0]), weights={"recency": 0, "impact": 0})
-    w2 = next(p for p in ranked if p["id"].endswith("W2"))
-    assert w2["scores"]["relevance"] == 0.5
+def test_relevance_is_text_only_without_references():
+    ranked = rank_papers(QUERY, candidates(), current_year=2026)
+    top = max(p["relevance_score"] for p in ranked)
+    assert [p["scores"]["relevance"] for p in ranked] == pytest.approx([p["relevance_score"] / top for p in ranked], abs=0.01)
+
+
+def test_citation_context_lifts_papers_that_share_references():
+    refs = [f"R{i}" for i in range(6)]
+    papers = [
+        paper("W1", "Optical observations of isolated neutron stars", "isolated neutron stars photometry", 2010, refs=refs),
+        paper("W2", "Isolated neutron stars in the optical", "deep imaging of isolated neutron stars", 2012, refs=refs[1:]),
+        paper("W3", "Faint counterparts of thermally emitting X-ray sources", "VLT imaging of RX J1856", 2014, refs=refs[:5]),
+        paper("W4", "Isolated neutron stars", "", 2019),  # stub: title only
+        paper("W5", "Neutron star equation of state", "dense matter in neutron stars", 2020, refs=["Q1", "Q2", "Q3", "Q4", "Q5"]),
+    ]
+    context = citation_context(papers, np.array([1.0, 0.9, 0.0, 0.95, 0.3]))
+    assert context[2] > context[4] and context[2] > context[3] == 0
+    ranked = {p["id"][-2:]: p for p in rank_papers(QUERY, papers, current_year=2026)}
+    assert ranked["W3"]["scores"]["relevance"] > ranked["W4"]["scores"]["relevance"]
+    assert ranked["W3"]["relevance_score"] < ranked["W4"]["relevance_score"]  # by text alone the stub wins
+
+
+def test_citation_context_is_zero_without_references():
+    assert citation_context(candidates(), np.array([1.0, 0.2, 0.5])).tolist() == [0, 0, 0]
 
 
 def test_recency_half_life():
@@ -171,7 +192,6 @@ def _http_error(status):
 def fake(monkeypatch):
     fake = FakeOpenAlex()
     monkeypatch.setattr(openalex, "_get", fake)
-    monkeypatch.setattr(embeddings, "enabled", lambda: False)
     return fake
 
 
@@ -183,7 +203,6 @@ def test_search_basic(fake):
     assert res.status_code == 200
     body = res.json()
     assert body["count"] == 2 and body["candidates"] == 3
-    assert body["semantic"] is False
     assert body["papers"][0]["id"].endswith("W1")
     params = fake.calls[0][1]
     assert params["per-page"] == 50
@@ -215,22 +234,6 @@ def test_search_openalex_failure_is_502(monkeypatch):
 
 def test_search_rejects_inverted_years():
     assert api.post("/search", json={"query": QUERY, "year_from": 2020, "year_to": 2010}).status_code == 422
-
-
-def test_embeddings_fall_back_on_error(monkeypatch):
-    monkeypatch.setattr(embeddings, "enabled", lambda: True)
-
-    def fail(_texts):
-        raise RuntimeError("quota")
-
-    monkeypatch.setattr(embeddings, "_embed", fail)
-    assert embeddings.similarities("q", ["doc"]) is None
-
-
-def test_embeddings_cosine(monkeypatch):
-    monkeypatch.setattr(embeddings, "enabled", lambda: True)
-    monkeypatch.setattr(embeddings, "_embed", lambda texts: np.array([[1.0, 0.0], [1.0, 0.0], [0.0, 1.0]]))
-    assert embeddings.similarities("q", ["a", "b"]).tolist() == [1.0, 0.0]
 
 
 def test_judgments_roundtrip(tmp_path):
@@ -340,7 +343,6 @@ def test_influence_ignores_impossible_citations():
 
 
 def test_search_adds_core_references(monkeypatch):
-    monkeypatch.setattr(embeddings, "enabled", lambda: False)
 
     def fake_get(url, params):
         flt = params.get("filter", "")
@@ -391,7 +393,6 @@ def test_frontier_prefers_fresh_relevant_work_building_on_key_papers():
 
 
 def test_search_fetches_recent_candidates_and_returns_groups(monkeypatch):
-    monkeypatch.setattr(embeddings, "enabled", lambda: False)
     calls = []
 
     def fake_get(url, params):

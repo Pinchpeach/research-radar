@@ -5,6 +5,8 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+from backend.services.context import citation_context
+
 RECENCY_HALF_LIFE_YEARS = 5
 DEFAULT_WEIGHTS = {"relevance": 0.35, "influence": 0.45, "seed": 0.2, "recency": 0.05, "impact": 0.15}
 
@@ -166,14 +168,14 @@ def rank_papers(
     seeds: list[dict] | None = None,
     weights: dict | None = None,
     current_year: int | None = None,
-    semantic: np.ndarray | None = None,
     recent_years: int = 5,
 ) -> list[dict]:
     """Score and sort candidates.
 
     Every component is in [0, 1]:
-    - relevance: TF-IDF cosine to the query, scaled so the best candidate is 1; averaged with
-      `semantic` (embedding similarity per paper) when it is given
+    - relevance: TF-IDF cosine to the query, scaled so the best candidate is 1, averaged with
+      the citation context (ties to the best text matches through references; see context.py)
+      when any candidate has references
     - seed: 1 for papers that cite or are cited by a seed, otherwise text similarity to the
       closest seed, scaled to the best candidate
     - influence: how much the relevant candidates build on the paper (personalized PageRank
@@ -202,8 +204,9 @@ def rank_papers(
 
     tfidf = cosine_similarity(query_vec, paper_vecs)[0]
     relevance = scale_to_max(tfidf)
-    if semantic is not None:
-        relevance = 0.5 * relevance + 0.5 * scale_to_max(semantic)
+    context = citation_context(papers, relevance)
+    if context.max() > 0:
+        relevance = 0.5 * relevance + 0.5 * scale_to_max(context)
 
     seed_scores = np.zeros(len(papers))
     links = [False] * len(papers)

@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.6.1**:
+최신 버전 **v0.7.0**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.6.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-windows.zip) | [ResearchRadar-0.6.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-macos.zip) | [ResearchRadar-0.6.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-linux.tar.gz) | [ResearchRadar-0.6.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/ResearchRadar-0.6.1-android.apk) |
+| [ResearchRadar-0.7.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.7.0/ResearchRadar-0.7.0-windows.zip) | [ResearchRadar-0.7.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.7.0/ResearchRadar-0.7.0-macos.zip) | [ResearchRadar-0.7.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.7.0/ResearchRadar-0.7.0-linux.tar.gz) | [ResearchRadar-0.7.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.7.0/ResearchRadar-0.7.0-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.6.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.7.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -23,7 +23,7 @@
 | 🔎 **탐색** | 연구 주제로 논문을 찾아 **◆ 핵심 흐름**(분야를 이해하는 데 중요한 논문)과 **🆕 최신 연구**(최근 연구) 두 묶음으로 보여줍니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. **정렬 평가**를 켜면 결과마다 관련/부분/무관을 표시해 Precision@10·20과 nDCG@20을 보고, 저장한 평가를 설정별로 비교할 수 있습니다. |
 | ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그를 붙입니다. 태그별로 거르고 BibTeX로 내보낼 수 있습니다. |
 | 🧭 **연구 흐름** | 검색 결과나 북마크를 *The Map of Physics* 스타일의 테크트리로 그립니다. 처음에는 큰 흐름만 보이고, 선 위의 점에 마우스를 올리거나 클릭하면 세부 정보가 나옵니다. HTML 포스터로 저장할 수 있습니다. |
-| ⚙ **환경설정** | **API 키** 탭에서 OpenAlex API 키를 입력하고 바로 확인합니다(의미 기반 정렬용 OpenAI 키는 선택). **언어** 탭에서 한국어/영어를 바꿉니다. 앱 화면과 연구 흐름 포스터가 함께 바뀌고, 논문 제목과 주제 이름은 원문 그대로 둡니다. **정보** 탭에 버전이 나옵니다. |
+| ⚙ **환경설정** | **API 키** 탭에서 OpenAlex API 키를 입력하고 바로 확인합니다. **언어** 탭에서 한국어/영어를 바꿉니다. 앱 화면과 연구 흐름 포스터가 함께 바뀌고, 논문 제목과 주제 이름은 원문 그대로 둡니다. **정보** 탭에 버전이 나옵니다. |
 
 ![탐색 화면](docs/images/discover.png)
 
@@ -96,7 +96,7 @@ OpenAlex는 키 없는 요청을 **같은 인터넷 주소(IP)를 쓰는 모든 
 
    | 신호 | 기본 가중치 | 의미 |
    |---|---|---|
-   | 주제 관련도 | 0.35 | 검색어와 제목·초록의 TF-IDF 유사도. OpenAI 키가 있으면 임베딩 유사도와 평균합니다. |
+   | 주제 관련도 | 0.35 | 검색어와 제목·초록의 TF-IDF 유사도와 **인용 맥락**의 평균. 인용 맥락은 검색어와 가장 잘 맞는 논문 20편과 참고문헌을 얼마나 공유하고 서로 인용하는지입니다. 그래서 검색어와 표현이 달라도 같은 주제의 논문은 올라가고, 제목만 같은 색인·장 제목 같은 항목은 내려갑니다. 언어 모델 없이 후보 안에서 계산합니다. |
    | **흐름 중요도** | 0.45 | 관련 논문들이 계속 바탕으로 삼는 논문일수록 높습니다. 후보들의 인용 관계에서, 관련도에 비례해 출발한 독자가 참고문헌을 따라갈 때 도착하는 비율(개인화 PageRank)입니다. 주제와 무관한 범용 논문은 낮춰서 반영합니다. 0.5 이상이면 결과에 ◆ **핵심 논문** 표시가 붙습니다. |
    | 인용 영향력 | 0.15 | 연간 인용 수(로그) |
    | 최신성 | 0.05 | 5년마다 절반. 최신 연구를 더 보고 싶으면 올리세요. |
@@ -148,7 +148,7 @@ python -m desktop.main             # 네이티브 창
 python -m desktop.main --browser   # 기본 브라우저로 열기
 ```
 
-API 서버만 띄우려면 `uvicorn backend.main:app --reload`를 실행하세요. 화면은 `http://localhost:8000/`, API 문서는 `/docs`에 있습니다. 데이터 폴더는 `RADAR_HOME`으로 바꿀 수 있고, 지정하지 않으면 `data/`를 씁니다. 키는 환경변수 `OPENALEX_API_KEY`, `OPENALEX_EMAIL`, `OPENAI_API_KEY`로도 줄 수 있으며, 앱에서 저장한 값이 환경변수보다 우선합니다.
+API 서버만 띄우려면 `uvicorn backend.main:app --reload`를 실행하세요. 화면은 `http://localhost:8000/`, API 문서는 `/docs`에 있습니다. 데이터 폴더는 `RADAR_HOME`으로 바꿀 수 있고, 지정하지 않으면 `data/`를 씁니다. 키는 환경변수 `OPENALEX_API_KEY`, `OPENALEX_EMAIL`로도 줄 수 있으며, 앱에서 저장한 값이 환경변수보다 우선합니다.
 
 ### 테스트
 
@@ -240,7 +240,7 @@ research-radar/
 │       ├── openalex.py      # OpenAlex 검색, 시드, 키 확인
 │       ├── dedupe.py        # 같은 논문의 여러 버전 합치기
 │       ├── ranking.py       # 정렬 점수
-│       ├── embeddings.py    # (선택) 의미 기반 유사도
+│       ├── context.py       # 인용 맥락 (관련도 보정)
 │       ├── flow.py          # 주제, 주제 이름, 인용 그래프, 계보
 │       └── techtree.py      # 인터랙티브 테크트리 지도
 ├── frontend/

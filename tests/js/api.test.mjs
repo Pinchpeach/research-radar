@@ -9,6 +9,7 @@ import { memoryStorage } from "../../frontend/web/core/store.js";
 import { tfidf, TOPIC_TOKENS } from "../../frontend/web/core/text.js";
 import { kmeans } from "../../frontend/web/core/kmeans.js";
 import { buildFlow } from "../../frontend/web/core/flow.js";
+import { citationContext } from "../../frontend/web/core/context.js";
 
 const template = fs.readFileSync(new URL("../../frontend/web/shared/poster.html", import.meta.url), "utf8");
 const reply = (status, body, headers = {}) => ({ status, ok: status >= 200 && status < 300, headers: new Headers(headers), json: async () => body });
@@ -165,6 +166,20 @@ test("k-means separates two clear topics and is the same every run", () => {
   assert.equal(new Set(a.labels.slice(0, 3)).size, 1);
   assert.equal(new Set(a.labels.slice(3)).size, 1);
   assert.notEqual(a.labels[0], a.labels[3]);
+});
+
+test("citation context lifts papers sharing references with the best text matches", () => {
+  const refs = ["R0", "R1", "R2", "R3", "R4", "R5"];
+  const papers = [
+    { id: "W1", abstract: "a", referenced_works: refs },
+    { id: "W2", abstract: "a", referenced_works: refs.slice(1) },
+    { id: "W3", abstract: "a", referenced_works: refs.slice(0, 5) },
+    { id: "W4", abstract: "" },
+    { id: "W5", abstract: "a", referenced_works: ["Q1", "Q2", "Q3", "Q4", "Q5"] },
+  ];
+  const context = citationContext(papers, [1, 0.9, 0, 0.95, 0.3]);
+  assert.ok(context[2] > context[4] && context[3] === 0);
+  assert.deepEqual(citationContext([{ id: "W1" }, { id: "W2" }], [1, 0.5]), [0, 0]);
 });
 
 test("flow of an empty or one-paper set", () => {

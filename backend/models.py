@@ -77,7 +77,6 @@ class SearchResponse(BaseModel):
     query: str
     count: int
     candidates: int
-    semantic: bool
     seeds: list[Seed]
     unresolved_seeds: list[str]
     papers: list[Paper]
@@ -118,7 +117,6 @@ class SettingsUpdate(BaseModel):
 
     openalex_api_key: Optional[str] = Field(default=None, max_length=200)
     openalex_email: Optional[str] = Field(default=None, max_length=200)
-    openai_api_key: Optional[str] = Field(default=None, max_length=300)
     language: Optional[Literal["ko", "en", ""]] = None
 
 

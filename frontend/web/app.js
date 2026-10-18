@@ -210,7 +210,7 @@ $("search-form").addEventListener("submit", async (event) => {
   try {
     const body = await api("POST", "/search", payload);
     const { query: _q, ...runSettings } = payload;
-    state.run = { ...body, query, runId: new Date().toISOString(), settings: { ...runSettings, semantic: body.semantic } };
+    state.run = { ...body, query, runId: new Date().toISOString(), settings: runSettings };
     state.judgments = {};
     renderResults();
   } catch (e) {
@@ -220,7 +220,7 @@ $("search-form").addEventListener("submit", async (event) => {
 
 function renderResults() {
   const run = state.run;
-  let message = t("search.summary", { count: run.count, candidates: run.candidates, mode: t(run.semantic ? "search.semantic" : "search.lexical") });
+  let message = t("search.summary", { count: run.count, candidates: run.candidates });
   if (run.seeds.length) message += t("search.seeds", { seeds: run.seeds.map((s) => s.title).join("; ") });
   if (run.unresolved_seeds.length) message += t("search.unresolved", { seeds: run.unresolved_seeds.join(", ") });
   setStatus("search-status", message);
@@ -462,10 +462,8 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("openalex-key-state").textContent = key.set
     ? t("set.keySaved", { hint: key.hint, env: key.source === "environment" ? t("set.keyEnv") : "" })
     : t("set.noKey");
-  $("openai-key-state").textContent = s.openai_api_key.set ? t("set.openaiSaved", { hint: s.openai_api_key.hint }) : t("set.unused");
   // only keys saved in the app can be removed here; environment variables stay as they are
   $("clear-openalex-key").hidden = key.source !== "settings";
-  $("clear-openai-key").hidden = s.openai_api_key.source !== "settings";
   $("openalex-email").value = s.openalex_email.value || "";
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
@@ -501,7 +499,7 @@ document.querySelectorAll("input[name=language]").forEach((radio) => radio.addEv
   else setStatus("language-status", t("set.languageSaved"));
 }));
 
-for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key", "OpenAlex"], ["clear-openai-key", "openai_api_key", "OpenAI"]]) {
+for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key", "OpenAlex"]]) {
   $(button).addEventListener("click", async () => {
     if (!confirm(t("set.clearConfirm", { label }))) return;
     await api("PUT", "/settings", { [field]: "" });
@@ -537,11 +535,9 @@ $("settings-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const update = { openalex_email: $("openalex-email").value.trim() };
   if ($("openalex-key").value.trim()) update.openalex_api_key = $("openalex-key").value.trim();
-  if ($("openai-key").value.trim()) update.openai_api_key = $("openai-key").value.trim();
   try {
     await api("PUT", "/settings", update);
     $("openalex-key").value = "";
-    $("openai-key").value = "";
     setStatus("settings-status", t("set.saved"));
     await loadSettings();
   } catch (e) {

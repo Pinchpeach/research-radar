@@ -194,7 +194,8 @@ export function longestChain(nodes, edges) {
   const best = {}, prev = {};
   for (const id of order) {
     best[id] = 1; prev[id] = null;
-    for (const cited of cites[id]) if (best[cited] + 1 > best[id]) { best[id] = best[cited] + 1; prev[id] = cited; }
+    // by position, so ties go to the older paper whatever order the edges came in
+    for (const cited of [...cites[id]].sort((a, b) => position.get(a) - position.get(b))) if (best[cited] + 1 > best[id]) { best[id] = best[cited] + 1; prev[id] = cited; }
   }
   if (!order.length) return [];
   let end = order[0];
