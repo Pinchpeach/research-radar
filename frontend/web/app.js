@@ -478,6 +478,14 @@ function autoDrawFlow() {
   if (fresh || (!state.flow && state.bookmarks.length)) drawFlow();
 }
 
+/** The map is its own page: point it at the app's font files (next to style.css). */
+function withAppFont(page) {
+  const css = document.querySelector("link[rel=stylesheet]").href;
+  const faces = [["L", 300], ["R", 400], ["B", 700], ["EB", 800]].map(([file, weight]) =>
+    `@font-face{font-family:NanumSquareRound;font-weight:${weight};src:url("${new URL(`fonts/NanumSquareRound${file}.woff2`, css)}") format("woff2")}`);
+  return page.replace("<style>", `<style>${faces.join("")}`);
+}
+
 /** Draw the analyzed flow in the current language (again after a language switch). */
 async function showFlow() {
   const flow = state.flow;
@@ -485,7 +493,7 @@ async function showFlow() {
   const poster = await api("POST", "/poster", { flow, title, lang: LANG });
   // on the app's light background the map is light too (and saved the way it is shown)
   const light = !matchMedia("(prefers-color-scheme: dark)").matches;
-  state.poster = light ? poster.replace("<html ", '<html class="light" ') : poster;
+  state.poster = withAppFont(light ? poster.replace("<html ", '<html class="light" ') : poster);
   $("poster").srcdoc = state.poster;
   $("poster").hidden = false;
   $("save-poster").disabled = false;

@@ -217,7 +217,7 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     by_id = {n["id"]: n for n in lay["nodes"]}
     out = [
         f'<svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" '
-        f'font-family="Inter, system-ui, -apple-system, Segoe UI, sans-serif">',
+        f'font-family="NanumSquareRound, Inter, system-ui, -apple-system, Segoe UI, sans-serif">',
         "<defs>"
         '<radialGradient id="glow"><stop offset="0" stop-color="#fff" stop-opacity=".9"/>'
         '<stop offset=".2" stop-color="#fff" stop-opacity=".45"/>'
@@ -420,7 +420,7 @@ def render_html(flow: dict, title: str, lang: str = "ko") -> str:
         "__LANG__": lang if lang in STRINGS else "en",
         "__TITLE__": _t(page_title),
         "__SURFACE__": SURFACE,
-        "__SVG__": _svg(lay, page_title, text) if lay["nodes"] else empty,
+        "__SVG__": _svg(lay, title, text) if lay["nodes"] else empty,  # the map shows the topic alone
         "__TEXT__": json.dumps(text["js"], ensure_ascii=False).replace("</", "<\\/"),
         "__DATA__": json.dumps(data).replace("</", "<\\/"),
     }

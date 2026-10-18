@@ -134,7 +134,7 @@ test("flow includes bookmarks and foundations, poster renders", async () => {
   assert.equal(flow.nodes.find((n) => n.id === "W1").role, "foundation");
   assert.equal(flow.nodes.find((n) => n.id === "W9").bookmarked, true);
   const page = await api("POST", "/poster", { flow, title: "Stars", lang: "en" });
-  assert.ok(page.startsWith("<!doctype html>") && page.includes("THE MAP OF STARS"));
+  assert.ok(page.startsWith("<!doctype html>") && page.includes(">STARS</text>"));
 });
 
 test("evaluations are saved, summarized and deleted", async () => {

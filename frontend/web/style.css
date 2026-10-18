@@ -1,3 +1,8 @@
+@font-face { font-family: "NanumSquareRound"; font-weight: 300; font-display: swap; src: url("fonts/NanumSquareRoundL.woff2") format("woff2"); }
+@font-face { font-family: "NanumSquareRound"; font-weight: 400; font-display: swap; src: url("fonts/NanumSquareRoundR.woff2") format("woff2"); }
+@font-face { font-family: "NanumSquareRound"; font-weight: 700; font-display: swap; src: url("fonts/NanumSquareRoundB.woff2") format("woff2"); }
+@font-face { font-family: "NanumSquareRound"; font-weight: 800; font-display: swap; src: url("fonts/NanumSquareRoundEB.woff2") format("woff2"); }
+
 :root {
   --bg: #f6f6f4;
   --surface: #ffffff;
@@ -12,7 +17,7 @@
   --danger: #c43c3c;
   --ok: #1a7f4b;
   color-scheme: light;
-  font-family: Inter, "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  font-family: "NanumSquareRound", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
   font-size: 14px;
   color: var(--text);
   background: var(--bg);
@@ -75,10 +80,10 @@ button.app-icon:hover { border: 0; transform: scale(1.06); }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(10, 12, 16, .38); animation: fade .2s ease; }
 @keyframes fade { from { opacity: 0; } }
 .drawer-head { padding: 6px 8px 16px; }
-/* one tall R shared by Research and Radar */
+/* one tall R shared by Research and Radar, in Research's colour */
 .wordmark { display: inline-flex; align-items: center; gap: 1px; padding: 5px 12px 5px 8px; border: 2px solid var(--text);
   border-radius: 10px; font-weight: 800; letter-spacing: -.01em; }
-.wordmark .r { font-size: 44px; line-height: .8; color: var(--accent); }
+.wordmark .r { font-size: 44px; line-height: .8; }
 .wordmark .rest { display: flex; flex-direction: column; font-size: 17px; line-height: 1.1; }
 .wordmark .rest span:last-child { color: var(--accent); }
 .drawer .tab {

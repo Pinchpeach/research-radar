@@ -92,7 +92,7 @@ def test_glow_marks_hubs_and_key_foundations(flow_data, lay):
 def test_render_html_is_self_contained_and_interactive(flow_data):
     page = techtree.render_html(flow_data, "Neutron <Stars>", "en")
     assert page.startswith("<!doctype html>")
-    assert "THE MAP OF NEUTRON &lt;STARS&gt;" in page
+    assert ">NEUTRON &lt;STARS&gt;</text>" in page  # the topic alone; "The map of" stays in <title>
     assert "<script src" not in page
     data = json.loads(re.search(r"const DATA = (\{.*?\});\n", page).group(1))
     assert len(data["nodes"]) == len(flow_data["nodes"])
@@ -141,4 +141,4 @@ def test_poster_speaks_the_chosen_language_but_keeps_titles(flow_data):
 def test_placeholders_in_titles_are_left_alone(flow_data):
     page = techtree.render_html(flow_data, "__DATA__ __TEXT__", "en")
     assert page.count("const DATA = {") == 1
-    assert "THE MAP OF __DATA__ __TEXT__" in page
+    assert ">__DATA__ __TEXT__</text>" in page
