@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.8.1",
+    "date": "2026-10-19",
+    "ko": ["안정성: 앱이 쓰는 모든 라이브러리의 버전을 고정하고, 새 버전마다 휴대폰·PC 화면을 자동으로 눌러 보는 검사를 거칩니다."],
+    "en": ["Stability: every library the app uses is pinned, and each version is clicked through on phone and desktop screens automatically before release."]
+  },
+  {
     "version": "0.8.0",
     "date": "2026-10-18",
     "ko": [

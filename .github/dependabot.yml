@@ -1,0 +1,25 @@
+# Weekly pull requests that raise pinned versions. Each runs the full CI (tests, builds, browser
+# tests) and can only be merged once it passes; minor and patch bumps come grouped in one PR.
+version: 2
+updates:
+  - package-ecosystem: pip # requirements*.txt (regenerate from the .in files with uv pip compile when adding packages)
+    directory: "/"
+    schedule: { interval: weekly, day: monday }
+    groups:
+      python:
+        update-types: [minor, patch]
+  - package-ecosystem: npm # the Android shell (Capacitor)
+    directory: "/mobile"
+    schedule: { interval: weekly, day: monday }
+    groups:
+      capacitor:
+        patterns: ["@capacitor/*"]
+  - package-ecosystem: npm # the browser tests (Playwright)
+    directory: "/tests/e2e"
+    schedule: { interval: weekly, day: monday }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly, day: monday }
+    groups:
+      actions:
+        patterns: ["*"]

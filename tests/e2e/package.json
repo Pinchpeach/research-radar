@@ -1,0 +1,13 @@
+{
+  "name": "research-radar-e2e",
+  "private": true,
+  "description": "Browser tests of the app's screens (frontend/web) on a phone and a desktop window, offline.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  }
+}

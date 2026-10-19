@@ -1,0 +1,11 @@
+# The app's direct dependencies. requirements.txt pins them and everything they pull in:
+#   uv pip compile requirements.in --universal -p 3.12 -o requirements.txt
+# (Dependabot proposes updates as pull requests; CI has to pass before they land.)
+fastapi
+uvicorn[standard]
+requests
+scikit-learn
+numpy
+pydantic>=2
+python-dotenv
+platformdirs

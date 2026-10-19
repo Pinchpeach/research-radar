@@ -1,0 +1,4 @@
+# Desktop app: the backend plus the native window and packaging (pinned in requirements-desktop.txt).
+-r requirements.in
+pywebview>=5
+pyinstaller>=6

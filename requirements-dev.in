@@ -1,0 +1,4 @@
+# Everything CI installs: the desktop app plus the test tools (pinned in requirements-dev.txt).
+-r requirements-desktop.in
+pytest
+httpx
