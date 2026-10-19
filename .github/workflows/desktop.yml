@@ -1,7 +1,9 @@
 name: Desktop and Android apps
 
-# Every push that touches the app: test, build and smoke-test on Windows, macOS and Linux, and
-# build the Android app (mobile/) after checking its JavaScript backend against the Python one.
+# Every push: test, build and smoke-test on Windows, macOS and Linux, build the Android app
+# (mobile/) after checking its JavaScript backend against the Python one, and click through the
+# screens in a browser (tests/e2e). These checks are what main's branch protection requires, so
+# they run on every push (a path filter would leave some pull requests without them).
 # A GitHub Release with the packages is published either by pushing a version tag
 # (v1.2.3, must match backend/version.py) or by running this workflow by hand on main with
 # "release" ticked, which tags the version in backend/version.py itself.
@@ -10,14 +12,6 @@ on:
     # A push trigger that lists only tags would stop running for branches, so name both.
     branches: ["**"]
     tags: ["v*"]
-    paths: # not applied to tag pushes
-      - "backend/**"
-      - "frontend/web/**"
-      - "desktop/**"
-      - "tests/**"
-      - "requirements-desktop.txt"
-      - "mobile/**"
-      - ".github/workflows/desktop.yml"
   workflow_dispatch:
     inputs:
       release:
@@ -40,7 +34,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements-desktop.txt
+          cache-dependency-path: requirements-dev.txt
 
       - name: Check the tag matches the app version
         if: startsWith(github.ref, 'refs/tags/v')
@@ -48,7 +42,7 @@ jobs:
         run: python desktop/release.py check-tag "$GITHUB_REF_NAME"
 
       - name: Install
-        run: pip install -r requirements-desktop.txt pytest httpx
+        run: pip install -r requirements-dev.txt # pinned; see requirements-dev.in
 
       - name: Test
         run: python -m pytest -q
@@ -102,7 +96,7 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
-          cache-dependency-path: requirements.txt
+          cache-dependency-path: requirements-dev.txt
 
       - uses: actions/setup-java@v4
         with:
@@ -112,7 +106,7 @@ jobs:
 
       - name: Test the JavaScript backend
         run: |
-          pip install -r requirements.txt pytest httpx
+          pip install -r requirements-dev.txt
           node --test tests/js/*.test.mjs
           python -m pytest -q tests/test_js_core.py
 
@@ -166,12 +160,45 @@ jobs:
           retention-days: 30
           if-no-files-found: ignore
 
+  e2e:
+    name: browser tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: tests/e2e/package-lock.json
+
+      - name: Install
+        working-directory: tests/e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Click through the app on a phone and a desktop window
+        working-directory: tests/e2e
+        env:
+          CI: "1"
+        run: npx playwright test
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-report
+          path: |
+            tests/e2e/playwright-report
+            tests/e2e/test-results
+          retention-days: 14
+
   release:
     name: Publish release
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
-    needs: [build, android] # only when every build and check passed
+    needs: [build, android, e2e] # only when every build and check passed
     runs-on: ubuntu-latest
     permissions:
       contents: write

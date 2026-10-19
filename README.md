@@ -146,7 +146,7 @@ PC 앱은 파이썬 서버(FastAPI)를 앱 안에서 띄우고 화면이 그 서
 ```bash
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements-desktop.txt
+pip install -r requirements-dev.txt   # 앱 + 테스트 도구 (버전 고정)
 python -m desktop.main             # 네이티브 창
 python -m desktop.main --browser   # 기본 브라우저로 열기
 ```
@@ -156,10 +156,12 @@ API 서버만 띄우려면 `uvicorn backend.main:app --reload`를 실행하세�
 ### 테스트
 
 ```bash
-pip install pytest httpx
 python -m pytest
 node --test tests/js/*.test.mjs   # Android 앱의 JavaScript 백엔드 (Node.js 22 이상)
+cd tests/e2e && npm ci && npx playwright install chromium && npx playwright test   # 브라우저 테스트
 ```
+
+브라우저 테스트(`tests/e2e/`)는 휴대폰 화면과 PC 창 크기에서 앱을 직접 눌러 봅니다: 홈 → 검색, ☰ 메뉴, 북마크 저장과 재시작, 연구 흐름 그리기(제목 겹침 없음), 새소식, 언어 유지. OpenAlex와 GitHub는 녹화된 응답으로 대신하므로 네트워크나 API 키가 필요 없습니다.
 
 `python -m pytest`에는 `tests/test_js_core.py`도 들어 있습니다. 실제 OpenAlex 검색을 녹화한 `tests/fixtures/`를 파이썬 백엔드와 JavaScript 백엔드에 똑같이 넣고, 결과(검색 순서와 점수, 인용 연결, 핵심 계보, 주제 이름, 포스터)가 같은지 비교합니다. Node.js가 없으면 이 테스트는 건너뜁니다. 녹화는 `python tests/fixtures/record_openalex.py "<검색어>"`로 다시 만들 수 있습니다.
 
@@ -177,7 +179,11 @@ pyinstaller desktop/research_radar.spec --noconfirm   # dist/ 에 생성
 python desktop/smoke.py dist/ResearchRadar/ResearchRadar   # 빌드 결과 점검
 ```
 
-PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop and Android apps 워크플로](.github/workflows/desktop.yml)가 앱 코드가 바뀐 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 하고, Android APK도 빌드합니다.
+PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop and Android apps 워크플로](.github/workflows/desktop.yml)가 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 하고, Android APK를 빌드하고, 브라우저 테스트를 돌립니다. `main`은 이 검사들이 모두 통과해야 병합할 수 있습니다.
+
+### 의존성 버전
+
+`requirements*.txt`는 모든 패키지의 버전을 고정한 목록이고(운영체제별 패키지 포함), 직접 쓰는 패키지는 `requirements*.in`에 적습니다. 패키지를 더하거나 바꾼 뒤에는 `uv pip compile requirements-dev.in --universal -p 3.12 -o requirements-dev.txt`처럼 다시 만듭니다(`requirements.txt`, `requirements-desktop.txt`도 같은 방식). 버전 올리기는 Dependabot이 매주 PR로 제안하고, CI를 통과해야 병합됩니다.
 
 ### Android 앱 빌드
 
@@ -258,7 +264,7 @@ research-radar/
 │   ├── smoke.py             # 빌드 결과 점검
 │   └── release.py           # 릴리스: 버전·태그 확인, 릴리스 노트
 ├── scripts/                 # live_check.py, evaluate.py
-└── tests/                   # js/ 는 JavaScript 백엔드 테스트, fixtures/ 는 녹화한 OpenAlex 응답
+└── tests/                   # js/ 는 JavaScript 백엔드 테스트, e2e/ 는 브라우저 테스트, fixtures/ 는 녹화한 OpenAlex 응답
 ```
 
 저장한 정렬 평가는 앱 데이터 폴더의 `judgments.jsonl`에 쌓이며, `python -m scripts.evaluate`로도 비교할 수 있습니다.
