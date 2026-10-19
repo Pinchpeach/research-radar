@@ -29,6 +29,12 @@ export function reconstructAbstract(inverted) {
 
 export const shortId = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 
+/** `value` if it is an http(s) link, else null (see backend/services/openalex.py web_url). */
+export function webUrl(value) {
+  value = typeof value === "string" ? value.trim() : "";
+  return /^https?:\/\//i.test(value) ? value : null;
+}
+
 export function normalizeWork(work) {
   const authors = (work.authorships || []).map((a) => a.author && a.author.display_name).filter(Boolean);
   const location = work.primary_location || {};
@@ -38,8 +44,8 @@ export function normalizeWork(work) {
     title: work.title || work.display_name || "",
     abstract: reconstructAbstract(work.abstract_inverted_index),
     year: work.publication_year ?? null,
-    doi: work.doi ?? null,
-    url: location.landing_page_url || work.doi || work.id || null,
+    doi: webUrl(work.doi),
+    url: webUrl(location.landing_page_url) || webUrl(work.doi) || webUrl(work.id),
     venue: source.display_name ?? null,
     authors,
     citations: work.cited_by_count || 0,

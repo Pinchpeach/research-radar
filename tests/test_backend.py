@@ -195,7 +195,7 @@ def fake(monkeypatch):
     return fake
 
 
-api = TestClient(main.app)
+api = TestClient(main.app, base_url="http://127.0.0.1")
 
 
 def test_search_basic(fake):

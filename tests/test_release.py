@@ -87,10 +87,10 @@ def test_newer_release_is_reported(monkeypatch):
         return Resp(200, {"tag_name": "v99.0.0", "html_url": "https://github.com/x/releases/v99.0.0", "published_at": "2027"})
 
     monkeypatch.setattr(updates.requests, "get", fake_get)
-    info = TestClient(main.app).get("/version").json()
+    info = TestClient(main.app, base_url="http://127.0.0.1").get("/version").json()
     assert info["version"] == __version__ and info["update_available"] is True
     assert info["latest"]["version"] == "99.0.0"
-    TestClient(main.app).get("/version")
+    TestClient(main.app, base_url="http://127.0.0.1").get("/version")
     assert len(calls) == 1  # cached
 
 

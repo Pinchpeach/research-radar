@@ -276,10 +276,13 @@ const cites = {}, citedBy = {};
 for (const e of DATA.edges) { (cites[e.s] ??= []).push(e.t); (citedBy[e.t] ??= []).push(e.s); }
 const reach = (start, g) => { const seen = new Set(), st = [start];
   while (st.length) for (const n of g[st.pop()] || []) if (!seen.has(n)) { seen.add(n); st.push(n); } return seen; };
-const esc = t => String(t ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+// everything below that comes from the papers is escaped: titles and names are third-party data
+const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const colour = c => (/^#[0-9a-f]{3,8}$/i.test(c) ? c : "#8a8984");
+const webUrl = u => (typeof u === "string" && /^https?:\/\//i.test(u.trim()) ? u.trim() : null);
 const dotEls = [...document.querySelectorAll(".dot")], edgeEls = [...document.querySelectorAll(".edge")];
 const haloEls = [...document.querySelectorAll(".halo")];
-const chip = (label, color) => `<span class="chip" style="background:${color}">${esc(label)}</span>`;
+const chip = (label, color) => `<span class="chip" style="background:${colour(color)}">${esc(label)}</span>`;
 
 // ---------- paper titles: fixed size on screen, never overlapping ----------
 // The most important papers claim space first; a title that would cover another title, a dot,
@@ -392,21 +395,21 @@ function paperTip(n) {
   const anc = reach(n.id, cites).size, desc = reach(n.id, citedBy).size;
   return chip(n.lane_label, n.color) + `<b>${esc(n.title)}</b>` +
     `<span class="k">${esc((n.authors || []).join(", ") || "—")}</span><br>` +
-    `${n.year} · ${fmt("citations", { n: (n.citations || 0).toLocaleString() })}` +
+    `${esc(n.year)} · ${fmt("citations", { n: esc(Number(n.citations || 0).toLocaleString()) })}` +
     `${n.bookmarked ? T.bookmarked : ""}${n.role === "foundation" ? T.foundational : ""}<br>` +
     `<span class="k">${fmt("lineageCounts", { anc, desc })}</span>`;
 }
 function laneTip(l) {
-  const t = id => nodes[id] ? `${esc(nodes[id].title)} (${nodes[id].year})` : "—";
-  return chip(l.label, l.color) + `<b>${fmt("papers", { n: l.size })} · ${l.years[0]}–${l.years[1]}</b>` +
+  const t = id => nodes[id] ? `${esc(nodes[id].title)} (${esc(nodes[id].year)})` : "—";
+  return chip(l.label, l.color) + `<b>${fmt("papers", { n: esc(l.size) })} · ${esc(l.years[0])}–${esc(l.years[1])}</b>` +
     `<span class="k">${T.origin}</span> ${t(l.origin)}<br><span class="k">${T.hub}</span> ${t(l.hub)}<br>` +
     `<span class="k">${T.latest}</span><ul>${l.frontier.map(id => `<li>${t(id)}</li>`).join("")}</ul>`;
 }
 function bundleTip(b) {
   const a = lanes[b.from_lane], c = lanes[b.to_lane];
   return `${chip(a.label, a.color)} → ${chip(c.label, c.color)}` +
-    `<b>${fmt("bundle", { n: b.count })}${b.branch ? T.branch : ""}</b>` +
-    `<ul>${b.examples.map(x => `<li>${esc(x.citing)} (${x.citing_year}) <span class="k">${T.cites}</span> ${esc(x.cited)} (${x.cited_year})</li>`).join("")}</ul>`;
+    `<b>${fmt("bundle", { n: esc(b.count) })}${b.branch ? T.branch : ""}</b>` +
+    `<ul>${b.examples.map(x => `<li>${esc(x.citing)} (${esc(x.citing_year)}) <span class="k">${T.cites}</span> ${esc(x.cited)} (${esc(x.cited_year)})</li>`).join("")}</ul>`;
 }
 
 // ---------- hover: peek at a paper's own citation lines ----------
@@ -497,7 +500,7 @@ function select(id) {
   const n = nodes[id];
   $("lineage").classList.remove("active");
   pin(paperTip(n) + `<div class="actions"><span class="k">${T.highlighted}</span>` +
-      (n.url ? ` <a href="${esc(n.url)}" target="_blank" rel="noopener">${T.open}</a>` : "") + `</div>`,
+      (webUrl(n.url) ? ` <a href="${esc(webUrl(n.url))}" target="_blank" rel="noopener">${T.open}</a>` : "") + `</div>`,
       { x: n.x, y: n.y }, n.color, "dot:" + id);
 }
 // a click on empty map (not a drag) closes the card

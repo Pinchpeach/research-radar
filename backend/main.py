@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import history, judgments, settings, updates
+from backend import history, judgments, security, settings, updates
 from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
@@ -46,6 +46,7 @@ CORE_MIN_SHARE = 0.05
 REFERENCES_PER_SEED = 50
 
 app = FastAPI(title="Research Radar API", version=VERSION)
+security.protect(app)
 
 
 @lru_cache

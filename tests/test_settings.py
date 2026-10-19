@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from backend import main, settings
 from backend.services import openalex
 
-api = TestClient(main.app)
+api = TestClient(main.app, base_url="http://127.0.0.1")
 
 
 def test_saved_value_wins_over_environment_and_can_be_cleared(monkeypatch):

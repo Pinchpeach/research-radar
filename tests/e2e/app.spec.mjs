@@ -58,6 +58,8 @@ test("research flow: drawn on opening, titled with the topic, titles never overl
   const frame = page.frame({ url: /about:srcdoc/ });
   await expect.poll(() => titleOverlaps(frame).then((o) => o.shown)).toBeGreaterThan(0);
   expect((await titleOverlaps(frame)).pairs).toBe(0);
+  // the sandboxed map can't load the app's files, so its font comes inlined
+  expect(await frame.evaluate(() => document.fonts.ready.then(() => document.fonts.check("700 12px NanumSquareRound")))).toBe(true);
   if (info.project.name === "phone") {
     // a phone opens zoomed on the latest work, with the timeline bar to swipe back
     await expect(map.locator("#track")).toBeVisible();

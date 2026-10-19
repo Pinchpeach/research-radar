@@ -144,7 +144,7 @@ def api(store, monkeypatch):
         return [{**p(i, f"Foundation {i}", "neutron star atmosphere", 1990, 1000)} for i in ids]
 
     monkeypatch.setattr(openalex, "papers_by_ids", fake_by_ids)
-    client = TestClient(main.app)
+    client = TestClient(main.app, base_url="http://127.0.0.1")
     client.fetched = fetched
     yield client
     main.app.dependency_overrides.clear()
