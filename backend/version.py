@@ -4,7 +4,7 @@ Release tags must match it: tagging v{__version__} publishes that version (see
 .github/workflows/desktop.yml).
 """
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 # GitHub repository whose releases the app checks for updates
 RELEASES_REPO = "Pinchpeach/research-radar"

@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.8.2",
+    "date": "2026-10-20",
+    "ko": [
+      "보안: 논문 링크는 http(s) 주소만 열고, 연구 흐름 지도는 앱과 분리된 공간에서 실행합니다.",
+      "보안: PC 앱의 내부 서버가 이 컴퓨터의 앱 화면에서 온 요청만 받습니다."
+    ],
+    "en": [
+      "Security: paper links open only http(s) addresses, and the research-flow map runs apart from the app.",
+      "Security: the desktop app's internal server answers only the app's own screen on this computer."
+    ]
+  },
+  {
     "version": "0.8.1",
     "date": "2026-10-19",
     "ko": ["안정성: 앱이 쓰는 모든 라이브러리의 버전을 고정하고, 새 버전마다 휴대폰·PC 화면을 자동으로 눌러 보는 검사를 거칩니다."],
