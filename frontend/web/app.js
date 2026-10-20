@@ -60,6 +60,9 @@ function setStatus(id, message, isError = false) {
 }
 
 const shortId = (id) => id.replace(/\/+$/, "").split("/").pop();
+/** Only http(s) links are followed: paper links come from publishers, and saved bookmarks may
+ * predate the backends' own check. */
+const webUrl = (url) => (typeof url === "string" && /^https?:\/\//i.test(url.trim()) ? url.trim() : null);
 const pick = (paper) => Object.fromEntries(PAPER_FIELDS.map((k) => [k, paper[k] ?? null]));
 
 function authorLine(authors) {
@@ -174,7 +177,7 @@ function paperCard(paper, { rank, query, extra } = {}) {
   node.querySelector(".rank").textContent = rank ? `#${rank} · ${paper.score}` : "";
   const title = node.querySelector(".title");
   title.textContent = paper.title || t("paper.noTitle");
-  const link = paper.url || paper.doi;
+  const link = webUrl(paper.url) || webUrl(paper.doi);
   if (link) title.href = link; else title.removeAttribute("href");
   node.querySelector(".authors").textContent = authorLine(paper.authors);
   node.querySelector(".meta").textContent = metaLine(paper);
@@ -478,12 +481,22 @@ function autoDrawFlow() {
   if (fresh || (!state.flow && state.bookmarks.length)) drawFlow();
 }
 
-/** The map is its own page: point it at the app's font files (next to style.css). */
-function withAppFont(page) {
-  const css = document.querySelector("link[rel=stylesheet]").href;
-  const faces = [["L", 300], ["R", 400], ["B", 700], ["EB", 800]].map(([file, weight]) =>
-    `@font-face{font-family:NanumSquareRound;font-weight:${weight};src:url("${new URL(`fonts/NanumSquareRound${file}.woff2`, css)}") format("woff2")}`);
-  return page.replace("<style>", `<style>${faces.join("")}`);
+/** The map's fonts, inlined: the map runs in a sandboxed frame with no access to the app, so it
+ * cannot load the app's files (and a saved poster keeps its look offline). Loaded once. */
+let mapFonts = null;
+function mapFontFaces() {
+  mapFonts ??= Promise.all([["L", 300], ["R", 400], ["B", 700]].map(async ([file, weight]) => {
+    const url = new URL(`fonts/NanumSquareRound${file}.woff2`, document.querySelector("link[rel=stylesheet]").href);
+    const blob = await (await fetch(url)).blob();
+    const data = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(new Blob([blob], { type: "font/woff2" }));
+    });
+    return `@font-face{font-family:NanumSquareRound;font-weight:${weight};src:url("${data}") format("woff2")}`;
+  })).then((faces) => faces.join("")).catch(() => ""); // without them the map uses the system font
+  return mapFonts;
 }
 
 /** Draw the analyzed flow in the current language (again after a language switch). */
@@ -493,7 +506,8 @@ async function showFlow() {
   const poster = await api("POST", "/poster", { flow, title, lang: LANG });
   // on the app's light background the map is light too (and saved the way it is shown)
   const light = !matchMedia("(prefers-color-scheme: dark)").matches;
-  state.poster = withAppFont(light ? poster.replace("<html ", '<html class="light" ') : poster);
+  const fonts = await mapFontFaces();
+  state.poster = (light ? poster.replace("<html ", '<html class="light" ') : poster).replace("<style>", () => `<style>${fonts}`);
   $("poster").srcdoc = state.poster;
   $("poster").hidden = false;
   $("save-poster").disabled = false;
@@ -641,12 +655,15 @@ $("settings-form").addEventListener("submit", async (event) => {
 
 // ───────────── version & updates ─────────────
 
+/** A newer release, announced only with a link to GitHub (the link comes from GitHub's API). */
+const newRelease = (info) => Boolean(info && info.update_available && /^https:\/\/github\.com\//.test(info.latest.url || ""));
+
 async function checkVersion() {
   let info;
   try { info = await api("GET", "/version"); } catch { return; }
   state.version = info;
   $("app-version").textContent = `v${info.version}`;
-  const update = info.update_available;
+  const update = newRelease(info);
   $("menu-dot").hidden = !update;
   $("news-badge").hidden = !update;
   $("news-badge").textContent = t("news.new");
@@ -663,7 +680,7 @@ async function checkVersion() {
 async function renderNews() {
   const info = state.version;
   const card = $("update-card");
-  card.hidden = !(info && info.update_available);
+  card.hidden = !newRelease(info);
   if (!card.hidden) {
     card.href = info.latest.url;
     card.textContent = t("news.update", { version: info.latest.version });

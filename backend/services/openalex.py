@@ -28,6 +28,13 @@ def short_id(openalex_id: str) -> str:
     return openalex_id.rstrip("/").rsplit("/", 1)[-1]
 
 
+def web_url(value) -> str | None:
+    """`value` if it is an http(s) link, else None. Links come from publishers and repositories;
+    a javascript: or data: one would run code when clicked."""
+    value = value.strip() if isinstance(value, str) else ""
+    return value if re.match(r"https?://", value, re.IGNORECASE) else None
+
+
 def normalize_work(work: dict) -> dict:
     authors = [
         authorship.get("author", {}).get("display_name")
@@ -42,8 +49,8 @@ def normalize_work(work: dict) -> dict:
         "title": work.get("title") or work.get("display_name") or "",
         "abstract": reconstruct_abstract(work.get("abstract_inverted_index")),
         "year": work.get("publication_year"),
-        "doi": work.get("doi"),
-        "url": location.get("landing_page_url") or work.get("doi") or work.get("id"),
+        "doi": web_url(work.get("doi")),
+        "url": web_url(location.get("landing_page_url")) or web_url(work.get("doi")) or web_url(work.get("id")),
         "venue": source.get("display_name"),
         "authors": authors,
         "citations": work.get("cited_by_count", 0) or 0,

@@ -130,7 +130,8 @@
         <button id="save-poster" disabled data-i18n="flow.save">포스터 저장</button>
       </div>
       <p id="map-status" class="status" role="status"></p>
-      <iframe id="poster" data-i18n-title="flow.frame" hidden></iframe>
+      <!-- sandboxed: the map shows third-party titles and links, so it gets no access to the app -->
+      <iframe id="poster" data-i18n-title="flow.frame" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" hidden></iframe>
       <div id="story" class="story"></div>
     </section>
 

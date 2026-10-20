@@ -200,6 +200,14 @@ test("searches are remembered newest first, like backend/history.py", async () =
   assert.equal((await api("GET", "/changelog"))[0].version, VERSION);
 });
 
+test("only web links survive from OpenAlex", async () => {
+  const { normalizeWork, webUrl } = await import("../../frontend/web/core/openalex.js");
+  const paper = normalizeWork({ id: "https://openalex.org/W1", doi: "javascript:alert(1)", primary_location: { landing_page_url: " JavaScript:fetch('//evil')" } });
+  assert.equal(paper.doi, null);
+  assert.equal(paper.url, "https://openalex.org/W1");
+  assert.equal(webUrl("data:text/html,<script>1</script>"), null);
+});
+
 test("unknown routes are 404", async () => {
   const { api } = setup();
   await assert.rejects(api("GET", "/nope"), (e) => e.status === 404);

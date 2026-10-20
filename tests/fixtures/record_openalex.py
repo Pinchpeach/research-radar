@@ -70,7 +70,7 @@ def main_(query: str) -> None:
 
     openalex._session.get = get
     main.date = type("FixedDate", (date,), {"today": classmethod(lambda cls: TODAY)})
-    response = TestClient(main.app).post("/search", json={"query": query, "limit": 20})
+    response = TestClient(main.app, base_url="http://127.0.0.1").post("/search", json={"query": query, "limit": 20})
     response.raise_for_status()
     shrink_references(recorded)
     out = Path(__file__).with_name(f"openalex_{query.replace(' ', '_')}.json")

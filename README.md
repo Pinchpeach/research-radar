@@ -181,6 +181,10 @@ python desktop/smoke.py dist/ResearchRadar/ResearchRadar   # 빌드 결과 점�
 
 PyInstaller는 크로스 컴파일을 하지 않으므로, 각 운영체제용 앱은 그 운영체제에서 빌드해야 합니다. GitHub Actions의 [Desktop and Android apps 워크플로](.github/workflows/desktop.yml)가 모든 푸시에서 Windows, macOS, Linux 테스트 → 빌드 → 실행 점검 → 업로드를 하고, Android APK를 빌드하고, 브라우저 테스트를 돌립니다. `main`은 이 검사들이 모두 통과해야 병합할 수 있습니다.
 
+### 보안
+
+앱이 다루는 외부 입력과 지금까지의 점검·조치는 [docs/security.md](docs/security.md)에 정리했습니다. 찾은 공격은 `tests/test_security.py`와 `tests/e2e/security.spec.mjs`로 남아 있어, 다시 열리면 CI가 실패합니다.
+
 ### 의존성 버전
 
 `requirements*.txt`는 모든 패키지의 버전을 고정한 목록이고(운영체제별 패키지 포함), 직접 쓰는 패키지는 `requirements*.in`에 적습니다. 패키지를 더하거나 바꾼 뒤에는 `uv pip compile requirements-dev.in --universal -p 3.12 -o requirements-dev.txt`처럼 다시 만듭니다(`requirements.txt`, `requirements-desktop.txt`도 같은 방식). 버전 올리기는 Dependabot이 매주 PR로 제안하고, CI를 통과해야 병합됩니다.

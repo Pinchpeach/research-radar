@@ -14,8 +14,11 @@ const CORS = { "access-control-allow-origin": "*", "access-control-allow-headers
 
 export const test = base.extend({
   latestRelease: [VERSION, { option: true }],
+  // { edit(url, body) => body }: changes OpenAlex's answers, e.g. to slip in a booby-trapped paper
+  // (wrapped in an object: Playwright would take a bare function for a fixture)
+  tamper: [null, { option: true }],
   openalexCalls: async ({}, use) => use([]),
-  page: async ({ page, latestRelease, openalexCalls }, use) => {
+  page: async ({ page, latestRelease, openalexCalls, tamper }, use) => {
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("dialog", (d) => d.accept());
@@ -23,12 +26,13 @@ export const test = base.extend({
     const openalex = replayFetch(FIXTURE, openalexCalls);
     await page.context().route("https://api.openalex.org/**", async (route) => {
       if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers: CORS });
-      const reply = await openalex(route.request().url());
-      await route.fulfill({ status: reply.status, headers: CORS, contentType: "application/json", body: JSON.stringify(await reply.json()) });
+      const url = route.request().url(), reply = await openalex(url);
+      const body = tamper ? tamper.edit(url, await reply.json()) : await reply.json();
+      await route.fulfill({ status: reply.status, headers: CORS, contentType: "application/json", body: JSON.stringify(body) });
     });
     await page.context().route("https://api.github.com/**", (route) => route.fulfill({
       headers: CORS, contentType: "application/json",
-      body: JSON.stringify({ tag_name: `v${latestRelease}`, html_url: "https://example.org/release", published_at: `${TODAY}T00:00:00Z` }),
+      body: JSON.stringify({ tag_name: `v${latestRelease}`, html_url: `https://github.com/Pinchpeach/research-radar/releases/tag/v${latestRelease}`, published_at: `${TODAY}T00:00:00Z` }),
     }));
     await use(page);
     expect(errors, "no script errors").toEqual([]);

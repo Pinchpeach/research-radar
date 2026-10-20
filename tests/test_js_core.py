@@ -97,7 +97,7 @@ def python_api(recorded, monkeypatch, tmp_path):
     monkeypatch.setattr(ranking, "date", fixed)
     store = BookmarkStore(tmp_path / "parity.db")
     main.app.dependency_overrides[main.get_store] = lambda: store
-    yield TestClient(main.app)
+    yield TestClient(main.app, base_url="http://127.0.0.1")
     main.app.dependency_overrides.clear()
 
 
