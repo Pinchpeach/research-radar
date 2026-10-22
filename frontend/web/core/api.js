@@ -6,7 +6,7 @@ import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Bookmarks, History, Judgments, Settings, toBibtex } from "./store.js";
+import { Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
 
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -33,7 +33,7 @@ export function paperData(raw) {
   if (!raw || typeof raw.id !== "string") throw invalid("paper.id is required");
   return {
     id: raw.id, title: raw.title || "", abstract: raw.abstract || "", year: raw.year ?? null, doi: raw.doi ?? null,
-    url: raw.url ?? null, venue: raw.venue ?? null, authors: raw.authors || [], citations: raw.citations || 0,
+    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, authors: raw.authors || [], citations: raw.citations || 0,
     referenced_works: raw.referenced_works || [], keywords: raw.keywords || [], topic: raw.topic ?? null,
   };
 }
@@ -192,6 +192,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     for (const [name, value] of Object.entries(body || {})) {
       if (name === "language") {
         if (value != null && !["ko", "en", ""].includes(value)) throw invalid("language must be ko or en");
+      } else if (name === "reading_goal") {
+        if (value != null && !/^([1-9][0-9]{0,2})?$/.test(String(value))) throw invalid("reading_goal must be 1-999");
       } else if (!(name in limits)) {
         continue;
       } else if (value != null && String(value).length > limits[name]) {
@@ -202,6 +204,33 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return update;
   };
 
+  // like backend/main.py new_papers: papers published since the day after each recent search
+  const NEW_PAPERS_TTL_MS = 3600 * 1000, newPapersCache = new Map();
+  const isoDay = (d) => d.toISOString().slice(0, 10);
+  async function newPapers(limit) {
+    const todayIso = isoDay(today()), out = [];
+    for (const entry of history.load().slice(0, limit)) {
+      const next = new Date(`${entry.searched_at.slice(0, 10)}T00:00:00Z`);
+      next.setUTCDate(next.getUTCDate() + 1);
+      const since = isoDay(next);
+      let count = 0;
+      if (since <= todayIso) {
+        const key = `${entry.query}\u0000${since}`, cached = newPapersCache.get(key);
+        if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS) count = cached.count;
+        else {
+          try {
+            count = await openalex.countSince(entry.query, since);
+            newPapersCache.set(key, { at: Date.now(), count });
+          } catch {
+            count = null; // offline or rate-limited: the home screen just shows no count
+          }
+        }
+      }
+      out.push({ ...entry, since, new_papers: count });
+    }
+    return out;
+  }
+
   const routes = [
     ["GET", /^\/health$/, () => ({ status: "ok", version })],
     ["POST", /^\/search$/, (_, body) => search(body)],
@@ -209,7 +238,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     ["PUT", /^\/bookmarks$/, (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null)],
     ["GET", /^\/bookmarks\/export\.bib$/, (_, __, q) => toBibtex(bookmarks.all(q.get("tag")))],
     ["PATCH", /^\/bookmarks\/([^/]+)$/, ([id], body) => {
-      const updated = bookmarks.update(decodeURIComponent(id), body.note ?? null, body.tags ?? null);
+      if (body.status != null && !READING_STATUSES.includes(body.status)) throw invalid("status must be to_read, reading or read");
+      const updated = bookmarks.update(decodeURIComponent(id), body.note ?? null, body.tags ?? null, body.status ?? null);
       if (!updated) throw new ApiError(404, "Bookmark not found");
       return updated;
     }],
@@ -236,6 +266,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       return null;
     }],
     ["GET", /^\/history$/, (_, __, q) => history.load().slice(0, Math.max(0, Number(q.get("limit") ?? 5) || 0))],
+    ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
     ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
     ["GET", /^\/changelog$/, () => CHANGELOG],
     ["GET", /^\/version$/, async () => {

@@ -33,6 +33,8 @@ def trim(work: dict) -> dict:
     location = work.get("primary_location") or {}
     out["primary_location"] = {"landing_page_url": location.get("landing_page_url"),
                                "source": {"display_name": (location.get("source") or {}).get("display_name")}}
+    out["open_access"] = {"oa_url": (work.get("open_access") or {}).get("oa_url")}
+    out["best_oa_location"] = {"pdf_url": (work.get("best_oa_location") or {}).get("pdf_url")}
     out["authorships"] = [{"author": {"display_name": a.get("author", {}).get("display_name")}} for a in work.get("authorships", [])]
     out["keywords"] = [{"display_name": k.get("display_name")} for k in work.get("keywords") or []]
     if out["primary_topic"]:

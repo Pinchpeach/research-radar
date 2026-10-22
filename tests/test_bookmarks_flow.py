@@ -305,3 +305,46 @@ def test_topic_names_keep_acronyms_and_trim_filler():
     assert names[1] == "Tomato"
     lone = flow.name_clusters(papers, [0, 0, 0], ["a"], query="off-target effects")
     assert lone == ["CRISPR and Genetic Engineering"]  # casing kept; query echo skipped
+
+
+# ---------- reading status ----------
+
+
+def test_reading_status_stamps_and_clears_read_at(tmp_path):
+    store = BookmarkStore(tmp_path / "r.db")
+    store.save({"id": "https://openalex.org/W1", "title": "A"})
+    assert store.get("W1")["status"] == "to_read" and store.get("W1")["read_at"] is None
+    read = store.update("W1", status="read")
+    assert read["status"] == "read" and read["read_at"]
+    again = store.update("W1", note="still read")
+    assert again["read_at"] == read["read_at"]  # a note doesn't move the day it was read
+    assert store.save({"id": "https://openalex.org/W1", "title": "A, refreshed"})["status"] == "read"
+    back = store.update("W1", status="reading")
+    assert back["status"] == "reading" and back["read_at"] is None
+    with pytest.raises(ValueError):
+        store.update("W1", status="finished")
+
+
+def test_old_databases_get_the_reading_columns(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    with sqlite3.connect(path) as db:
+        db.execute("CREATE TABLE bookmarks (id TEXT PRIMARY KEY, paper TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', "
+                   "tags TEXT NOT NULL DEFAULT '[]', query TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        db.execute("INSERT INTO bookmarks VALUES ('W1', '{\"id\": \"W1\"}', '', '[]', NULL, 'x', 'x')")
+    item = BookmarkStore(path).get("W1")
+    assert item["status"] == "to_read" and item["read_at"] is None
+
+
+def test_status_over_the_api(tmp_path):
+    store = BookmarkStore(tmp_path / "api.db")
+    main.app.dependency_overrides[main.get_store] = lambda: store
+    try:
+        client = TestClient(main.app, base_url="http://127.0.0.1")
+        client.put("/bookmarks", json={"paper": {"id": "https://openalex.org/W7", "title": "T"}})
+        assert client.patch("/bookmarks/W7", json={"status": "read"}).json()["read_at"]
+        assert client.patch("/bookmarks/W7", json={"status": "done"}).status_code == 422
+        assert client.get("/bookmarks").json()[0]["status"] == "read"
+    finally:
+        main.app.dependency_overrides.clear()

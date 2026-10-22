@@ -208,6 +208,52 @@ test("only web links survive from OpenAlex", async () => {
   assert.equal(webUrl("data:text/html,<script>1</script>"), null);
 });
 
+test("reading status stamps and clears read_at, like backend/storage.py", async () => {
+  const { api } = setup();
+  await api("PUT", "/bookmarks", { paper: { id: "https://openalex.org/W1", title: "A" } });
+  assert.equal((await api("GET", "/bookmarks"))[0].status, "to_read");
+  const read = await api("PATCH", "/bookmarks/W1", { status: "read" });
+  assert.ok(read.read_at);
+  assert.equal((await api("PATCH", "/bookmarks/W1", { note: "n" })).read_at, read.read_at);
+  assert.equal((await api("PUT", "/bookmarks", { paper: { id: "https://openalex.org/W1", title: "A2" } })).status, "read");
+  assert.equal((await api("PATCH", "/bookmarks/W1", { status: "reading" })).read_at, null);
+  await assert.rejects(api("PATCH", "/bookmarks/W1", { status: "done" }), (e) => e.status === 422);
+});
+
+test("reading goal is 1-999", async () => {
+  const { api } = setup();
+  assert.equal((await api("PUT", "/settings", { reading_goal: "15" })).reading_goal.value, "15");
+  for (const bad of ["0", "1000", "abc"]) await assert.rejects(api("PUT", "/settings", { reading_goal: bad }), (e) => e.status === 422);
+});
+
+test("new papers since the day after each search, asked once", async () => {
+  const asked = [];
+  const { api } = setup({ handler: (url) => {
+    const u = new URL(url);
+    if (u.searchParams.get("select") === "id") { asked.push(u.searchParams.get("filter")); return reply(200, { meta: { count: 7 }, results: [] }); }
+    return reply(200, { results: WORKS });
+  } });
+  await api("POST", "/search", { query: "neutron star" }); // recorded at the fixed today: nothing to ask
+  assert.equal((await api("GET", "/history/new"))[0].new_papers, 0);
+  const storage = memoryStorage();
+  storage.setItem("radar.history", JSON.stringify([{ query: "neutron star", searched_at: "2026-05-01T00:00:00+00:00" }]));
+  const later = createApi({ fetch: async (url, init) => {
+    const u = new URL(url); asked.push(u.searchParams.get("filter")); return reply(200, { meta: { count: 7 }, results: [] });
+  }, storage, version: "0.5.0", releasesRepo: "o/r", posterTemplate: async () => template, today: () => new Date("2026-06-01T00:00:00Z") });
+  const [entry] = await later("GET", "/history/new");
+  assert.deepEqual([entry.since, entry.new_papers], ["2026-05-02", 7]);
+  await later("GET", "/history/new");
+  assert.deepEqual(asked, ["from_publication_date:2026-05-02"]);
+});
+
+test("free full text prefers the PDF", async () => {
+  const { normalizeWork } = await import("../../frontend/web/core/openalex.js");
+  const work = { id: "https://openalex.org/W1", best_oa_location: { pdf_url: "https://r.example/p.pdf" }, open_access: { oa_url: "https://r.example/l" } };
+  assert.equal(normalizeWork(work).open_access_url, "https://r.example/p.pdf");
+  assert.equal(normalizeWork({ ...work, best_oa_location: null }).open_access_url, "https://r.example/l");
+  assert.equal(normalizeWork({ id: "W2", open_access: { oa_url: "javascript:x" } }).open_access_url, null);
+});
+
 test("unknown routes are 404", async () => {
   const { api } = setup();
   await assert.rejects(api("GET", "/nope"), (e) => e.status === 404);

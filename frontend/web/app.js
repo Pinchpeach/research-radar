@@ -1,7 +1,7 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "venue", "authors", "citations",
+const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "authors", "citations",
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
 const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
@@ -93,7 +93,7 @@ async function saveFile(name, content, mime) {
 
 // ───────────── navigation: the ☰ drawer and pages ─────────────
 
-const PAGE_TITLES = { home: "", discover: "tab.discover", bookmarks: "tab.bookmarks", map: "tab.flow", news: "tab.news", settings: "tab.settings" };
+const PAGE_TITLES = { home: "", discover: "tab.discover", bookmarks: "tab.bookmarks", reading: "tab.reading", map: "tab.flow", news: "tab.news", settings: "tab.settings" };
 let currentTab = "home";
 
 function setDrawer(open) {
@@ -118,6 +118,7 @@ function showTab(name) {
   if (name === "bookmarks") renderBookmarks();
   if (name === "map") autoDrawFlow();
   if (name === "news") renderNews();
+  if (name === "reading") renderReading();
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 $("menu-button").addEventListener("click", () => setDrawer(!$("drawer").classList.contains("open")));
@@ -152,6 +153,27 @@ async function renderHome() {
     chip.addEventListener("click", () => searchFor(query));
     return el("li", {}, chip);
   }));
+  if (recent.length) markNewPapers();
+}
+
+/** "새 논문 N편" on recent topics with papers published since they were last searched. */
+async function markNewPapers() {
+  let counts = [];
+  try { counts = await api("GET", "/history/new?limit=3"); } catch { return; }
+  const chips = [...$("recent-topics").querySelectorAll(".topic")];
+  for (const { query, since, new_papers: n } of counts) {
+    const chip = chips.find((c) => c.title === query);
+    if (!chip || !n || chip.querySelector(".new")) continue;
+    chip.append(el("span", { class: "new", text: t("home.new", { n: n > 99 ? "99+" : n }), title: t("home.newTitle", { since }) }));
+  }
+}
+
+/** Search again with `paper` as the seed: what it cites, what cites it, and what is close to it. */
+function startFrom(paper, query) {
+  $("seeds").value = shortId(paper.id);
+  $("query").value = (query || paper.title || "").slice(0, 300);
+  showTab("discover");
+  $("search-form").requestSubmit();
 }
 
 /** Open Discover and search for `query` there. */
@@ -197,6 +219,10 @@ function paperCard(paper, { rank, query, extra } = {}) {
   }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: t("chip.seed") }));
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
+
+  const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);
+  if (freeUrl) { free.href = freeUrl; free.hidden = false; }
+  node.querySelector(".from-here").addEventListener("click", () => startFrom(paper, query));
 
   const abstract = node.querySelector(".abstract");
   if (paper.abstract) abstract.querySelector("p").textContent = paper.abstract;
@@ -396,6 +422,32 @@ async function loadBookmarks() {
   $("bm-count").textContent = state.bookmarks.length ? `(${state.bookmarks.length})` : "";
   $("bookmark-seeds").disabled = !state.bookmarks.length;
   if (!$("tab-bookmarks").hidden) renderBookmarks();
+  if (!$("tab-reading").hidden) renderReading();
+}
+
+const STATUSES = ["to_read", "reading", "read"];
+
+/** 읽을 것 · 읽는 중 · 읽음 buttons for a bookmark; `done` runs after a change is saved. */
+function statusControl(bookmark, done) {
+  const group = el("div", { class: "status-control", role: "group", "aria-label": t("bm.status") });
+  for (const status of STATUSES) {
+    const button = el("button", { type: "button", "data-status": status, text: t(`status.${status}`),
+      class: bookmark.status === status ? "on" : null, "aria-pressed": String(bookmark.status === status) });
+    button.addEventListener("click", async () => {
+      if (bookmark.status === status) return;
+      group.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      try {
+        await api("PATCH", `/bookmarks/${bookmark.id}`, { status });
+        await loadBookmarks();
+        done();
+      } catch (e) {
+        alert(t("bm.saveFailed", { error: e.message }));
+        group.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      }
+    });
+    group.append(button);
+  }
+  return group;
 }
 
 function renderBookmarks() {
@@ -405,7 +457,8 @@ function renderBookmarks() {
   select.replaceChildren(el("option", { value: "", text: t("bm.all") }), ...tags.map((t) => el("option", { value: t, text: t })));
   select.value = tags.includes(current) ? current : "";
 
-  const shown = state.bookmarks.filter((b) => !select.value || b.tags.includes(select.value));
+  const status = $("status-filter").value;
+  const shown = state.bookmarks.filter((b) => (!select.value || b.tags.includes(select.value)) && (!status || b.status === status));
   $("bm-empty").hidden = state.bookmarks.length > 0;
   $("bookmarks").replaceChildren(...shown.map((b) => {
     const note = el("textarea", { rows: 2, placeholder: t("bm.note") });
@@ -430,11 +483,68 @@ function renderBookmarks() {
     });
     const edit = el("div", { class: "bm-edit" }, note, tagInput, el("div", { class: "buttons" }, save, remove));
     const card = paperCard(b.paper, { query: b.query, extra: edit });
+    card.querySelector(".paper-actions").prepend(statusControl(b, renderBookmarks));
     if (b.query) card.querySelector(".meta").append(el("span", { class: "found-via", text: t("bm.foundVia", { query: b.query }) }));
     return card;
   }));
 }
 $("tag-filter").addEventListener("change", renderBookmarks);
+$("status-filter").addEventListener("change", renderBookmarks);
+
+// ───────────── reading: this month's papers as a thermometer ─────────────
+
+const DEFAULT_GOAL = 10;
+
+function readThisMonth(now = new Date()) {
+  return state.bookmarks
+    .filter((b) => b.status === "read" && b.read_at)
+    .filter((b) => { const d = new Date(b.read_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); })
+    .sort((a, b) => (a.read_at < b.read_at ? 1 : -1));
+}
+
+function readRow(bookmark, when) {
+  const link = webUrl(bookmark.paper.url) || webUrl(bookmark.paper.doi);
+  const title = el(link ? "a" : "span", { class: "title", href: link, target: link ? "_blank" : null, rel: link ? "noopener" : null,
+    text: bookmark.paper.title || t("paper.noTitle") });
+  return el("li", { class: "read-row" }, title,
+    el("span", { class: "meta", text: when }), statusControl(bookmark, renderReading));
+}
+
+function renderReading() {
+  const now = new Date(), goal = state.readingGoal || DEFAULT_GOAL;
+  const reads = readThisMonth(now), n = reads.length, full = Math.min(1, n / goal);
+  $("reading-month").textContent = now.toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { year: "numeric", month: "long" });
+  $("reading-cheer").textContent = t(n === 0 ? "read.cheerZero" : n >= goal ? "read.cheerGoal" : "read.cheer");
+  $("reading-count").textContent = String(n);
+  $("reading-of").textContent = t("read.of", { goal });
+  $("thermo").setAttribute("aria-label", t("read.aria", { n, goal }));
+  $("thermo").classList.toggle("done", n >= goal);
+  $("mercury").style.height = "0%";
+  requestAnimationFrame(() => requestAnimationFrame(() => ($("mercury").style.height = `${(full * 100).toFixed(1)}%`)));
+  $("ticks").replaceChildren(...[goal, Math.round(goal / 2), 0].map((v) =>
+    el("span", { style: `bottom:${((v / goal) * 100).toFixed(1)}%`, text: String(v) })));
+  if (document.activeElement !== $("reading-goal")) $("reading-goal").value = String(goal);
+  const date = (iso) => new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
+  $("read-empty").hidden = n > 0;
+  $("read-list").replaceChildren(...reads.map((b) => readRow(b, t("read.readOn", { date: date(b.read_at) }))));
+  const reading = state.bookmarks.filter((b) => b.status === "reading");
+  $("reading-empty").hidden = reading.length > 0;
+  $("reading-list").replaceChildren(...reading.map((b) => readRow(b, b.query ? t("bm.foundVia", { query: b.query }).replace(/^\s*·\s*/, "") : "")));
+}
+
+$("goal-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const goal = Math.round(Number($("reading-goal").value));
+  if (!(goal >= 1 && goal <= 999)) return setStatus("goal-status", t("read.goalRange"), true);
+  try {
+    await api("PUT", "/settings", { reading_goal: String(goal) });
+    state.readingGoal = goal;
+    setStatus("goal-status", t("read.goalSaved"));
+    renderReading();
+  } catch (e) {
+    setStatus("goal-status", t("set.saveFailed", { error: e.message }), true);
+  }
+});
 
 $("export-bib").addEventListener("click", async () => {
   const tag = $("tag-filter").value;
@@ -553,6 +663,8 @@ function renderStory(flow) {
 async function loadSettings({ applyLanguage = false } = {}) {
   let s;
   try { s = await api("GET", "/settings"); } catch { return; }
+  state.readingGoal = Number(s.reading_goal && s.reading_goal.value) || null;
+  if (!$("tab-reading").hidden) renderReading();
   const key = s.openalex_api_key;
   $("openalex-key-state").textContent = key.set
     ? t("set.keySaved", { hint: key.hint, env: key.source === "environment" ? t("set.keyEnv") : "" })

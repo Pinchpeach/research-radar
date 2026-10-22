@@ -304,7 +304,7 @@ export function renderHtml(flow, title, lang, template) {
     years: lay.years || [0, 0],
     chain: lay.chain || [],
     edges: lay.edges.map((e) => ({ s: e.s, t: e.t })),
-    nodes: lay.nodes.map((n) => pick(n, ["id", "title", "authors", "year", "citations", "url", "role", "bookmarked",
+    nodes: lay.nodes.map((n) => pick(n, ["id", "title", "authors", "year", "citations", "url", "open_access_url", "role", "bookmarked",
       "cited_by_in_set", "lane_label", "color", "x", "y", "r", "glow"])),
     lanes: lay.lanes.map((l) => pick(l, ["lane", "label", "color", "size", "years", "origin", "hub", "frontier"])),
     bundles: (lay.bundles || []).map((b) => pick(b, ["from_lane", "to_lane", "count", "branch", "examples"])),

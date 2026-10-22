@@ -25,7 +25,7 @@ const write = (storage, key, value) => storage.setItem(key, JSON.stringify(value
 
 // ---------- settings ----------
 
-export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "language"];
+export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "language", "reading_goal"];
 const SECRETS = new Set(["openalex_api_key"]);
 
 export const mask = (secret) => (secret.length > 8 ? "•".repeat(6) + secret.slice(-4) : "•".repeat(secret.length));
@@ -69,10 +69,15 @@ export function cleanTags(tags) {
   return seen;
 }
 
+export const READING_STATUSES = ["to_read", "reading", "read"];
+
 export class Bookmarks {
   constructor(storage) { this.storage = storage; }
-  load() { return read(this.storage, KEYS.bookmarks, []); }
   store(items) { write(this.storage, KEYS.bookmarks, items); }
+  load() {
+    // bookmarks saved before reading status existed are still to read
+    return read(this.storage, KEYS.bookmarks, []).map((b) => ({ status: "to_read", read_at: null, ...b }));
+  }
   all(tag = null) {
     const items = this.load().sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
     return tag ? items.filter((b) => b.tags.includes(tag.toLowerCase())) : items;
@@ -90,16 +95,22 @@ export class Bookmarks {
       query: query != null ? query : existing ? existing.query : null,
       created_at: existing ? existing.created_at : stamp,
       updated_at: stamp,
+      status: existing ? existing.status || "to_read" : "to_read",
+      read_at: existing ? existing.read_at ?? null : null,
     };
     this.store([...items.filter((b) => b.id !== id), item]);
     return item;
   }
-  update(id, note = null, tags = null) {
+  /** Change note, tags or reading status (see backend/storage.py update). */
+  update(id, note = null, tags = null, status = null) {
     const items = this.load(), existing = items.find((b) => b.id === short(id));
     if (!existing) return null;
+    const stamp = now();
     if (note != null) existing.note = note;
     if (tags != null) existing.tags = cleanTags(tags);
-    existing.updated_at = now();
+    existing.status = status ?? existing.status ?? "to_read";
+    existing.read_at = existing.status === "read" ? existing.read_at || stamp : null;
+    existing.updated_at = stamp;
     this.store(items);
     return existing;
   }

@@ -17,6 +17,7 @@ FIELDS = {
     "openalex_api_key": "OPENALEX_API_KEY",
     "openalex_email": "OPENALEX_EMAIL",
     "language": "RADAR_LANG",
+    "reading_goal": "RADAR_READING_GOAL",  # papers to read a month (the reading thermometer)
 }
 SECRETS = {"openalex_api_key"}
 

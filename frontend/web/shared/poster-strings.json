@@ -37,6 +37,7 @@
       "cites": "→ 인용 →",
       "highlighted": "지도에 계보를 표시했습니다.",
       "open": "논문 열기 ↗",
+      "free": "무료로 읽기 ↗",
       "hint": "스크롤: 이동 · Ctrl/⌘+스크롤: 확대",
       "hintTouch": "드래그: 이동 · 두 손가락: 확대"
     }
@@ -79,6 +80,7 @@
       "cites": "cites",
       "highlighted": "Lineage highlighted on the map.",
       "open": "Open paper ↗",
+      "free": "Free full text ↗",
       "hint": "Scroll: move · Ctrl/⌘ + scroll: zoom",
       "hintTouch": "Drag: move · Two fingers: zoom"
     }
