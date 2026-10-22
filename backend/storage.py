@@ -18,9 +18,14 @@ CREATE TABLE IF NOT EXISTS bookmarks (
     tags TEXT NOT NULL DEFAULT '[]',
     query TEXT,
     created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL
+    updated_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'to_read',
+    read_at TEXT
 )
 """
+# columns added after the first release: (name, definition) for databases created without them
+ADDED_COLUMNS = [("status", "TEXT NOT NULL DEFAULT 'to_read'"), ("read_at", "TEXT")]
+STATUSES = ("to_read", "reading", "read")
 
 
 def short_id(paper_id: str) -> str:
@@ -42,6 +47,10 @@ class BookmarkStore:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.execute(SCHEMA)
+            have = {row[1] for row in db.execute("PRAGMA table_info(bookmarks)")}
+            for name, definition in ADDED_COLUMNS:
+                if name not in have:
+                    db.execute(f"ALTER TABLE bookmarks ADD COLUMN {name} {definition}")
 
     @contextmanager
     def _connect(self):
@@ -63,6 +72,8 @@ class BookmarkStore:
             "query": row["query"],
             "created_at": row["created_at"],
             "updated_at": row["updated_at"],
+            "status": row["status"],
+            "read_at": row["read_at"],
         }
 
     def all(self, tag: str | None = None) -> list[dict]:
@@ -89,8 +100,8 @@ class BookmarkStore:
         existing = self.get(bookmark_id)
         with self._connect() as db:
             db.execute(
-                "INSERT OR REPLACE INTO bookmarks (id, paper, note, tags, query, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                "INSERT OR REPLACE INTO bookmarks (id, paper, note, tags, query, created_at, updated_at, status, read_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
                     bookmark_id,
                     json.dumps(paper),
@@ -99,21 +110,34 @@ class BookmarkStore:
                     query if query is not None else (existing["query"] if existing else None),
                     existing["created_at"] if existing else now,
                     now,
+                    existing["status"] if existing else "to_read",
+                    existing["read_at"] if existing else None,
                 ),
             )
         return self.get(bookmark_id)
 
-    def update(self, bookmark_id: str, note: str | None = None, tags: list[str] | None = None) -> dict | None:
+    def update(
+        self, bookmark_id: str, note: str | None = None, tags: list[str] | None = None, status: str | None = None
+    ) -> dict | None:
+        """Change note, tags or reading status. Marking a paper read stamps read_at (kept if it was
+        already read); moving it back to reading or to-read clears it."""
         existing = self.get(bookmark_id)
         if not existing:
             return None
+        now = datetime.now(timezone.utc).isoformat()
+        status = existing["status"] if status is None else status
+        if status not in STATUSES:
+            raise ValueError(f"unknown reading status {status}")
+        read_at = (existing["read_at"] or now) if status == "read" else None
         with self._connect() as db:
             db.execute(
-                "UPDATE bookmarks SET note = ?, tags = ?, updated_at = ? WHERE id = ?",
+                "UPDATE bookmarks SET note = ?, tags = ?, updated_at = ?, status = ?, read_at = ? WHERE id = ?",
                 (
                     existing["note"] if note is None else note,
                     json.dumps(existing["tags"] if tags is None else clean_tags(tags)),
-                    datetime.now(timezone.utc).isoformat(),
+                    now,
+                    status,
+                    read_at,
                     existing["id"],
                 ),
             )

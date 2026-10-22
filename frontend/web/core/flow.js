@@ -245,6 +245,7 @@ export function buildFlow(papers, { bookmarked = new Set(), foundations = [], qu
       citations: paper.citations || 0,
       authors: (paper.authors || []).slice(0, 3),
       url: paper.url || paper.doi || null,
+      open_access_url: paper.open_access_url ?? null,
       cluster: assignment[i],
       role: paper.role,
       bookmarked: bookmarked.has(id),

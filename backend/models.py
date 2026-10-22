@@ -48,6 +48,7 @@ class PaperData(BaseModel):
     year: Optional[int] = None
     doi: Optional[str] = None
     url: Optional[str] = None
+    open_access_url: Optional[str] = None
     venue: Optional[str] = None
     authors: list[str] = Field(default_factory=list)
     citations: int = 0
@@ -89,9 +90,13 @@ class BookmarkIn(BaseModel):
     query: Optional[str] = None
 
 
+ReadingStatus = Literal["to_read", "reading", "read"]
+
+
 class BookmarkUpdate(BaseModel):
     note: Optional[str] = None
     tags: Optional[list[str]] = None
+    status: Optional[ReadingStatus] = None
 
 
 class Bookmark(BaseModel):
@@ -102,6 +107,8 @@ class Bookmark(BaseModel):
     query: Optional[str] = None
     created_at: str
     updated_at: str
+    status: ReadingStatus = "to_read"
+    read_at: Optional[str] = None  # when it was marked read
 
 
 class FlowRequest(BaseModel):
@@ -118,6 +125,7 @@ class SettingsUpdate(BaseModel):
     openalex_api_key: Optional[str] = Field(default=None, max_length=200)
     openalex_email: Optional[str] = Field(default=None, max_length=200)
     language: Optional[Literal["ko", "en", ""]] = None
+    reading_goal: Optional[str] = Field(default=None, pattern=r"^([1-9][0-9]{0,2})?$")  # 1-999, "" resets
 
 
 class KeyTest(BaseModel):

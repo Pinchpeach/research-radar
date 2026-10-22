@@ -325,6 +325,7 @@ def build_flow(
             "citations": paper.get("citations") or 0,
             "authors": (paper.get("authors") or [])[:3],
             "url": paper.get("url") or paper.get("doi"),
+            "open_access_url": paper.get("open_access_url"),
             "cluster": cluster,
             "role": paper["role"],
             "bookmarked": nid in bookmarked,

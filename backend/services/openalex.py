@@ -51,6 +51,9 @@ def normalize_work(work: dict) -> dict:
         "year": work.get("publication_year"),
         "doi": web_url(work.get("doi")),
         "url": web_url(location.get("landing_page_url")) or web_url(work.get("doi")) or web_url(work.get("id")),
+        # a free full text (PDF when OpenAlex knows one), for papers that are open access
+        "open_access_url": web_url((work.get("best_oa_location") or {}).get("pdf_url"))
+        or web_url((work.get("open_access") or {}).get("oa_url")),
         "venue": source.get("display_name"),
         "authors": authors,
         "citations": work.get("cited_by_count", 0) or 0,
@@ -135,6 +138,12 @@ def _list(filters: list[str], limit: int, **extra) -> list[dict]:
         params["filter"] = ",".join(filters)
     data = _get(OPENALEX_URL, params)
     return [normalize_work(work) for work in data.get("results", [])]
+
+
+def count_since(query: str, since: str) -> int:
+    """How many works match `query` and were published on or after `since` (YYYY-MM-DD)."""
+    params = _params(**{"per-page": 1, "select": "id"}, search=query, filter=f"from_publication_date:{since}")
+    return int((_get(OPENALEX_URL, params).get("meta") or {}).get("count") or 0)
 
 
 def search_papers(

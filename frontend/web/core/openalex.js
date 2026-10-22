@@ -46,6 +46,8 @@ export function normalizeWork(work) {
     year: work.publication_year ?? null,
     doi: webUrl(work.doi),
     url: webUrl(location.landing_page_url) || webUrl(work.doi) || webUrl(work.id),
+    // a free full text (PDF when OpenAlex knows one), for papers that are open access
+    open_access_url: webUrl((work.best_oa_location || {}).pdf_url) || webUrl((work.open_access || {}).oa_url),
     venue: source.display_name ?? null,
     authors,
     citations: work.cited_by_count || 0,
@@ -120,6 +122,12 @@ export class OpenAlex {
     if (filters.length) params.filter = filters.join(",");
     const data = await this.get(OPENALEX_URL, params);
     return (data.results || []).map(normalizeWork);
+  }
+
+  /** How many works match `query` and were published on or after `since` (YYYY-MM-DD). */
+  async countSince(query, since) {
+    const data = await this.get(OPENALEX_URL, { "per-page": 1, select: "id", search: query, filter: `from_publication_date:${since}` });
+    return Number((data.meta || {}).count) || 0;
   }
 
   search(query, limit = 20, yearFrom = null, yearTo = null) {

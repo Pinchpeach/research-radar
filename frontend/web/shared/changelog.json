@@ -1,5 +1,21 @@
 [
   {
+    "version": "0.9.0",
+    "date": "2026-10-22",
+    "ko": [
+      "독서 기록: 북마크를 '읽을 것 · 읽는 중 · 읽음'으로 표시하고, 이번 달 읽은 논문을 온도계로 봅니다. 목표 편수도 정할 수 있어요.",
+      "새 논문 알림: 홈의 최근 주제에 마지막 검색 이후 나온 논문 수가 표시됩니다.",
+      "무료로 읽기: 오픈 액세스 논문은 원문(PDF가 있으면 PDF)을 바로 엽니다.",
+      "이 논문에서 시작: 논문 하나를 시드로 인용한·인용된 논문까지 다시 검색합니다."
+    ],
+    "en": [
+      "Reading record: mark bookmarks to read, reading or read, and watch this month's reads fill a thermometer toward your goal.",
+      "New papers: recent topics on the home screen show how many papers came out since you last searched them.",
+      "Free full text: open-access papers open their full text (the PDF when there is one) directly.",
+      "Start from this paper: search again with one paper as the seed, following what it cites and what cites it."
+    ]
+  },
+  {
     "version": "0.8.2",
     "date": "2026-10-20",
     "ko": [

@@ -1,6 +1,7 @@
 import logging
 import math
-from datetime import date
+import time
+from datetime import date, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -205,7 +206,7 @@ def export_bibtex(tag: str | None = None, store: BookmarkStore = Depends(get_sto
 
 @app.patch("/bookmarks/{bookmark_id}", response_model=Bookmark)
 def update_bookmark(bookmark_id: str, item: BookmarkUpdate, store: BookmarkStore = Depends(get_store)):
-    updated = store.update(bookmark_id, item.note, item.tags)
+    updated = store.update(bookmark_id, item.note, item.tags, item.status)
     if not updated:
         raise HTTPException(status_code=404, detail="Bookmark not found")
     return updated
@@ -300,6 +301,34 @@ def delete_evaluation(run_id: str):
 def search_history(limit: int = 5):
     """Recently searched topics, newest first."""
     return history.load()[: max(0, limit)]
+
+
+NEW_PAPERS_TTL = 3600  # seconds a count of new papers is reused (the home screen asks on every visit)
+_new_papers_cache: dict[tuple[str, str], tuple[float, int]] = {}
+
+
+@app.get("/history/new")
+def new_papers(limit: int = 3):
+    """For the most recent topics: papers published since the day after each was last searched.
+    `new_papers` is None when OpenAlex could not be asked."""
+    today = date.today()
+    out = []
+    for entry in history.load()[: max(0, limit)]:
+        since = date.fromisoformat(entry["searched_at"][:10]) + timedelta(days=1)
+        count: int | None = 0
+        if since <= today:
+            key = (entry["query"], since.isoformat())
+            cached = _new_papers_cache.get(key)
+            if cached and time.monotonic() - cached[0] < NEW_PAPERS_TTL:
+                count = cached[1]
+            else:
+                try:
+                    count = openalex.count_since(entry["query"], since.isoformat())
+                    _new_papers_cache[key] = (time.monotonic(), count)
+                except RequestException:  # includes rate limits: the home screen just shows no count
+                    count = None
+        out.append({**entry, "since": since.isoformat(), "new_papers": count})
+    return out
 
 
 @app.delete("/history", status_code=204)

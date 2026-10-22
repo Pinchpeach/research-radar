@@ -6,24 +6,25 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.8.2**:
+최신 버전 **v0.9.0**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.8.2-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.8.2/ResearchRadar-0.8.2-windows.zip) | [ResearchRadar-0.8.2-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.8.2/ResearchRadar-0.8.2-macos.zip) | [ResearchRadar-0.8.2-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.8.2/ResearchRadar-0.8.2-linux.tar.gz) | [ResearchRadar-0.8.2-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.8.2/ResearchRadar-0.8.2-android.apk) |
+| [ResearchRadar-0.9.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.9.0/ResearchRadar-0.9.0-windows.zip) | [ResearchRadar-0.9.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.9.0/ResearchRadar-0.9.0-macos.zip) | [ResearchRadar-0.9.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.9.0/ResearchRadar-0.9.0-linux.tar.gz) | [ResearchRadar-0.9.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.9.0/ResearchRadar-0.9.0-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.8.2/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.9.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
 ## 주요 기능
 
-앱은 **홈** 화면에서 시작합니다. 인사말 아래 검색창에 주제를 넣으면 바로 연구 탐색으로 넘어가고, 최근 찾아본 주제를 눌러 다시 검색할 수 있습니다. 왼쪽 위 **☰** 메뉴로 아래 화면들을 오갑니다.
+앱은 **홈** 화면에서 시작합니다. 인사말 아래 검색창에 주제를 넣으면 바로 연구 탐색으로 넘어가고, 최근 찾아본 주제를 눌러 다시 검색할 수 있습니다. 최근 주제에는 마지막으로 검색한 뒤 새로 나온 논문 수가 표시됩니다. 논문 카드의 **무료로 읽기**는 오픈 액세스 원문(PDF가 있으면 PDF)을 열고, **이 논문에서 시작**은 그 논문을 시드로 다시 검색합니다. 왼쪽 위 **☰** 메뉴로 아래 화면들을 오갑니다.
 
 | 화면 | 하는 일 |
 |---|---|
 | 🔎 **연구 탐색** | 연구 주제로 논문을 찾아 **◆ 핵심 흐름**(분야를 이해하는 데 중요한 논문)과 **🆕 최신 연구**(최근 연구) 두 묶음으로 보여줍니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. **정렬 평가**를 켜면 결과마다 관련/부분/무관을 표시해 Precision@10·20과 nDCG@20을 보고, 저장한 평가를 설정별로 비교할 수 있습니다. |
-| ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그를 붙입니다. 태그별로 거르고 BibTeX로 내보낼 수 있습니다. |
+| ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그, 읽기 상태(읽을 것 · 읽는 중 · 읽음)를 붙입니다. 태그와 상태로 거르고 BibTeX로 내보낼 수 있습니다. |
+| 📖 **독서 기록** | 이번 달 '읽음'으로 표시한 논문 수가 온도계처럼 차오릅니다. 한 달 목표 편수를 정하고, 이번 달 읽은 논문과 읽는 중인 논문을 모아 봅니다. |
 | 🧭 **연구 흐름** | 검색 결과나 북마크를 *The Map of Physics* 스타일의 테크트리로 그립니다. 처음에는 큰 흐름만 보이고, 선 위의 점에 마우스를 올리거나 클릭하면 세부 정보가 나옵니다. HTML 포스터로 저장할 수 있습니다. 열면 최근 검색 결과로 바로 그려지고, 휴대폰에서는 가장 최근 연구부터 보여 옆으로 넘기며 거슬러 올라갑니다. |
 | 🔔 **새소식** | 버전마다 바뀐 점과 새 버전 알림을 보여 줍니다. |
 | ⚙ **설정** | **API 키** 탭에서 OpenAlex API 키를 입력하고 바로 확인합니다. **언어** 탭에서 한국어/영어를 바꿉니다. 앱 화면과 연구 흐름 포스터가 함께 바뀌고, 논문 제목과 주제 이름은 원문 그대로 둡니다. **정보** 탭에 버전이 나오고 검색 기록을 지울 수 있습니다. |

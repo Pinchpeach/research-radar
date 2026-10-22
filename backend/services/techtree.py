@@ -401,7 +401,7 @@ def render_html(flow: dict, title: str, lang: str = "ko") -> str:
         "chain": lay.get("chain", []),
         "edges": [{"s": e["s"], "t": e["t"]} for e in lay["edges"]],
         "nodes": [
-            {key: n.get(key) for key in ("id", "title", "authors", "year", "citations", "url", "role", "bookmarked",
+            {key: n.get(key) for key in ("id", "title", "authors", "year", "citations", "url", "open_access_url", "role", "bookmarked",
                                           "cited_by_in_set", "lane_label", "color", "x", "y", "r", "glow")}
             for n in lay["nodes"]
         ],

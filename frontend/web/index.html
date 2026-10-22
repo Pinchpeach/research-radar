@@ -21,6 +21,7 @@
     <button class="tab" data-tab="home" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M3.5 11 12 4l8.5 7"/><path d="M6 9.5V20h12V9.5"/></svg><span data-i18n="tab.home">홈</span></button>
     <button class="tab" data-tab="discover" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></svg><span data-i18n="tab.discover">연구 탐색</span></button>
     <button class="tab" data-tab="bookmarks" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.5 3.5h11v17l-5.5-4-5.5 4z"/></svg><span data-i18n="tab.bookmarks">북마크</span> <span id="bm-count" class="count"></span></button>
+    <button class="tab" data-tab="reading" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6.5C10 5 7 4.5 3.5 5v13c3.5-.5 6.5 0 8.5 1.5 2-1.5 5-2 8.5-1.5V5C17 4.5 14 5 12 6.5z"/><path d="M12 6.5v13"/></svg><span data-i18n="tab.reading">독서 기록</span></button>
     <button class="tab" data-tab="map" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="19" cy="18" r="2"/><path d="M7 12h5m0 0c2 0 3-6 5-6M12 12c2 0 3 6 5 6"/></svg><span data-i18n="tab.flow">연구 흐름</span></button>
     <button class="tab" data-tab="news" type="button"><svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15z"/><path d="M10 20.5h4"/></svg><span data-i18n="tab.news">새소식</span> <span id="news-badge" class="badge" hidden></span></button>
     <span class="spacer"></span>
@@ -109,11 +110,40 @@
     <section id="tab-bookmarks" class="panel" hidden>
       <div class="toolbar">
         <label><span data-i18n="bm.tag">태그</span> <select id="tag-filter"><option value="" data-i18n="bm.all">전체</option></select></label>
+        <label><span data-i18n="bm.status">상태</span> <select id="status-filter"><option value="" data-i18n="bm.all">전체</option>
+          <option value="to_read" data-i18n="status.to_read">읽을 것</option><option value="reading" data-i18n="status.reading">읽는 중</option><option value="read" data-i18n="status.read">읽음</option></select></label>
         <span class="spacer"></span>
         <button id="export-bib" data-i18n="bm.export">BibTeX 저장</button>
       </div>
       <p id="bm-empty" class="empty" data-i18n="bm.empty">아직 북마크가 없습니다.</p>
       <ol id="bookmarks" class="papers"></ol>
+    </section>
+
+    <!-- ───────────── 독서 기록 / Reading ───────────── -->
+    <section id="tab-reading" class="panel reading" hidden>
+      <div class="reading-hero">
+        <div class="thermo" id="thermo" role="img">
+          <div class="tube"><div class="mercury" id="mercury"></div><div class="ticks" id="ticks"></div></div>
+          <div class="bulb"></div>
+        </div>
+        <div class="reading-summary">
+          <p class="month" id="reading-month"></p>
+          <h2 id="reading-cheer"></h2>
+          <p class="count"><b id="reading-count">0</b><span id="reading-of"></span></p>
+          <form id="goal-form" class="goal">
+            <label><span data-i18n="read.goal">이번 달 목표</span>
+              <input id="reading-goal" type="number" min="1" max="999" inputmode="numeric"> <span data-i18n="read.unit">편</span></label>
+            <button type="submit" data-i18n="read.saveGoal">저장</button>
+            <span id="goal-status" class="status" role="status"></span>
+          </form>
+        </div>
+      </div>
+      <h3 class="group-head" data-i18n="read.thisMonth">이번 달 읽은 논문</h3>
+      <p id="read-empty" class="empty" data-i18n="read.empty">아직 없어요. 북마크에서 다 읽은 논문을 '읽음'으로 표시해 보세요.</p>
+      <ol id="read-list" class="reads"></ol>
+      <h3 class="group-head" data-i18n="read.now">읽는 중</h3>
+      <p id="reading-empty" class="empty" data-i18n="read.nowEmpty">읽는 중인 논문이 없어요.</p>
+      <ol id="reading-list" class="reads"></ol>
     </section>
 
     <!-- ───────────── 연구 흐름 / Research flow ───────────── -->
@@ -206,6 +236,10 @@
       <div class="authors"></div>
       <div class="meta"></div>
       <div class="chips"></div>
+      <div class="paper-actions">
+        <a class="free" target="_blank" rel="noopener" data-i18n="paper.free" data-i18n-title="paper.freeTitle" hidden>무료로 읽기 ↗</a>
+        <button type="button" class="from-here" data-i18n="paper.fromHere" data-i18n-title="paper.fromHereTitle">이 논문에서 시작</button>
+      </div>
       <details class="abstract"><summary data-i18n="paper.abstract">초록</summary><p></p></details>
       <div class="judge" hidden>
         <button data-j="relevant" data-i18n="eval.relevant">관련</button><button data-j="partial" data-i18n="eval.partial">부분</button><button data-j="not_relevant" data-i18n="eval.notRelevant">무관</button>
