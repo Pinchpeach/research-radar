@@ -6,7 +6,7 @@ import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
+import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
 
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -62,7 +62,25 @@ export function searchRequest(body) {
 
 export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date() }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
-  const history = new History(storage);
+  const history = new History(storage), annotations = new Annotations(storage);
+  /** Like the AnnotationDoc model: the fields kept, with their limits. */
+  const annotationDoc = (body) => {
+    const doc = {
+      title: String(body.title ?? "").slice(0, 500), paper_id: body.paper_id ?? null, source: body.source ?? null,
+      page_count: number(body.page_count ?? 0, "page_count", { min: 0, max: 10000 }),
+      last_page: number(body.last_page ?? 1, "last_page", { min: 1, max: 10000 }),
+      pages: body.pages || {}, notes: body.notes || [],
+    };
+    if (typeof doc.pages !== "object" || Array.isArray(doc.pages) || !Array.isArray(doc.notes) || doc.notes.length > 500) throw invalid("pages and notes");
+    return doc;
+  };
+  const annotationCall = (fn) => {
+    try { return fn(); } catch (error) {
+      if (error instanceof RangeError) throw new ApiError(413, error.message);
+      if (error instanceof ApiError) throw error;
+      throw new ApiError(422, error.message);
+    }
+  };
   const openalex = new OpenAlex({ fetch, setting: (name) => settings.get(name) });
   const updateCache = { at: 0, latest: null };
 
@@ -266,6 +284,17 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       return null;
     }],
     ["GET", /^\/history$/, (_, __, q) => history.load().slice(0, Math.max(0, Number(q.get("limit") ?? 5) || 0))],
+    ["GET", /^\/annotations$/, () => annotations.all()],
+    ["GET", /^\/annotations\/([^/]+)$/, ([id]) => annotationCall(() => {
+      const doc = annotations.load(decodeURIComponent(id));
+      if (!doc) throw new ApiError(404, "No handwriting for this document");
+      return doc;
+    })],
+    ["PUT", /^\/annotations\/([^/]+)$/, ([id], body) => annotationCall(() => annotations.save(decodeURIComponent(id), annotationDoc(body)))],
+    ["DELETE", /^\/annotations\/([^/]+)$/, ([id]) => annotationCall(() => {
+      if (!annotations.delete(decodeURIComponent(id))) throw new ApiError(404, "No handwriting for this document");
+      return null;
+    })],
     ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
     ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
     ["GET", /^\/changelog$/, () => CHANGELOG],

@@ -75,11 +75,23 @@ function metaLine(paper) {
     .filter(Boolean).join(" · ");
 }
 
-/** Save text to a file: native dialog in the desktop app, download in a browser. */
+/** Bytes as base64, in chunks (a whole PDF at once would overflow the call stack). */
+function toBase64(bytes) {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  return btoa(binary);
+}
+
+/** Save text or bytes (a Uint8Array) to a file: native dialog in the desktop app, the share sheet
+ * on Android, a download in a browser. */
+window.radarBase64 = toBase64;
 async function saveFile(name, content, mime) {
   if (window.radarSaveFile) return window.radarSaveFile(name, content, mime);
-  if (window.pywebview && window.pywebview.api && window.pywebview.api.save_file) {
-    const saved = await window.pywebview.api.save_file(name, content);
+  const desktop = window.pywebview && window.pywebview.api;
+  if (desktop && desktop.save_file) {
+    const saved = content instanceof Uint8Array
+      ? await desktop.save_bytes(name, toBase64(content))
+      : await desktop.save_file(name, content);
     return saved ? t("file.saved", { path: saved }) : t("file.cancelled");
   }
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
@@ -118,7 +130,7 @@ function showTab(name) {
   if (name === "bookmarks") renderBookmarks();
   if (name === "map") autoDrawFlow();
   if (name === "news") renderNews();
-  if (name === "reading") renderReading();
+  if (name === "reading") { renderReading(); renderDocs(); }
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 $("menu-button").addEventListener("click", () => setDrawer(!$("drawer").classList.contains("open")));
@@ -223,6 +235,7 @@ function paperCard(paper, { rank, query, extra } = {}) {
   const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);
   if (freeUrl) { free.href = freeUrl; free.hidden = false; }
   node.querySelector(".from-here").addEventListener("click", () => startFrom(paper, query));
+  node.querySelector(".read-pdf").addEventListener("click", () => readPaper(paper));
 
   const abstract = node.querySelector(".abstract");
   if (paper.abstract) abstract.querySelector("p").textContent = paper.abstract;
@@ -490,6 +503,100 @@ function renderBookmarks() {
 }
 $("tag-filter").addEventListener("change", renderBookmarks);
 $("status-filter").addEventListener("change", renderBookmarks);
+
+// ───────────── the PDF reader (frontend/web/reader, loaded when first used) ─────────────
+
+let readerModule = null;
+async function openReader(options) {
+  readerModule ??= await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
+  return readerModule.openReader({ api, saveFile, onOpened: readingStarted, onFinished: readingFinished,
+    onAttachNote: attachToNote, onClose: () => { loadBookmarks(); if (currentTab === "reading") renderDocs(); }, ...options });
+}
+
+/** Ask for a PDF file; resolves to the File, or null if the person cancels. */
+function pickPdf() {
+  const input = $("pick-pdf");
+  input.value = "";
+  return new Promise((resolve) => {
+    input.onchange = () => resolve(input.files[0] || null);
+    input.click();
+  });
+}
+
+/** Read a paper: its free PDF when there is one, else a PDF file the person picks. */
+async function readPaper(paper, { askFile = false } = {}) {
+  const url = webUrl(paper.open_access_url);
+  if (url && !askFile) return openReader({ paper: pick(paper), url });
+  const file = await pickPdf();
+  if (file) openReader({ paper: pick(paper), file });
+}
+
+const bookmarkOf = (paper) => state.bookmarks.find((b) => b.id === shortId(paper.id));
+
+/** Opening a bookmarked paper that was still "to read" moves it to "reading". */
+async function readingStarted(paper) {
+  const b = bookmarkOf(paper);
+  if (b && b.status === "to_read") {
+    try { await api("PATCH", `/bookmarks/${b.id}`, { status: "reading" }); await loadBookmarks(); } catch { /* not important */ }
+  }
+}
+
+/** Reaching the end of the PDF marks the paper read (bookmarking it first). Resolves to whether it changed. */
+async function readingFinished(paper) {
+  try {
+    let b = bookmarkOf(paper);
+    if (!b) b = await api("PUT", "/bookmarks", { paper: pick(paper) });
+    if (b.status === "read") return false;
+    await api("PATCH", `/bookmarks/${b.id}`, { status: "read" });
+    await loadBookmarks();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Add the reader's annotation list to the paper's bookmark note. Resolves to a message. */
+async function attachToNote(paper, text) {
+  try {
+    let b = bookmarkOf(paper);
+    if (!b) b = await api("PUT", "/bookmarks", { paper: pick(paper) });
+    const note = [b.note, text].filter((s) => s && s.trim()).join("\n\n");
+    await api("PATCH", `/bookmarks/${b.id}`, { note });
+    await loadBookmarks();
+    return t("rd.attached");
+  } catch (e) {
+    return t("bm.saveFailed", { error: e.message });
+  }
+}
+
+async function renderDocs() {
+  let docs = [];
+  try { docs = await api("GET", "/annotations"); } catch { /* shown as empty */ }
+  $("docs-empty").hidden = docs.length > 0;
+  const when = (iso) => (iso ? new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" }) : "");
+  $("doc-list").replaceChildren(...docs.map((d) => {
+    const open = el("button", { type: "button", class: "title link-like", text: d.title || d.id });
+    open.addEventListener("click", async () => {
+      const paper = d.paper_id ? (bookmarkOf({ id: d.paper_id }) || {}).paper || { id: `https://openalex.org/${d.paper_id}`, title: d.title } : null;
+      if (d.id.startsWith("notes-")) return openReader({ paper, docId: d.id });
+      if (d.source && webUrl(d.source)) return openReader({ paper, url: d.source });
+      alert(t("read.pickAgain", { title: d.title }));
+      const file = await pickPdf();
+      if (file) openReader({ paper, file });
+    });
+    const remove = el("button", { type: "button", class: "danger small-button", text: t("bm.delete") });
+    remove.addEventListener("click", async () => {
+      if (!confirm(t("read.deleteDoc", { title: d.title || d.id }))) return;
+      await api("DELETE", `/annotations/${encodeURIComponent(d.id)}`);
+      renderDocs();
+    });
+    const meta = t("read.docMeta", { items: d.items, notes: d.note_pages, date: when(d.updated_at) });
+    return el("li", { class: "read-row" }, open, el("span", { class: "meta", text: meta }), remove);
+  }));
+}
+
+$("open-pdf").addEventListener("change", (e) => { const file = e.target.files[0]; e.target.value = ""; if (file) openReader({ file }); });
+$("new-notes").addEventListener("click", () => openReader({}));
 
 // ───────────── reading: this month's papers as a thermometer ─────────────
 

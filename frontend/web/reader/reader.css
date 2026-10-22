@@ -1,0 +1,98 @@
+/* The PDF reader (reader.js), above the app. Uses the app's colour variables from style.css. */
+
+body.reader-open { overflow: hidden; }
+.reader {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; background: var(--bg);
+  padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom);
+}
+.reader .ic { width: 20px; height: 20px; }
+.rd-top { flex: none; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; flex-direction: column; }
+.rd-row { display: flex; align-items: center; gap: 4px; padding: 4px 8px; }
+.rd-head { gap: 6px; }
+.rd-title { flex: 1; min-width: 0; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reader.unsaved .rd-title::after { content: " •"; color: var(--danger); }
+.rd-toolbar, .rd-views { overflow-x: auto; scrollbar-width: none; flex-wrap: nowrap; }
+.rd-toolbar::-webkit-scrollbar, .rd-views::-webkit-scrollbar { display: none; }
+.rd-toolbar > *, .rd-views > * { flex: none; }
+.rd-tool, .rd-act { border: 0; background: none; width: 38px; height: 38px; padding: 0; border-radius: 10px; display: grid;
+  place-items: center; color: var(--text-2); }
+.rd-tool:hover:not(:disabled), .rd-act:hover:not(:disabled) { background: var(--surface-2); }
+.rd-tool.on, .rd-act.on { background: rgba(57, 135, 229, .16); color: var(--accent); }
+.rd-act:disabled { opacity: .35; }
+.rd-sep { width: 1px; height: 24px; background: var(--border); margin: 0 4px; }
+.rd-spacer { flex: 1; }
+.rd-colours { display: flex; gap: 4px; }
+.rd-colour { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 2px solid var(--surface); background: var(--c);
+  box-shadow: 0 0 0 1px var(--border); }
+.rd-colour.on { box-shadow: 0 0 0 2px var(--accent); }
+.rd-custom { width: 28px; height: 28px; padding: 0; border: 0; background: none; }
+.rd-size { width: 90px; }
+.rd-zoom-label { min-width: 44px; text-align: center; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.rd-delete { display: none !important; }
+.reader.has-selection .rd-delete { display: grid !important; color: var(--danger); }
+.rd-save-wrap { position: relative; }
+.rd-menu { position: absolute; right: 0; top: 42px; z-index: 5; display: flex; flex-direction: column; min-width: 210px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, .18); padding: 6px; }
+.rd-menu button { border: 0; background: none; text-align: left; padding: 10px 12px; border-radius: 8px; }
+.rd-menu button:hover { background: var(--surface-2); }
+.rd-searchbar { display: flex; gap: 6px; align-items: center; padding: 4px 10px 8px; }
+.rd-searchbar input { flex: 1; min-width: 0; }
+.rd-search-count { font-size: 12px; color: var(--text-3); min-width: 54px; text-align: right; }
+
+.rd-body { flex: 1; min-height: 0; display: flex; }
+.rd-pages, .rd-notes { position: relative; /* pages' offsetTop is measured from here */ flex: 1; min-width: 0; overflow: auto; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 14px;
+  overscroll-behavior: contain; }
+.reader.notes-open .rd-notes { flex: 0 0 40%; border-left: 1px solid var(--border); background: var(--surface-2); }
+.rd-page { position: relative; flex: none; background: #fff; box-shadow: 0 2px 12px rgba(20, 30, 50, .12); border-radius: 2px; }
+.rd-note { background: #fffdf7; background-image: repeating-linear-gradient(transparent 0 calc(4% - 1px), rgba(42, 120, 214, .12) calc(4% - 1px) 4%); }
+.rd-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.rd-ink { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+.reader[data-tool=hand] .rd-ink { cursor: grab; }
+.reader[data-tool=text] .rd-ink { cursor: text; }
+.reader[data-tool=select] .rd-ink { cursor: default; }
+.reader[data-tool=eraser] .rd-ink { cursor: cell; }
+.reader.ink-hidden .rd-items, .reader.ink-hidden .rd-live { visibility: hidden; }
+.rd-hl { mix-blend-mode: multiply; }
+.rd-text { font-family: NanumSquareRound, sans-serif; white-space: pre; }
+.rd-lasso { fill: rgba(57, 135, 229, .08); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.rd-selbox { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.rd-hit { fill: rgba(255, 196, 0, .35); }
+.rd-hit.on { fill: rgba(255, 140, 0, .55); }
+.rd-page-no { position: absolute; right: 6px; bottom: -18px; font-size: 11px; color: var(--text-3); }
+.rd-editor { position: absolute; z-index: 2; margin: 0; padding: 0; border: 1px dashed var(--accent); background: rgba(255, 255, 255, .85);
+  font-family: NanumSquareRound, sans-serif; resize: none; overflow: hidden; outline: none; min-height: 1.4em; border-radius: 2px; }
+.rd-add-note { flex: none; border: 2px dashed var(--border); background: none; border-radius: 10px; padding: 14px 24px; color: var(--text-2); font-weight: 700; }
+
+.rd-thumbs { flex: 0 0 128px; overflow-y: auto; border-right: 1px solid var(--border); background: var(--surface); padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.rd-thumb { border: 2px solid transparent; border-radius: 6px; padding: 2px; background: none; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11px; color: var(--text-3); }
+.rd-thumb canvas { width: 96px; background: #fff; box-shadow: 0 1px 4px rgba(0, 0, 0, .15); }
+.rd-thumb.on { border-color: var(--accent); }
+.rd-annots { flex: 0 0 300px; overflow-y: auto; border-left: 1px solid var(--border); background: var(--surface); padding: 12px; }
+.rd-annots h3 { margin: 0 0 8px; font-size: 15px; }
+.rd-annots ol { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.rd-annot button { width: 100%; text-align: left; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: var(--surface);
+  display: grid; grid-template-columns: auto auto 1fr; gap: 6px; align-items: start; font-size: 12.5px; line-height: 1.45; }
+.rd-annot b { color: var(--text-3); font-weight: 700; }
+.rd-swatch { width: 8px; height: 1.2em; border-radius: 2px; background: var(--c, transparent); }
+.rd-empty { color: var(--text-3); }
+.rd-unavailable { margin: auto; max-width: 440px; text-align: center; padding: 24px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.rd-unavailable h3 { margin: 0; }
+.rd-error { color: var(--danger); font-size: 12.5px; word-break: break-word; }
+.rd-btn { border: 1px solid var(--border); background: var(--surface); border-radius: 999px; padding: 8px 16px; font-weight: 700; color: var(--text);
+  text-decoration: none; cursor: pointer; }
+.rd-btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.rd-file { display: none; }
+.rd-toast { position: fixed; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom)); transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  background: #1b1b1a; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 13px; transition: opacity .2s, transform .2s; max-width: 90vw; z-index: 3; }
+.rd-toast.on { opacity: 1; transform: translate(-50%, 0); }
+
+@media (max-width: 760px) {
+  .rd-thumbs { position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; box-shadow: 4px 0 18px rgba(0, 0, 0, .18); }
+  .rd-annots { position: absolute; z-index: 2; top: 0; bottom: 0; right: 0; width: min(320px, 88vw); box-shadow: -4px 0 18px rgba(0, 0, 0, .18); }
+  .rd-body { position: relative; }
+  /* a phone shows either the PDF or the note pages */
+  .reader.notes-open .rd-notes { flex: 1; border-left: 0; }
+  .reader.notes-open.has-pdf .rd-pages { display: none; }
+  .rd-pages, .rd-notes { padding: 8px; }
+}
+@media (prefers-color-scheme: dark) { .rd-page { box-shadow: 0 2px 12px rgba(0, 0, 0, .5); } }

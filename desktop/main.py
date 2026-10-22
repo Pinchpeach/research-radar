@@ -78,6 +78,20 @@ class DesktopApi:
         path.write_text(content, encoding="utf-8")
         return str(path)
 
+    def save_bytes(self, name: str, base64_content: str):
+        """Like save_file, for binary files (a PDF with handwriting), sent as base64."""
+        import base64
+
+        import webview
+
+        dialog = getattr(getattr(webview, "FileDialog", None), "SAVE", None) or webview.SAVE_DIALOG
+        chosen = self.window.create_file_dialog(dialog, save_filename=name)
+        if not chosen:
+            return None
+        path = Path(chosen[0] if isinstance(chosen, (list, tuple)) else chosen)
+        path.write_bytes(base64.b64decode(base64_content))
+        return str(path)
+
 
 def wait_forever() -> None:
     try:

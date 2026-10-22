@@ -138,6 +138,14 @@
           </form>
         </div>
       </div>
+      <div class="reader-entry">
+        <label class="primary-button"><span data-i18n="read.openPdf">PDF 파일 열기</span>
+          <input id="open-pdf" type="file" accept="application/pdf,.pdf" hidden></label>
+        <button type="button" id="new-notes" data-i18n="read.newNotes">빈 노트에 필기</button>
+      </div>
+      <h3 class="group-head" data-i18n="read.docs">필기한 문서</h3>
+      <p id="docs-empty" class="empty" data-i18n="read.docsEmpty">아직 없어요. 논문 카드의 '필기하며 읽기'나 PDF 파일 열기로 시작해 보세요.</p>
+      <ol id="doc-list" class="reads"></ol>
       <h3 class="group-head" data-i18n="read.thisMonth">이번 달 읽은 논문</h3>
       <p id="read-empty" class="empty" data-i18n="read.empty">아직 없어요. 북마크에서 다 읽은 논문을 '읽음'으로 표시해 보세요.</p>
       <ol id="read-list" class="reads"></ol>
@@ -226,6 +234,8 @@
     </section>
   </main>
 
+  <input id="pick-pdf" type="file" accept="application/pdf,.pdf" hidden>
+
   <template id="paper-template">
     <li class="paper">
       <div class="paper-head">
@@ -238,6 +248,7 @@
       <div class="chips"></div>
       <div class="paper-actions">
         <a class="free" target="_blank" rel="noopener" data-i18n="paper.free" data-i18n-title="paper.freeTitle" hidden>무료로 읽기 ↗</a>
+        <button type="button" class="read-pdf" data-i18n="paper.readPdf" data-i18n-title="paper.readPdfTitle">필기하며 읽기</button>
         <button type="button" class="from-here" data-i18n="paper.fromHere" data-i18n-title="paper.fromHereTitle">이 논문에서 시작</button>
       </div>
       <details class="abstract"><summary data-i18n="paper.abstract">초록</summary><p></p></details>

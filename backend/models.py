@@ -132,6 +132,19 @@ class KeyTest(BaseModel):
     api_key: Optional[str] = Field(default=None, max_length=200)
 
 
+class AnnotationDoc(BaseModel):
+    """One document's handwriting (see backend/annotations.py). Items stay free-form dicts: the
+    reader owns their shape, and draws them only as SVG attributes and text."""
+
+    title: str = Field(default="", max_length=500)
+    paper_id: Optional[str] = Field(default=None, max_length=100)
+    source: Optional[str] = Field(default=None, max_length=2000)  # where the PDF came from
+    page_count: int = Field(default=0, ge=0, le=10000)
+    last_page: int = Field(default=1, ge=1, le=10000)
+    pages: dict[str, list[dict]] = Field(default_factory=dict)  # PDF page number -> items
+    notes: list[list[dict]] = Field(default_factory=list, max_length=500)  # blank note pages
+
+
 class PosterRequest(BaseModel):
     flow: dict
     title: str = Field(default="My Research", max_length=300)
