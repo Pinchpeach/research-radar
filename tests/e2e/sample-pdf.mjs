@@ -15,5 +15,8 @@ export async function samplePdf(pages = 3) {
     page.drawText(`Page ${i + 1}`, { x: 60, y: 780, size: 20, font });
     page.drawText(SAMPLE_TEXT[i % SAMPLE_TEXT.length], { x: 60, y: 720, size: 14, font });
   }
+  // fixed dates: the same pages give the same bytes, so the reader recognises the file again
+  pdf.setCreationDate(new Date("2026-01-01T00:00:00Z"));
+  pdf.setModificationDate(new Date("2026-01-01T00:00:00Z"));
   return Buffer.from(await pdf.save());
 }

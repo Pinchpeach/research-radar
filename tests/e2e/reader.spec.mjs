@@ -91,6 +91,8 @@ test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   await page.locator(".rd-redo").click();
   expect(await pathOf(0)).not.toBe(first);
 
+  // undo and redo drop the selection: lasso the (moved) strokes again, then delete them
+  await stroke(page, page1(page), [[20, 250], [400, 250], [400, 560], [20, 560], [20, 252]]);
   await page.locator(".rd-delete").click();
   await expect(items(page)).toHaveCount(0);
   await page.keyboard.press("Control+z");
@@ -145,19 +147,21 @@ test("handwriting comes back when the same file is opened again", async ({ page 
 });
 
 test("saving: the PDF with handwriting merged, and the note pages on their own", async ({ page }) => {
+  // in English: headless Chromium names downloads with non-ASCII names just "download"
+  await page.addInitScript(() => { if (window === window.top) localStorage.setItem("radar-lang", "en"); });
   await openSample(page);
   await stroke(page, page1(page), wave);
   await page.locator(".rd-tool[data-tool=text]").click();
   const box = await page1(page).boundingBox();
   await page.mouse.click(box.x + 80, box.y + 500);
-  await page.keyboard.type("한글 메모");
+  await page.keyboard.type("한글 메모"); // Hangul survives: text boxes go into the PDF as images
   await page.locator(".rd-tool[data-tool=pen]").click();
   await page.locator(".rd-notes-btn").click();
   await stroke(page, page.locator(".rd-note .rd-ink").first(), [[40, 80], [200, 90]]);
 
   await page.locator(".rd-save").click();
   const [merged] = await Promise.all([page.waitForEvent("download"), page.locator(".rd-save-pdf").click()]);
-  expect(merged.suggestedFilename()).toBe("sample (필기).pdf");
+  expect(merged.suggestedFilename()).toBe("sample (annotated).pdf");
   const doc = await PDFLib.PDFDocument.load(await readAll(merged));
   expect(doc.getPageCount()).toBe(3);
   const original = await PDFLib.PDFDocument.load(await samplePdf());
@@ -166,7 +170,7 @@ test("saving: the PDF with handwriting merged, and the note pages on their own",
 
   await page.locator(".rd-save").click();
   const [notes] = await Promise.all([page.waitForEvent("download"), page.locator(".rd-save-notes").click()]);
-  expect(notes.suggestedFilename()).toBe("sample (노트).pdf");
+  expect(notes.suggestedFilename()).toBe("sample (notes).pdf");
   expect((await PDFLib.PDFDocument.load(await readAll(notes))).getPageCount()).toBe(1);
 });
 

@@ -107,7 +107,8 @@ class Reader {
     }
     if (!this.bytes && (this.url || this.file || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
-    if (this.doc.notes.length || !this.bytes) this.toggleNotes(true);
+    const notesOnly = !this.bytes && !this.url && !this.file && !error;
+    if (this.doc.notes.length || notesOnly) this.toggleNotes(true);
     this.renderNotes();
     if (this.onOpened && this.paper) this.onOpened(this.paper);
   }
@@ -140,12 +141,13 @@ class Reader {
 
   async loadPdf() {
     const lib = await loadPdfjs();
-    this.pdf = await lib.getDocument({
+    this.loading = lib.getDocument({
       data: this.bytes.slice(), // pdf.js takes ownership of what it gets; keep our copy for saving
       cMapUrl: new URL("cmaps/", PDFJS).href, cMapPacked: true,
       standardFontDataUrl: new URL("standard_fonts/", PDFJS).href, wasmUrl: new URL("wasm/", PDFJS).href,
       isEvalSupported: false, // the PDF is third-party: no generated code
-    }).promise;
+    });
+    this.pdf = await this.loading.promise;
     this.doc.page_count = this.pdf.numPages;
     this.root.classList.add("has-pdf");
     for (let n = 1; n <= this.pdf.numPages; n++) {
@@ -261,7 +263,7 @@ class Reader {
     document.removeEventListener("keydown", this.keyHandler);
     window.removeEventListener("resize", this.resizeHandler);
     if (this.observer) this.observer.disconnect();
-    if (this.pdf) this.pdf.destroy();
+    if (this.loading) this.loading.destroy().catch(() => {}); // frees the worker and the pages
     this.root.remove();
     document.body.classList.remove("reader-open");
     if (notify && this.onClose) this.onClose();
