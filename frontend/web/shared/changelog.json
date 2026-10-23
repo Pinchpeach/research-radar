@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.11.0",
+    "date": "2026-10-23",
+    "ko": [
+      "학교 도서관: 학교 메일을 넣으면 학교를 알아보고 도서관 교외 접속 주소를 채워요. 무료본이 없는 논문은 PC 앱이 학교 도서관을 거쳐 받아 바로 열어요(처음 한 번은 학교 계정으로 로그인).",
+      "무료본 찾기: OpenAlex에 없는 무료 PDF도 Unpaywall에서 찾아 바로 엽니다."
+    ],
+    "en": [
+      "University library: enter your school e-mail and the app finds your library's off-campus address. Papers with no free copy are fetched through your library and opened right away in the desktop app (sign in once with your school account).",
+      "Free copies: free PDFs OpenAlex doesn't link to are found on Unpaywall and opened directly."
+    ]
+  },
+  {
     "version": "0.10.0",
     "date": "2026-10-22",
     "ko": [

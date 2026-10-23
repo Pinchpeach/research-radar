@@ -53,6 +53,7 @@ test("pen, colours, highlighter and text boxes", async ({ page }) => {
   await page.locator(".rd-tool[data-tool=text]").click();
   const box = await page1(page).boundingBox();
   await page.mouse.click(box.x + 80, box.y + 500);
+  await expect(page.locator(".rd-editor")).toBeFocused();
   await page.keyboard.type("핵심 정리: message passing");
   await page.locator(".rd-tool[data-tool=pen]").click();
   await expect(items(page).nth(3)).toContainText("핵심 정리: message passing");
@@ -154,6 +155,7 @@ test("saving: the PDF with handwriting merged, and the note pages on their own",
   await page.locator(".rd-tool[data-tool=text]").click();
   const box = await page1(page).boundingBox();
   await page.mouse.click(box.x + 80, box.y + 500);
+  await expect(page.locator(".rd-editor")).toBeFocused();
   await page.keyboard.type("한글 메모"); // Hangul survives: text boxes go into the PDF as images
   await page.locator(".rd-tool[data-tool=pen]").click();
   await page.locator(".rd-notes-btn").click();
@@ -215,6 +217,47 @@ test.describe("reading a paper's free PDF", () => {
     await expect(page.locator(".rd-unavailable")).toBeVisible();
     await expect(page.locator(".rd-unavailable a")).toHaveAttribute("href", PDF_URL);
     await page.locator(".rd-unavailable input[type=file]").setInputFiles({ name: "downloaded.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+  });
+});
+
+test.describe("no free copy on OpenAlex", () => {
+  const DOI = "10.1109/TNN.2008.2005605", PDF_URL = "https://authors.example.org/gnn-preprint.pdf";
+  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
+    (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
+
+  test("the school e-mail finds the library; Unpaywall's copy opens", async ({ page }) => {
+    let asked = null;
+    await page.context().route("https://api.unpaywall.org/**", (route) => {
+      asked = route.request().url();
+      return route.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "application/json",
+        body: JSON.stringify({ best_oa_location: { url_for_pdf: PDF_URL }, oa_locations: [] }) });
+    });
+    await page.route(PDF_URL, async (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" },
+      contentType: "application/pdf", body: await samplePdf(3) }));
+
+    await page.goto("./");
+    await go(page, "settings");
+    await page.locator(".subtab[data-pane=library]").click();
+    await page.locator("#openalex-email").fill("student@yonsei.ac.kr");
+    await page.locator("#openalex-email").blur();
+    await expect(page.locator("#school-state")).toContainText("연세대학교");
+    await expect(page.locator("#library-proxy")).toHaveValue("https://access.yonsei.ac.kr/link.n2s?url=");
+    await page.locator("#library-form button[type=submit]").click();
+    await expect(page.locator("#library-status")).not.toBeEmpty();
+
+    await search(page);
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    expect(asked).toBe(`https://api.unpaywall.org/v2/${DOI}?email=student%40yonsei.ac.kr`);
+  });
+
+  test("nowhere to get it: says how to add the library, or pick the file", async ({ page }) => {
+    await search(page);
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-unavailable h3")).toHaveText("무료로 받을 수 있는 PDF를 찾지 못했어요");
+    await expect(page.locator(".rd-unavailable")).toContainText("설정 › 도서관");
+    await page.locator(".rd-unavailable input[type=file]").setInputFiles({ name: "mine.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
   });
 });

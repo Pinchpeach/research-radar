@@ -36,10 +36,16 @@ def public_address(url: str) -> None:
             raise Refused("not a public address")
 
 
-def fetch_pdf(url: str, session: requests.Session | None = None) -> bytes:
+def fetch(url: str, session: requests.Session | None = None, stay=None) -> tuple[str, bytes]:
+    """GET a public address, following redirects by hand; returns the final address and the body.
+
+    stay(url) is called before every request (the first one too) and may raise to stop there.
+    """
     session = session or requests.Session()
     for _ in range(MAX_REDIRECTS + 1):
         public_address(url)
+        if stay:
+            stay(url)
         with session.get(url, headers=HEADERS, timeout=TIMEOUT, stream=True, allow_redirects=False) as response:
             if response.is_redirect or response.status_code in (301, 302, 303, 307, 308):
                 url = urljoin(url, response.headers.get("location", ""))
@@ -50,7 +56,16 @@ def fetch_pdf(url: str, session: requests.Session | None = None) -> bytes:
                 data += chunk
                 if len(data) > MAX_BYTES:
                     raise Refused("file too large")
-            if not bytes(data[:1024]).lstrip().startswith(b"%PDF"):
-                raise Refused("not a PDF (the site may want you to open it in a browser)")
-            return bytes(data)
+            return url, bytes(data)
     raise Refused("too many redirects")
+
+
+def is_pdf(data: bytes) -> bool:
+    return data[:1024].lstrip().startswith(b"%PDF")
+
+
+def fetch_pdf(url: str, session: requests.Session | None = None) -> bytes:
+    _, data = fetch(url, session)
+    if not is_pdf(data):
+        raise Refused("not a PDF (the site may want you to open it in a browser)")
+    return data

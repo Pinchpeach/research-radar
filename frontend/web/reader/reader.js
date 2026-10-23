@@ -75,8 +75,8 @@ export async function openReader(options) {
 }
 
 class Reader {
-  constructor({ paper = null, url = null, file = null, docId = null, api, saveFile, onOpened, onFinished, onAttachNote, onClose }) {
-    Object.assign(this, { paper, url, file, api, saveFile, onOpened, onFinished, onAttachNote, onClose });
+  constructor({ paper = null, url = null, file = null, docId = null, libraryOnly = false, api, saveFile, onOpened, onFinished, onAttachNote, onClose }) {
+    Object.assign(this, { paper, url, file, libraryOnly, api, saveFile, onOpened, onFinished, onAttachNote, onClose });
     this.givenId = docId; // a notes-only document opened again
     this.tool = "pen";
     this.colours = { pen: PEN_COLOURS[0], highlighter: HIGHLIGHT_COLOURS[0], text: PEN_COLOURS[0] };
@@ -96,7 +96,7 @@ class Reader {
     let error = null;
     try {
       if (this.file) this.bytes = new Uint8Array(await this.file.arrayBuffer());
-      else if (this.url) this.bytes = await this.fetchPdf(this.url);
+      else if (this.url || (this.paper && !this.givenId)) this.bytes = await this.findPdf();
     } catch (e) { error = e; }
     if (this.bytes) this.docId = this.paper ? shortId(this.paper.id) : await fileId(this.bytes);
     else if (this.paper) this.docId = shortId(this.paper.id);
@@ -105,12 +105,59 @@ class Reader {
     if (this.bytes) {
       try { await this.loadPdf(); } catch (e) { error = e; this.bytes = null; }
     }
-    if (!this.bytes && (this.url || this.file || error)) this.showUnavailable(error);
+    if (!this.bytes && (this.url || this.file || (this.paper && !this.givenId) || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
-    const notesOnly = !this.bytes && !this.url && !this.file && !error;
+    const notesOnly = !this.bytes && !this.url && !this.file && !error && !(this.paper && !this.givenId);
     if (this.doc.notes.length || notesOnly) this.toggleNotes(true);
     this.renderNotes();
     if (this.onOpened && this.paper) this.onOpened(this.paper);
+  }
+
+  /**
+   * A paper's PDF, from the first place that has it: the free copy OpenAlex links to, the ones
+   * Unpaywall knows, then the person's university library (backend/library.py). Null if none.
+   */
+  async findPdf() {
+    const doi = bareDoi(this.paper && this.paper.doi);
+    let lastError = null;
+    const attempt = async (message, get) => {
+      this.pagesEl.replaceChildren(el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: message })));
+      try { return await get(); } catch (e) { lastError = e; return null; }
+    };
+    if (!this.libraryOnly) {
+      if (this.url) {
+        const bytes = await attempt(t("rd.findingFree"), () => this.fetchPdf(this.url));
+        if (bytes) return bytes;
+      }
+      let links = [];
+      if (doi) try { links = (await this.api("GET", `/unpaywall?doi=${encodeURIComponent(doi)}`)).pdf_urls || []; } catch { /* no e-mail set, or offline */ }
+      for (const link of links.filter((l) => l !== this.url)) {
+        const bytes = await attempt(t("rd.findingFree"), () => this.fetchPdf(link));
+        if (bytes) { this.url = link; return bytes; }
+      }
+    }
+    if (doi && !window.radarLocalApi) { // the desktop app signs in to the library (desktop/main.py)
+      const bytes = await attempt(t("rd.findingLibrary"), () => this.libraryPdf(doi));
+      if (bytes) return bytes;
+    }
+    if (lastError) throw lastError;
+    return null;
+  }
+
+  async libraryPdf(doi) {
+    const response = await fetch(`/library/pdf?doi=${encodeURIComponent(doi)}`);
+    if (response.ok) {
+      const bytes = new Uint8Array(await response.arrayBuffer());
+      if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
+      throw new Error(t("rd.notPdf"));
+    }
+    let detail = null;
+    try { detail = (await response.json()).detail; } catch { /* not JSON */ }
+    if (response.status === 422) return null; // no library set up: nothing to say
+    if (response.status === 401) this.libraryLogin = doi;
+    if (response.status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
+    const key = { 401: "rd.library401", 404: "rd.library404" }[response.status] || "rd.libraryFailed";
+    throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${response.status}` }));
   }
 
   async fetchPdf(url) {
@@ -164,13 +211,30 @@ class Reader {
     const pick = el("input", { type: "file", accept: "application/pdf,.pdf", class: "rd-file" });
     pick.addEventListener("change", () => pick.files[0] && this.reopen({ file: pick.files[0] }));
     const box = el("div", { class: "rd-unavailable" },
-      el("h3", { text: this.url ? t("rd.cantOpen") : t("rd.noPdf") }),
+      el("h3", { text: this.url ? t("rd.cantOpen") : this.paper ? t("rd.noFree") : t("rd.noPdf") }),
       error ? el("p", { class: "rd-error", text: String(error.message || error) }) : null,
-      el("p", { text: t("rd.cantOpenHint") }),
+      el("p", { text: this.libraryLogin ? t("rd.loginHint") : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
       el("div", { class: "rd-row" },
-        this.url ? el("a", { href: this.url, target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
+        this.libraryLogin && window.pywebview && window.pywebview.api && window.pywebview.api.library_login ? this.loginButton() : null,
+        this.url || this.libraryPage ? el("a", { href: this.url || this.libraryPage, target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
         el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick)));
     this.pagesEl.replaceChildren(box);
+  }
+
+  /** Sign in to the library in a window of the desktop app, then open the paper from there. */
+  loginButton() {
+    const button = el("button", { type: "button", class: "rd-btn primary rd-login", text: t("rd.login") });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      button.textContent = t("rd.loggingIn");
+      let ok = false;
+      try { ok = await window.pywebview.api.library_login(this.libraryLogin); } catch { /* the window failed to open */ }
+      if (ok) return this.reopen({ libraryOnly: true });
+      button.disabled = false;
+      button.textContent = t("rd.login");
+      this.toast(t("rd.loginClosed"));
+    });
+    return button;
   }
 
   async reopen(options) {
@@ -798,7 +862,8 @@ class Reader {
     s.itemsG.querySelector(`[data-id="${item.id}"]`)?.setAttribute("visibility", "hidden");
     this.editor = { s, item, isNew, area };
     fit();
-    setTimeout(() => area.focus(), 0);
+    area.focus(); // at once, so typing right after the tap lands in the box
+    setTimeout(() => area.focus(), 0); // and again once the tap is over
   }
 
   finishEditing() {
@@ -960,6 +1025,12 @@ class Reader {
       this.toast(await this.saveFile(this.fileName(t("rd.suffixNotes")), new Uint8Array(data), "application/pdf"));
     } catch (e) { this.toast(t("rd.saveFailed", { error: e.message })); }
   }
+}
+
+/** "10.1/x" from a DOI link (https://doi.org/10.1/x), or null. */
+function bareDoi(doi) {
+  const match = /^(?:https?:\/\/(?:dx\.)?doi\.org\/|doi:)?(10\.\d{4,9}\/\S+)$/i.exec(String(doi || "").trim());
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function shortId(id) { return String(id).replace(/\/+$/, "").split("/").pop(); }
