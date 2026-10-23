@@ -862,7 +862,8 @@ class Reader {
     s.itemsG.querySelector(`[data-id="${item.id}"]`)?.setAttribute("visibility", "hidden");
     this.editor = { s, item, isNew, area };
     fit();
-    setTimeout(() => area.focus(), 0);
+    area.focus(); // at once, so typing right after the tap lands in the box
+    setTimeout(() => area.focus(), 0); // and again once the tap is over
   }
 
   finishEditing() {

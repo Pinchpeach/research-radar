@@ -53,6 +53,7 @@ test("pen, colours, highlighter and text boxes", async ({ page }) => {
   await page.locator(".rd-tool[data-tool=text]").click();
   const box = await page1(page).boundingBox();
   await page.mouse.click(box.x + 80, box.y + 500);
+  await expect(page.locator(".rd-editor")).toBeFocused();
   await page.keyboard.type("핵심 정리: message passing");
   await page.locator(".rd-tool[data-tool=pen]").click();
   await expect(items(page).nth(3)).toContainText("핵심 정리: message passing");
@@ -154,6 +155,7 @@ test("saving: the PDF with handwriting merged, and the note pages on their own",
   await page.locator(".rd-tool[data-tool=text]").click();
   const box = await page1(page).boundingBox();
   await page.mouse.click(box.x + 80, box.y + 500);
+  await expect(page.locator(".rd-editor")).toBeFocused();
   await page.keyboard.type("한글 메모"); // Hangul survives: text boxes go into the PDF as images
   await page.locator(".rd-tool[data-tool=pen]").click();
   await page.locator(".rd-notes-btn").click();
