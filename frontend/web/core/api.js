@@ -8,6 +8,7 @@ import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranki
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
+import { DOI, PROXY, schoolFor, unpaywallLinks } from "./library.js";
 
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
 const FRESH_YEARS = 2, CORE_MIN_SHARE = 0.05, REFERENCES_PER_SEED = 50, UPDATE_CACHE_MS = 6 * 3600 * 1000;
@@ -210,6 +211,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     for (const [name, value] of Object.entries(body || {})) {
       if (name === "language") {
         if (value != null && !["ko", "en", ""].includes(value)) throw invalid("language must be ko or en");
+      } else if (name === "library_proxy") {
+        if (value != null && (String(value).length > 300 || (value !== "" && !PROXY.test(String(value))))) throw invalid("library_proxy must be an http(s) address");
       } else if (name === "reading_goal") {
         if (value != null && !/^([1-9][0-9]{0,2})?$/.test(String(value))) throw invalid("reading_goal must be 1-999");
       } else if (!(name in limits)) {
@@ -273,6 +276,15 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     }],
     ["GET", /^\/settings$/, () => settings.publicView(dataDir)],
     ["PUT", /^\/settings$/, (_, body) => { settings.save(settingsUpdate(body)); return settings.publicView(dataDir); }],
+    ["GET", /^\/unpaywall$/, async (_, __, q) => {
+      const doi = q.get("doi") || "", email = settings.get("openalex_email");
+      if (!DOI.test(doi)) throw invalid("not a DOI");
+      if (!email) throw new ApiError(409, "Add your e-mail in Settings to look for free copies");
+      try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
+    }],
+    ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
+    ["GET", /^\/library\/pdf$/, () => { throw new ApiError(501, "Signing in through your library works in the desktop app for now"); }],
+    ["DELETE", /^\/library\/session$/, () => null],
     ["POST", /^\/settings\/test-openalex$/, (_, body) => openalex.checkKey((body && body.api_key) || null)],
     ["POST", /^\/evaluations$/, (_, body) => {
       if (!body.judgments || !Object.values(body.judgments).some(Boolean)) throw new ApiError(400, "No judgments to save.");

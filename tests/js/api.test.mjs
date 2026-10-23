@@ -271,6 +271,27 @@ test("handwriting: saved, listed, size-capped, ids kept to safe names, like back
   await assert.rejects(api("GET", "/annotations/W1"), { status: 404 });
 });
 
+test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, like backend/library.py", async () => {
+  const asked = [];
+  const { api } = setup({ handler: (url) => {
+    asked.push(url);
+    return reply(200, { best_oa_location: { url_for_pdf: "https://repo.example/a.pdf" },
+      oa_locations: [{ url_for_pdf: "https://repo.example/a.pdf" }, { url_for_pdf: "javascript:x" }, { url_for_pdf: "https://arxiv.org/pdf/1" }] });
+  } });
+  assert.equal((await api("GET", "/library/school?email=lee%40mail.yonsei.ac.kr")).name_en, "Yonsei University");
+  assert.equal(await api("GET", "/library/school?email=x%40notsnu.ac.kr"), null);
+  await assert.rejects(api("GET", "/unpaywall?doi=10.1000%2Fxyz"), { status: 409 });
+  await api("PUT", "/settings", { openalex_email: "me@uni.example" });
+  assert.deepEqual(await api("GET", "/unpaywall?doi=10.1000%2Fxyz"), { pdf_urls: ["https://repo.example/a.pdf", "https://arxiv.org/pdf/1"] });
+  assert.equal(asked.pop(), "https://api.unpaywall.org/v2/10.1000/xyz?email=me%40uni.example");
+  await assert.rejects(api("GET", "/unpaywall?doi=nope"), { status: 422 });
+  await assert.rejects(api("PUT", "/settings", { library_proxy: "javascript:alert(1)" }), { status: 422 });
+  const view = await api("PUT", "/settings", { library_proxy: "https://libproxy.uni.example/_Lib_Proxy_Url/" });
+  assert.equal(view.library_proxy.value, "https://libproxy.uni.example/_Lib_Proxy_Url/");
+  assert.equal(view.library_signed_in, false);
+  await assert.rejects(api("GET", "/library/pdf?doi=10.1000%2Fxyz"), { status: 501 });
+});
+
 test("unknown routes are 404", async () => {
   const { api } = setup();
   await assert.rejects(api("GET", "/nope"), (e) => e.status === 404);

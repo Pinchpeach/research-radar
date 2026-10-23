@@ -126,6 +126,8 @@ class SettingsUpdate(BaseModel):
     openalex_email: Optional[str] = Field(default=None, max_length=200)
     language: Optional[Literal["ko", "en", ""]] = None
     reading_goal: Optional[str] = Field(default=None, pattern=r"^([1-9][0-9]{0,2})?$")  # 1-999, "" resets
+    # a library proxy prefix (backend/library.py), "" removes it
+    library_proxy: Optional[str] = Field(default=None, max_length=300, pattern=r"^(https?://[A-Za-z0-9.-]+(:\d+)?(/\S*)?)?$")
 
 
 class KeyTest(BaseModel):

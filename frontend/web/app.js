@@ -526,7 +526,8 @@ function pickPdf() {
 /** Read a paper: its free PDF when there is one, else a PDF file the person picks. */
 async function readPaper(paper, { askFile = false } = {}) {
   const url = webUrl(paper.open_access_url);
-  if (url && !askFile) return openReader({ paper: pick(paper), url });
+  // the reader also asks Unpaywall and the person's library (reader.js findPdf)
+  if ((url || paper.doi) && !askFile) return openReader({ paper: pick(paper), url });
   const file = await pickPdf();
   if (file) openReader({ paper: pick(paper), file });
 }
@@ -779,6 +780,11 @@ async function loadSettings({ applyLanguage = false } = {}) {
   // only keys saved in the app can be removed here; environment variables stay as they are
   $("clear-openalex-key").hidden = key.source !== "settings";
   $("openalex-email").value = s.openalex_email.value || "";
+  $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
+  $("school-state").textContent = "";
+  $("library-state").textContent = window.radarLocalApi ? t("set.libraryMobile")
+    : s.library_proxy && s.library_proxy.value ? t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") : "";
+  $("library-sign-out").hidden = !s.library_signed_in;
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
   $("key-pill").textContent = key.set ? t("pill.ok") : t("pill.missing");
@@ -860,7 +866,7 @@ $("test-key").addEventListener("click", async () => {
 
 $("settings-form").addEventListener("submit", async (event) => {
   event.preventDefault();
-  const update = { openalex_email: $("openalex-email").value.trim() };
+  const update = {};
   if ($("openalex-key").value.trim()) update.openalex_api_key = $("openalex-key").value.trim();
   try {
     await api("PUT", "/settings", update);
@@ -870,6 +876,32 @@ $("settings-form").addEventListener("submit", async (event) => {
   } catch (e) {
     setStatus("settings-status", t("set.saveFailed", { error: e.message }), true);
   }
+});
+
+// the school e-mail fills in the library's address when the app knows the school
+$("openalex-email").addEventListener("change", async () => {
+  let school = null;
+  const email = $("openalex-email").value.trim();
+  if (email.includes("@")) try { school = await api("GET", `/library/school?email=${encodeURIComponent(email)}`); } catch { /* offline: type it */ }
+  if (school && !$("library-proxy").value.trim()) $("library-proxy").value = school.proxy;
+  $("school-state").textContent = !email.includes("@") ? "" : school ? t("set.school", { name: LANG === "ko" ? school.name_ko : school.name_en }) : t("set.schoolUnknown");
+});
+
+$("library-form").addEventListener("submit", async (event) => {
+  event.preventDefault();
+  try {
+    await api("PUT", "/settings", { openalex_email: $("openalex-email").value.trim(), library_proxy: $("library-proxy").value.trim() });
+    setStatus("library-status", t("set.saved"));
+    await loadSettings();
+  } catch (e) {
+    setStatus("library-status", t("set.saveFailed", { error: e.message }), true);
+  }
+});
+
+$("library-sign-out").addEventListener("click", async () => {
+  await api("DELETE", "/library/session");
+  setStatus("library-status", t("set.librarySignedOut"));
+  await loadSettings();
 });
 
 // ───────────── version & updates ─────────────

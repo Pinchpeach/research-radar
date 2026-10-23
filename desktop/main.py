@@ -92,6 +92,46 @@ class DesktopApi:
         path.write_bytes(base64.b64decode(base64_content))
         return str(path)
 
+    def library_login(self, doi: str) -> bool:
+        """Sign in to the library in a window of its own, opened on the paper.
+
+        After each page loads, the proxy's cookies are kept and the PDF tried; when it comes, the
+        window closes and the page asks the server for it again. True when it worked; False if the
+        person closed the window first (they can also download by hand in it).
+        """
+        import webview
+
+        from backend import library, settings
+
+        prefix = settings.get("library_proxy")
+        if not library.valid_proxy(prefix or "") or not library.DOI.match(doi or ""):
+            return False
+        done, lock, result = threading.Event(), threading.Lock(), {"ok": False}
+        window = webview.create_window(f"{APP_NAME} — library", library.login_url(prefix, doi), width=1100, height=820)
+
+        def loaded():
+            if done.is_set() or not lock.acquire(blocking=False):
+                return
+            try:
+                cookies = []
+                for jar in window.get_cookies() or []:
+                    for name, morsel in jar.items():
+                        cookies.append({"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]})
+                if library.save_cookies(prefix, cookies):
+                    library.fetch(doi)  # raises until the session reaches the PDF
+                    result["ok"] = True
+                    done.set()
+                    window.destroy()
+            except Exception:  # not signed in yet, or no PDF from here: the person carries on in the window
+                pass
+            finally:
+                lock.release()
+
+        window.events.loaded += loaded
+        window.events.closed += done.set
+        done.wait(15 * 60)
+        return result["ok"]
+
 
 def wait_forever() -> None:
     try:

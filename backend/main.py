@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import annotations, history, judgments, pdf_proxy, security, settings, updates
+from backend import annotations, history, judgments, library, pdf_proxy, security, settings, updates
 from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
@@ -27,7 +27,7 @@ from backend.models import (
     SearchResponse,
     SettingsUpdate,
 )
-from backend.services import openalex
+from backend.services import openalex, unpaywall
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import rank_papers, recent_since, select_results
@@ -308,6 +308,47 @@ def open_access_pdf(url: str):
     except RequestException as exc:
         raise HTTPException(status_code=502, detail="Could not download the PDF") from exc
     return Response(data, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/unpaywall")
+def free_copies(doi: str):
+    """Free PDF addresses Unpaywall knows for a DOI (it asks for the person's e-mail)."""
+    if not library.DOI.match(doi):
+        raise HTTPException(status_code=422, detail="not a DOI")
+    email = settings.get("openalex_email")
+    if not email:
+        raise HTTPException(status_code=409, detail="Add your e-mail in Settings to look for free copies")
+    try:
+        return {"pdf_urls": unpaywall.pdf_links(doi, email)}
+    except (RequestException, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Unpaywall did not answer") from exc
+
+
+@app.get("/library/pdf")
+def library_pdf(doi: str):
+    """A paper's PDF through the person's library proxy, with the session they signed in to."""
+    try:
+        data = library.fetch(doi)
+    except library.NeedsLogin as exc:
+        raise HTTPException(status_code=401, detail={"message": "Sign in to your library", "login_url": exc.login_url}) from exc
+    except library.NoPdf as exc:
+        raise HTTPException(status_code=404, detail={"message": "No PDF link on the paper's page", "page_url": exc.page_url}) from exc
+    except pdf_proxy.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="Could not reach the library") from exc
+    return Response(data, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/library/school")
+def library_school(email: str):
+    """The school an e-mail address belongs to and its library's proxy, if the app knows it."""
+    return library.school_for(email)
+
+
+@app.delete("/library/session", status_code=204)
+def library_sign_out():
+    library.clear_session()
 
 
 @app.get("/annotations")

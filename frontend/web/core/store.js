@@ -26,7 +26,7 @@ const write = (storage, key, value) => storage.setItem(key, JSON.stringify(value
 
 // ---------- settings ----------
 
-export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "language", "reading_goal"];
+export const SETTING_FIELDS = ["openalex_api_key", "openalex_email", "language", "reading_goal", "library_proxy"];
 const SECRETS = new Set(["openalex_api_key"]);
 
 export const mask = (secret) => (secret.length > 8 ? "•".repeat(6) + secret.slice(-4) : "•".repeat(secret.length));
@@ -55,6 +55,7 @@ export class Settings {
       view[name] = entry;
     }
     view.data_dir = dataDir;
+    view.library_signed_in = false; // signing in through a library is the desktop app's for now
     return view;
   }
 }

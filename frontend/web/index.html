@@ -183,6 +183,7 @@
     <section id="tab-settings" class="panel" hidden>
       <nav class="subtabs" role="tablist">
         <button type="button" class="subtab active" data-pane="keys" role="tab" data-i18n="set.navKeys">API 키</button>
+        <button type="button" class="subtab" data-pane="library" role="tab" data-i18n="set.navLibrary">도서관</button>
         <button type="button" class="subtab" data-pane="language" role="tab" data-i18n="set.navLanguage">언어</button>
         <button type="button" class="subtab" data-pane="about" role="tab" data-i18n="set.navAbout">정보</button>
       </nav>
@@ -201,15 +202,29 @@
             <button type="button" id="clear-openalex-key" class="link-button small" data-i18n="set.clearKey" hidden>저장된 키 삭제</button></span>
           <small id="test-result" class="test-result" role="status"></small>
         </label>
-        <label><span><span data-i18n="set.email">연락용 이메일</span> <small data-i18n="set.emailHint">(선택) OpenAlex에 요청자를 알립니다</small></span>
-          <input id="openalex-email" type="email" placeholder="you@university.edu">
-        </label>
-
         <div class="actions">
           <button type="submit" class="primary" data-i18n="set.save">저장</button>
           <span id="settings-status" class="status" role="status"></span>
         </div>
         <p class="hint" id="data-hint"><span data-i18n="set.dataDir">키는 이 컴퓨터의 데이터 폴더에만 저장됩니다:</span> <code id="data-dir"></code></p>
+      </form>
+
+      <form id="library-form" class="settings pane" data-pane="library" autocomplete="off" hidden>
+        <h2 data-i18n="set.library">학교 도서관</h2>
+        <p class="hint" data-i18n="set.libraryHint"></p>
+        <label><span><span data-i18n="set.email">학교 이메일</span> <small data-i18n="set.emailHint"></small></span>
+          <input id="openalex-email" type="email" placeholder="you@university.ac.kr">
+          <small id="school-state" role="status"></small>
+        </label>
+        <label><span><span data-i18n="set.proxy">도서관 교외 접속 주소</span> <small data-i18n="set.proxyHint"></small></span>
+          <input id="library-proxy" type="url" spellcheck="false" placeholder="https://libproxy.university.ac.kr/_Lib_Proxy_Url/">
+        </label>
+        <span class="row"><small id="library-state"></small>
+          <button type="button" id="library-sign-out" class="link-button small" data-i18n="set.librarySignOut" hidden>로그인 정보 지우기</button></span>
+        <div class="actions">
+          <button type="submit" class="primary" data-i18n="set.save">저장</button>
+          <span id="library-status" class="status" role="status"></span>
+        </div>
       </form>
 
       <div class="settings pane" data-pane="language" hidden>

@@ -18,6 +18,7 @@ FIELDS = {
     "openalex_email": "OPENALEX_EMAIL",
     "language": "RADAR_LANG",
     "reading_goal": "RADAR_READING_GOAL",  # papers to read a month (the reading thermometer)
+    "library_proxy": "RADAR_LIBRARY_PROXY",  # the university library's off-campus proxy prefix
 }
 SECRETS = {"openalex_api_key"}
 
@@ -87,4 +88,7 @@ def public_view() -> dict:
             entry["value"] = value
         view[name] = entry
     view["data_dir"] = str(data_dir())
+    from backend import library  # (imports settings)
+
+    view["library_signed_in"] = library.signed_in(get("library_proxy"))
     return view
