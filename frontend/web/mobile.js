@@ -21,7 +21,9 @@ window.radarLocalApi = createApi({
 const { Filesystem, Share } = plugins;
 if (Filesystem && Share) {
   window.radarSaveFile = async (name, content) => {
-    const written = await Filesystem.writeFile({ path: name, data: content, directory: "CACHE", encoding: "utf8" });
+    // text as UTF-8; bytes (a saved PDF) as base64, which is what writeFile takes without an encoding
+    const file = content instanceof Uint8Array ? { data: window.radarBase64(content) } : { data: content, encoding: "utf8" };
+    const written = await Filesystem.writeFile({ path: name, directory: "CACHE", ...file });
     try {
       await Share.share({ title: name, files: [written.uri] });
     } catch {

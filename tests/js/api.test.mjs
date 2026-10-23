@@ -254,6 +254,23 @@ test("free full text prefers the PDF", async () => {
   assert.equal(normalizeWork({ id: "W2", open_access: { oa_url: "javascript:x" } }).open_access_url, null);
 });
 
+test("handwriting: saved, listed, size-capped, ids kept to safe names, like backend/annotations.py", async () => {
+  const { api } = setup();
+  const ink = { id: "a1", type: "ink", color: "#1b1b1a", outline: [[10, 10], [20, 12], [12, 20]] };
+  const saved = await api("PUT", "/annotations/W1", { title: "GNN", paper_id: "W1", page_count: 3, last_page: 2, pages: { 1: [ink] }, notes: [[ink, ink]] });
+  assert.equal(saved.items, 3);
+  assert.equal(saved.note_pages, 1);
+  assert.deepEqual((await api("GET", "/annotations/W1")).pages["1"][0].outline, ink.outline);
+  assert.deepEqual((await api("GET", "/annotations")).map((d) => d.id), ["W1"]);
+  for (const bad of ["..", ".hidden", "a b", "x".repeat(81)]) {
+    await assert.rejects(api("PUT", `/annotations/${encodeURIComponent(bad)}`, {}), (e) => [404, 422].includes(e.status), bad);
+  }
+  await assert.rejects(api("PUT", "/annotations/W2", { pages: { 1: [{ ...ink, outline: Array(1_500_000).fill([1, 2]) }] } }), { status: 413 });
+  await assert.rejects(api("PUT", "/annotations/W2", { notes: {} }), { status: 422 });
+  await api("DELETE", "/annotations/W1");
+  await assert.rejects(api("GET", "/annotations/W1"), { status: 404 });
+});
+
 test("unknown routes are 404", async () => {
   const { api } = setup();
   await assert.rejects(api("GET", "/nope"), (e) => e.status === 404);

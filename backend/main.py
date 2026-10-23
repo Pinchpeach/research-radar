@@ -7,14 +7,15 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import history, judgments, security, settings, updates
+from backend import annotations, history, judgments, pdf_proxy, security, settings, updates
 from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
+    AnnotationDoc,
     Bookmark,
     BookmarkIn,
     BookmarkUpdate,
@@ -292,6 +293,58 @@ def list_evaluations():
 def delete_evaluation(run_id: str):
     if not judgments.delete_run(run_id):
         raise HTTPException(status_code=404, detail="Evaluation run not found")
+
+
+# ---------- PDF reader ----------
+
+
+@app.get("/pdf")
+def open_access_pdf(url: str):
+    """An open-access PDF, fetched for the reader (publishers don't let the page fetch it)."""
+    try:
+        data = pdf_proxy.fetch_pdf(url)
+    except pdf_proxy.Refused as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="Could not download the PDF") from exc
+    return Response(data, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
+@app.get("/annotations")
+def list_annotations():
+    """Documents with handwriting, most recently changed first."""
+    return annotations.all_summaries()
+
+
+@app.get("/annotations/{doc_id}")
+def get_annotations(doc_id: str):
+    try:
+        doc = annotations.load(doc_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if doc is None:
+        raise HTTPException(status_code=404, detail="No handwriting for this document")
+    return doc
+
+
+@app.put("/annotations/{doc_id}")
+def put_annotations(doc_id: str, doc: AnnotationDoc):
+    try:
+        return annotations.save(doc_id, doc.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+
+@app.delete("/annotations/{doc_id}", status_code=204)
+def delete_annotations(doc_id: str):
+    try:
+        found = annotations.delete(doc_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if not found:
+        raise HTTPException(status_code=404, detail="No handwriting for this document")
 
 
 # ---------- home screen and news ----------

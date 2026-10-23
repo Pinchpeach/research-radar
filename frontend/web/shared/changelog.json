@@ -1,5 +1,21 @@
 [
   {
+    "version": "0.10.0",
+    "date": "2026-10-22",
+    "ko": [
+      "PDF 리더: 논문의 무료 PDF나 기기의 PDF 파일을 열어 터치펜으로 필기합니다. 필압과 손바닥 무시를 지원하고, 형광펜·텍스트 상자·여러 색을 쓸 수 있어요.",
+      "필기 고치기: 올가미나 선택으로 필기를 옮기고 지우며, 지우개와 되돌리기·다시 하기가 있습니다.",
+      "노트 페이지: PDF 옆에 빈 페이지를 띄워 따로 적고, 필기를 합친 PDF와 노트 PDF를 각각 저장합니다.",
+      "읽기 도구: 필기 숨기기, 본문 검색, 페이지 썸네일, 주석 모아보기. 끝까지 읽으면 '읽음'으로 기록하고 형광펜 내용을 북마크 메모로 옮깁니다."
+    ],
+    "en": [
+      "PDF reader: open a paper's free PDF or a PDF on your device and write on it with a stylus, with pressure and palm rejection, a highlighter, text boxes and any colour.",
+      "Editing handwriting: lasso or select strokes to move or delete them, with an eraser, undo and redo.",
+      "Note pages: write on blank pages beside the PDF, then save the PDF with your handwriting merged and the notes as their own PDF.",
+      "Reading tools: hide handwriting, search the text, page thumbnails and a list of your annotations. Reaching the end marks the paper read, and highlights can go into its bookmark note."
+    ]
+  },
+  {
     "version": "0.9.0",
     "date": "2026-10-22",
     "ko": [

@@ -3,7 +3,8 @@
 
 import { GAIN, ndcgAt, precisionAt } from "./evaluation.js";
 
-const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments", history: "radar.history" };
+const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments", history: "radar.history",
+  annotations: "radar.annotations" };
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 const now = () => new Date().toISOString();
 
@@ -198,6 +199,50 @@ export class History {
     write(this.storage, KEYS.history, [entry, ...others].slice(0, MAX_HISTORY));
   }
   clear() { this.storage.removeItem(KEYS.history); }
+}
+
+// ---------- handwriting (backend/annotations.py) ----------
+
+export const DOC_ID = /^[A-Za-z0-9_.-]{1,80}$/;
+export const MAX_ANNOTATION_BYTES = 8 * 1024 * 1024;
+
+export function annotationSummary(doc) {
+  const pages = doc.pages || {}, notes = doc.notes || [];
+  return {
+    id: doc.id, title: doc.title || "", paper_id: doc.paper_id ?? null, source: doc.source ?? null,
+    page_count: doc.page_count || 0, last_page: doc.last_page || 1,
+    items: Object.values(pages).reduce((n, items) => n + items.length, 0) + notes.reduce((n, items) => n + items.length, 0),
+    note_pages: notes.length, updated_at: doc.updated_at ?? null,
+  };
+}
+
+/** One storage entry per document plus an index of summaries (Storage can't list its keys here). */
+export class Annotations {
+  constructor(storage) { this.storage = storage; }
+  key(id) {
+    if (!DOC_ID.test(id) || id.startsWith(".")) throw new Error("invalid document id");
+    return `${KEYS.annotations}.${id}`;
+  }
+  load(id) { return read(this.storage, this.key(id), null); }
+  save(id, doc) {
+    const saved = { ...doc, id, updated_at: now().replace(/\.\d+Z$/, "+00:00") };
+    const text = JSON.stringify(saved);
+    if (new Blob([text]).size > MAX_ANNOTATION_BYTES) throw new RangeError("handwriting too large");
+    this.storage.setItem(this.key(id), text);
+    const summary = annotationSummary(saved);
+    write(this.storage, KEYS.annotations, [summary, ...this.all().filter((d) => d.id !== id)]);
+    return summary;
+  }
+  delete(id) {
+    const key = this.key(id);
+    if (this.storage.getItem(key) == null) return false;
+    this.storage.removeItem(key);
+    write(this.storage, KEYS.annotations, this.all().filter((d) => d.id !== id));
+    return true;
+  }
+  all() {
+    return read(this.storage, KEYS.annotations, []).sort((a, b) => ((a.updated_at || "") < (b.updated_at || "") ? 1 : -1));
+  }
 }
 
 export { GAIN };

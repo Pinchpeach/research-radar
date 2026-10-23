@@ -32,6 +32,8 @@ Research Radar가 받는 외부 입력과 지키는 자산을 정리하고, 찾�
 | 8 | Android 백업에 API 키와 북마크가 포함됨 | 낮음 | 결정 필요 |
 | 9 | Android 앱은 OpenAlex 키를 URL 쿼리로 보냄 | 낮음 | 유지 (설명) |
 | 10 | PC 창이 외부 사이트로 이동하면 파일 저장 기능이 노출됨 | 낮음 | 유지 (설명) |
+| 11 | PDF 리더의 `/pdf?url=` 프록시로 내부망 주소를 읽음(SSRF) | 중간 | 해결 |
+| 12 | 필기 문서 id로 데이터 폴더 밖의 파일에 접근 | 중간 | 해결 |
 
 ### 1. 논문 링크의 `javascript:` URL
 
@@ -107,6 +109,18 @@ Android의 JavaScript 백엔드는 OpenAlex 안내대로 키를 `api_key` 쿼리
 PC 창(pywebview)이 외부 사이트로 이동하면, 그 페이지도 `window.pywebview.api.save_file`을 부를 수 있습니다. 그래도 실제 저장은 사용자가 저장 창에서 위치를 골라야만 일어납니다.
 
 지금은 앱의 외부 링크가 모두 `target="_blank"`라서 기본 브라우저로 열리고, 앱 창은 이동하지 않습니다. 새 외부 링크를 추가할 때도 이 규칙을 지켜야 합니다.
+
+### 11. PDF 프록시의 SSRF
+
+PC 앱은 출판사 PDF를 브라우저의 CORS 제한 없이 받으려고 `GET /pdf?url=`로 대신 받아 옵니다. 이 주소는 OpenAlex(누구나 정할 수 있는 값)에서 오므로, 그대로 따라가면 공유기 관리 페이지 같은 내부망을 읽을 수 있습니다.
+
+`backend/pdf_proxy.py`는 http(s)만 받고, 주소를 직접 풀어(`getaddrinfo`) 공인 IP일 때만 연결합니다. 리다이렉트는 자동으로 따르지 않고 한 번씩(최대 5번) 같은 검사를 다시 합니다. 크기는 80MB까지, 내용이 `%PDF`로 시작해야만 돌려줍니다. Android는 각 기기에서 직접 받으므로 프록시가 없습니다. 테스트: `tests/test_reader_backend.py`.
+
+### 12. 필기 문서 id
+
+필기는 `annotations/<id>.json`에 저장합니다. id는 `[A-Za-z0-9_.-]`만, 80자까지, `.`으로 시작할 수 없어 데이터 폴더 밖이나 숨은 파일을 가리킬 수 없습니다. 문서 하나는 8MB까지입니다(413). 두 백엔드가 같은 규칙을 씁니다.
+
+PDF 본문은 pdf.js가 `isEvalSupported: false`로 그리고, 필기는 SVG의 속성 값(경로, 색은 `#rgb`·`#rrggbb`만)으로만 화면에 들어가며 텍스트 상자는 `textContent`로 넣습니다.
 
 ## 그대로 안전한 부분
 
