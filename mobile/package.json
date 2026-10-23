@@ -4,7 +4,9 @@
   "description": "Research Radar for Android: the desktop app's screens plus a JavaScript port of its backend, in a Capacitor shell.",
   "license": "Apache-2.0",
   "type": "module",
-  "engines": { "node": ">=22" },
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "build": "node build.mjs",
     "sync": "node build.mjs && cap sync android",
@@ -14,6 +16,7 @@
     "@capacitor/android": "8.5.3",
     "@capacitor/core": "8.5.3",
     "@capacitor/filesystem": "8.1.5",
+    "@capacitor/inappbrowser": "4.0.4",
     "@capacitor/share": "8.0.3"
   },
   "devDependencies": {

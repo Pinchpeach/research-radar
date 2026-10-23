@@ -289,7 +289,29 @@ test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, li
   const view = await api("PUT", "/settings", { library_proxy: "https://libproxy.uni.example/_Lib_Proxy_Url/" });
   assert.equal(view.library_proxy.value, "https://libproxy.uni.example/_Lib_Proxy_Url/");
   assert.equal(view.library_signed_in, false);
-  await assert.rejects(api("GET", "/library/pdf?doi=10.1000%2Fxyz"), { status: 501 });
+});
+
+test("library PDF through the proxy: page, PDF link, sign-in when it lands elsewhere", async () => {
+  const KR = "https://libproxy.uni.example/_Lib_Proxy_Url/", PDF = new TextEncoder().encode("%PDF-1.7 paper");
+  const page = (body, url) => ({ ok: true, status: 200, url, headers: new Headers(), arrayBuffer: async () => new TextEncoder().encode(body).buffer });
+  let signedIn = false, cleared = 0;
+  const pages = {
+    [KR + "https://doi.org/10.1000/xyz"]: () => (signedIn
+      ? page(`<meta name="citation_pdf_url" content="https://publisher.example/x.pdf?a=1&amp;b=2">`, KR + "https://doi.org/10.1000/xyz")
+      : page("<form>sign in</form>", "https://sso.uni.example/login")),
+    [KR + "https://publisher.example/x.pdf?a=1&b=2"]: () => ({ ok: true, status: 200, url: KR + "https://publisher.example/x.pdf?a=1&b=2", headers: new Headers(), arrayBuffer: async () => PDF.buffer }),
+  };
+  const api = createApi({ fetch: async (url) => pages[url](), storage: memoryStorage(), version: "0", releasesRepo: "o/r",
+    posterTemplate: async () => "", clearCookies: async () => { cleared++; } });
+  await assert.rejects(api("GET", "/library/pdf?doi=10.1000%2Fxyz"), { status: 422 }); // no proxy yet
+  await api("PUT", "/settings", { library_proxy: KR });
+  await assert.rejects(api("GET", "/library/pdf?doi=10.1000%2Fxyz"), (e) => e.status === 401 && e.detail.login_url === KR + "https://doi.org/10.1000/xyz");
+  signedIn = true;
+  assert.deepEqual(await api("GET", "/library/pdf?doi=10.1000%2Fxyz"), PDF);
+  assert.equal((await api("GET", "/settings")).library_signed_in, true);
+  await api("DELETE", "/library/session");
+  assert.equal((await api("GET", "/settings")).library_signed_in, false);
+  assert.equal(cleared, 1);
 });
 
 test("unknown routes are 404", async () => {
