@@ -8,8 +8,9 @@ import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranki
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
-import { DOI, PROXY, schoolFor, unpaywallLinks } from "./library.js";
+import { DOI, libraryPdf, NeedsLogin, NoPdf, PROXY, schoolFor, unpaywallLinks } from "./library.js";
 
+const LIBRARY_SESSION = "radar.library.session";
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
 const FRESH_YEARS = 2, CORE_MIN_SHARE = 0.05, REFERENCES_PER_SEED = 50, UPDATE_CACHE_MS = 6 * 3600 * 1000;
 
@@ -61,7 +62,12 @@ export function searchRequest(body) {
   return request;
 }
 
-export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date() }) {
+/**
+ * clearCookies: forgets the web view's cookies (signing out of the library); Android's mobile.js
+ * passes Capacitor's.
+ */
+export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date(),
+  clearCookies = async () => {} }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
   const history = new History(storage), annotations = new Annotations(storage);
   /** Like the AnnotationDoc model: the fields kept, with their limits. */
@@ -252,6 +258,13 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return out;
   }
 
+  /** Like backend/settings.public_view; signed in = the last library fetch with this proxy worked. */
+  const settingsView = () => {
+    const view = settings.publicView(dataDir), proxy = settings.get("library_proxy");
+    view.library_signed_in = Boolean(proxy) && storage.getItem(LIBRARY_SESSION) === proxy;
+    return view;
+  };
+
   const routes = [
     ["GET", /^\/health$/, () => ({ status: "ok", version })],
     ["POST", /^\/search$/, (_, body) => search(body)],
@@ -274,8 +287,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (!["ko", "en"].includes(lang)) throw invalid("lang must be ko or en");
       return renderHtml(body.flow, String(body.title ?? "My Research").slice(0, 300), lang, await posterTemplate());
     }],
-    ["GET", /^\/settings$/, () => settings.publicView(dataDir)],
-    ["PUT", /^\/settings$/, (_, body) => { settings.save(settingsUpdate(body)); return settings.publicView(dataDir); }],
+    ["GET", /^\/settings$/, () => settingsView()],
+    ["PUT", /^\/settings$/, (_, body) => { settings.save(settingsUpdate(body)); return settingsView(); }],
     ["GET", /^\/unpaywall$/, async (_, __, q) => {
       const doi = q.get("doi") || "", email = settings.get("openalex_email");
       if (!DOI.test(doi)) throw invalid("not a DOI");
@@ -283,8 +296,24 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
     }],
     ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
-    ["GET", /^\/library\/pdf$/, () => { throw new ApiError(501, "Signing in through your library works in the desktop app for now"); }],
-    ["DELETE", /^\/library\/session$/, () => null],
+    ["GET", /^\/library\/pdf$/, async (_, __, q) => {
+      const doi = q.get("doi") || "", prefix = settings.get("library_proxy");
+      if (!prefix || !PROXY.test(prefix)) throw invalid("set your library's proxy address in Settings first");
+      if (!DOI.test(doi)) throw invalid("not a DOI");
+      try {
+        const bytes = await libraryPdf(fetch, prefix, doi);
+        storage.setItem(LIBRARY_SESSION, prefix);
+        return bytes;
+      } catch (error) {
+        if (error instanceof NeedsLogin) {
+          storage.removeItem(LIBRARY_SESSION);
+          throw new ApiError(401, { message: "Sign in to your library", login_url: error.loginUrl });
+        }
+        if (error instanceof NoPdf) throw new ApiError(404, { message: "No PDF link on the paper's page", page_url: error.pageUrl });
+        throw new ApiError(502, "Could not reach the library");
+      }
+    }],
+    ["DELETE", /^\/library\/session$/, async () => { storage.removeItem(LIBRARY_SESSION); await clearCookies(); return null; }],
     ["POST", /^\/settings\/test-openalex$/, (_, body) => openalex.checkKey((body && body.api_key) || null)],
     ["POST", /^\/evaluations$/, (_, body) => {
       if (!body.judgments || !Object.values(body.judgments).some(Boolean)) throw new ApiError(400, "No judgments to save.");

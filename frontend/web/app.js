@@ -131,6 +131,7 @@ function showTab(name) {
   if (name === "map") autoDrawFlow();
   if (name === "news") renderNews();
   if (name === "reading") { renderReading(); renderDocs(); }
+  if (name === "settings") loadSettings(); // e.g. signed in to the library since
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 $("menu-button").addEventListener("click", () => setDrawer(!$("drawer").classList.contains("open")));
@@ -782,8 +783,8 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("openalex-email").value = s.openalex_email.value || "";
   $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
   $("school-state").textContent = "";
-  $("library-state").textContent = window.radarLocalApi ? t("set.libraryMobile")
-    : s.library_proxy && s.library_proxy.value ? t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") : "";
+  $("library-state").textContent = !(s.library_proxy && s.library_proxy.value) ? ""
+    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") + (window.radarLocalApi ? " " + t("set.libraryMobile") : "");
   $("library-sign-out").hidden = !s.library_signed_in;
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;

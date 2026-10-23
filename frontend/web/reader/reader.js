@@ -136,7 +136,7 @@ class Reader {
         if (bytes) { this.url = link; return bytes; }
       }
     }
-    if (doi && !window.radarLocalApi) { // the desktop app signs in to the library (desktop/main.py)
+    if (doi) {
       const bytes = await attempt(t("rd.findingLibrary"), () => this.libraryPdf(doi));
       if (bytes) return bytes;
     }
@@ -144,20 +144,27 @@ class Reader {
     return null;
   }
 
+  /** The PDF through the library: the desktop server (backend/library.py) or, on Android, core/library.js. */
   async libraryPdf(doi) {
-    const response = await fetch(`/library/pdf?doi=${encodeURIComponent(doi)}`);
-    if (response.ok) {
-      const bytes = new Uint8Array(await response.arrayBuffer());
-      if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
-      throw new Error(t("rd.notPdf"));
+    const path = `/library/pdf?doi=${encodeURIComponent(doi)}`;
+    let status, detail = null;
+    if (window.radarLocalApi) {
+      try { return await window.radarLocalApi("GET", path); } catch (e) { status = e.status || 502; detail = e.detail || e.message; }
+    } else {
+      const response = await fetch(path);
+      if (response.ok) {
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
+        throw new Error(t("rd.notPdf"));
+      }
+      status = response.status;
+      try { detail = (await response.json()).detail; } catch { /* not JSON */ }
     }
-    let detail = null;
-    try { detail = (await response.json()).detail; } catch { /* not JSON */ }
-    if (response.status === 422) return null; // no library set up: nothing to say
-    if (response.status === 401) this.libraryLogin = doi;
-    if (response.status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
-    const key = { 401: "rd.library401", 404: "rd.library404" }[response.status] || "rd.libraryFailed";
-    throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${response.status}` }));
+    if (status === 422) return null; // no library set up: nothing to say
+    if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url };
+    if (status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
+    const key = { 401: "rd.library401", 404: "rd.library404" }[status] || "rd.libraryFailed";
+    throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${status}` }));
   }
 
   async fetchPdf(url) {
@@ -215,20 +222,20 @@ class Reader {
       error ? el("p", { class: "rd-error", text: String(error.message || error) }) : null,
       el("p", { text: this.libraryLogin ? t("rd.loginHint") : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
       el("div", { class: "rd-row" },
-        this.libraryLogin && window.pywebview && window.pywebview.api && window.pywebview.api.library_login ? this.loginButton() : null,
+        this.libraryLogin && signIn() ? this.loginButton() : null,
         this.url || this.libraryPage ? el("a", { href: this.url || this.libraryPage, target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
         el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick)));
     this.pagesEl.replaceChildren(box);
   }
 
-  /** Sign in to the library in a window of the desktop app, then open the paper from there. */
+  /** Sign in to the library in a window of its own (signIn()), then open the paper from there. */
   loginButton() {
     const button = el("button", { type: "button", class: "rd-btn primary rd-login", text: t("rd.login") });
     button.addEventListener("click", async () => {
       button.disabled = true;
       button.textContent = t("rd.loggingIn");
       let ok = false;
-      try { ok = await window.pywebview.api.library_login(this.libraryLogin); } catch { /* the window failed to open */ }
+      try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url); } catch { /* the window failed to open */ }
       if (ok) return this.reopen({ libraryOnly: true });
       button.disabled = false;
       button.textContent = t("rd.login");
@@ -1025,6 +1032,16 @@ class Reader {
       this.toast(await this.saveFile(this.fileName(t("rd.suffixNotes")), new Uint8Array(data), "application/pdf"));
     } catch (e) { this.toast(t("rd.saveFailed", { error: e.message })); }
   }
+}
+
+/**
+ * How this app signs in to the library: desktop/main.py's window, or mobile.js's in-app web view.
+ * Resolves to true once the PDF came through.
+ */
+function signIn() {
+  if (window.radarLibraryLogin) return window.radarLibraryLogin;
+  const desktop = window.pywebview && window.pywebview.api;
+  return desktop && desktop.library_login ? (doi) => desktop.library_login(doi) : null;
 }
 
 /** "10.1/x" from a DOI link (https://doi.org/10.1/x), or null. */

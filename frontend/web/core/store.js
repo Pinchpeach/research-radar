@@ -55,7 +55,6 @@ export class Settings {
       view[name] = entry;
     }
     view.data_dir = dataDir;
-    view.library_signed_in = false; // signing in through a library is the desktop app's for now
     return view;
   }
 }

@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.11.1",
+    "date": "2026-10-23",
+    "ko": [
+      "휴대폰에서도 학교 도서관: Android 앱에서도 학교 계정으로 로그인하면 무료본이 없는 논문을 학교 도서관을 거쳐 받아 바로 열어요. 로그인은 앱 안의 창에서 해요.",
+      "텍스트 상자를 누르자마자 입력한 글자가 빠지지 않아요."
+    ],
+    "en": [
+      "University library on the phone: the Android app now signs in to your library too (in a window inside the app) and opens papers with no free copy through it.",
+      "Typing right after tapping a new text box no longer loses the first letters."
+    ]
+  },
+  {
     "version": "0.11.0",
     "date": "2026-10-23",
     "ko": [

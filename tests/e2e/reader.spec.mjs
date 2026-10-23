@@ -262,6 +262,73 @@ test.describe("no free copy on OpenAlex", () => {
   });
 });
 
+test.describe("through the university library (the Android app's in-app sign-in)", () => {
+  const DOI = "10.1109/TNN.2008.2005605", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
+  const PAGE = `${KR}https://doi.org/${DOI}`, PDF = `${KR}https://ieeexplore.example/stamp/gnn.pdf`;
+  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
+    (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
+
+  test("signing in once in the web view, then the paper opens", async ({ page }) => {
+    let signedIn = false;
+    const opened = [];
+    await page.exposeFunction("signInAtLibrary", (url) => { opened.push(url); signedIn = true; });
+    // a stand-in for @capacitor/inappbrowser: "signing in" happens when the web view opens
+    await page.addInitScript(() => {
+      if (window !== window.top) return;
+      const listeners = {};
+      const fire = (name) => (listeners[name] || []).forEach((f) => f({}));
+      window.Capacitor = { Plugins: { InAppBrowser: {
+        addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
+        openInWebView: async ({ url, options }) => {
+          window.webViewOptions = options;
+          await window.signInAtLibrary(url);
+          setTimeout(() => fire("browserPageLoaded"), 10);
+        },
+        close: async () => fire("browserClosed"),
+      } } };
+      // like CapacitorHttp, which follows redirects natively and reports where it ended up
+      // (a fulfilled cross-origin redirect fails in the test browser)
+      const original = window.fetch;
+      window.fetch = async (...args) => {
+        const response = await original(...args), final = response.headers.get("x-final-url");
+        if (final) Object.defineProperty(response, "url", { value: final });
+        return response;
+      };
+    });
+    await page.context().route((url) => url.href.startsWith(KR), async (route) => {
+      const url = route.request().url(), cors = { "access-control-allow-origin": "*" };
+      if (!signedIn) { // off to the school's sign-in page
+        return route.fulfill({ headers: { ...cors, "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" },
+          contentType: "text/html", body: "<form>sign in</form>" });
+      }
+      if (url === PAGE) return route.fulfill({ headers: cors, contentType: "text/html", body: `<meta name="citation_pdf_url" content="https://ieeexplore.example/stamp/gnn.pdf">` });
+      if (url === PDF) return route.fulfill({ headers: cors, contentType: "application/pdf", body: await samplePdf(3) });
+      return route.fulfill({ status: 404, headers: cors });
+    });
+
+    await page.goto("./");
+    await go(page, "settings");
+    await page.locator(".subtab[data-pane=library]").click();
+    await page.locator("#library-proxy").fill(KR);
+    await page.locator("#library-form button[type=submit]").click();
+    await expect(page.locator("#library-state")).toContainText("아직 로그인하지 않았어요");
+
+    await search(page);
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
+    await page.locator(".rd-login").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    expect(opened).toEqual([PAGE]);
+    const options = await page.evaluate(() => window.webViewOptions);
+    expect([options.clearCache, options.clearSessionCache, options.android.isIsolated]).toEqual([false, false, false]); // keeps the cookies
+
+    await page.locator(".rd-close").click();
+    await go(page, "settings");
+    await page.locator(".subtab[data-pane=library]").click();
+    await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
+  });
+});
+
 async function readAll(download) {
   const chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
