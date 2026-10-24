@@ -1,12 +1,18 @@
 package io.github.pinchpeach.researchradar;
 
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.net.http.SslError;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
+import android.webkit.SslErrorHandler;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -63,6 +69,9 @@ public class LibraryWebActivity extends AppCompatActivity {
         settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(true);
         settings.setDisplayZoomControls(false);
+        // as Chrome: some schools' sign-in turns away browsers that say they're an app's web view ("; wv")
+        settings.setUserAgentString(settings.getUserAgentString().replace("; wv", ""));
+        web.setBackgroundColor(Color.WHITE);
         CookieManager cookies = CookieManager.getInstance();
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
@@ -73,9 +82,26 @@ public class LibraryWebActivity extends AppCompatActivity {
                 address.setText(url);
             }
 
+            // a failed page says why in the address bar, instead of leaving a blank screen
+            @Override
+            public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+                if (request.isForMainFrame()) address.setText("⚠ " + error.getDescription() + " — " + request.getUrl());
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse response) {
+                if (request.isForMainFrame()) address.setText("⚠ HTTP " + response.getStatusCode() + " — " + request.getUrl());
+            }
+
+            @Override
+            public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                handler.cancel(); // never past a certificate problem: just say so
+                address.setText("⚠ certificate error " + error.getPrimaryError() + " — " + error.getUrl());
+            }
+
             @Override
             public void onPageFinished(WebView view, String url) {
-                address.setText(url);
+                if (!address.getText().toString().startsWith("⚠")) address.setText(url);
                 CookieManager.getInstance().flush();
                 if (LibraryWebPlugin.current != null) LibraryWebPlugin.current.navigated(url);
             }
