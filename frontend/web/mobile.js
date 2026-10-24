@@ -24,14 +24,23 @@ window.radarLocalApi = createApi({
 // keeps its cookies to itself, so the app can't fetch the PDF: the person downloads it there and
 // opens it with Research Radar (AndroidManifest's PDF intent filter), and it opens on the paper
 // they were signing in for (remembered for two hours).
-const PENDING = "radar.library.pending";
+const PENDING = "radar.library.pending", CHROME_SIGN_IN = "radar.library.chrome", SIGN_IN_HOURS = 8;
 const CHROME = {
   android: { showTitle: true, hideToolbarOnScroll: false, viewStyle: 1, startAnimation: 0, exitAnimation: 1 }, // full screen
   iOS: { closeButtonText: 2, viewStyle: 2, animationEffect: 2, enableBarsCollapsing: true, enableReadersMode: false },
 };
 if (InAppBrowser) {
-  // the library's own sign-in page first, for proxies that need it (reader.js loginButtons)
-  window.radarOpenInBrowser = (url) => InAppBrowser.openInSystemBrowser({ url, options: CHROME });
+  // the library's own sign-in page (Settings, or reader.js loginButtons); Chrome keeps the
+  // sign-in, so when it happened is remembered: for a few hours papers open in one step
+  window.radarOpenInBrowser = (url, { signIn = true } = {}) => {
+    if (signIn) try { localStorage.setItem(CHROME_SIGN_IN, String(Date.now())); } catch { /* fine */ }
+    return InAppBrowser.openInSystemBrowser({ url, options: CHROME });
+  };
+  window.radarChromeSignIn = () => {
+    let at = 0;
+    try { at = Number(localStorage.getItem(CHROME_SIGN_IN)) || 0; } catch { /* none */ }
+    return at && Date.now() - at < SIGN_IN_HOURS * 3600 * 1000 ? at : null;
+  };
   window.radarLibraryLogin = async (doi, url, paper) => {
     if (!url) return false;
     try { localStorage.setItem(PENDING, JSON.stringify({ paper, at: Date.now() })); } catch { /* still works, without the paper */ }

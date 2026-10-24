@@ -371,3 +371,76 @@ def test_a_library_that_needs_its_own_sign_in_first(monkeypatch):
     assert window.loaded_urls == [yonsei + "https://doi.org/" + DOI]  # on to the paper through the proxy
     window.destroy()
     thread.join(5)
+
+
+def test_signing_in_once_from_settings(monkeypatch):
+    """Settings › Library › Sign in: the library's sign-in page, then a publisher's page through
+    the proxy, whose cookies are kept for the papers opened later."""
+    import sys
+    import threading
+    import time
+    import types
+
+    from desktop.main import DesktopApi
+
+    yonsei = "https://access.yonsei.ac.kr/link.n2s?url="
+    assert library.sign_in_url(yonsei) == "https://library.yonsei.ac.kr/login"
+    assert library.sign_in_url(KR) == KR + "https://www.nature.com/"
+    assert library.sign_in_url("") is None
+    assert library.on_publisher("https://www-nature-com-ssl.access.yonsei.ac.kr/articles/168356a0", yonsei)
+    assert not library.on_publisher(yonsei + "https://www.nature.com/", yonsei)  # the proxy's own link page
+    assert library.on_publisher(KR + "https://www.nature.com/", KR) and not library.on_publisher("https://sso.uni.example/", KR)
+
+    settings.save({"library_proxy": yonsei})
+    assert api.get("/settings").json()["library_sign_in_url"] == "https://library.yonsei.ac.kr/login"
+
+    class Hook:
+        def __init__(self):
+            self.handlers = []
+
+        def __iadd__(self, handler):
+            self.handlers.append(handler)
+            return self
+
+        def fire(self):
+            for handler in self.handlers:
+                handler()
+
+    from http.cookies import SimpleCookie
+
+    class Window:
+        def __init__(self, title, url, **kwargs):
+            self.url, self.loaded_urls = url, []
+            self.events = types.SimpleNamespace(loaded=Hook(), closed=Hook())
+            opened.append(self)
+
+        def get_current_url(self):
+            return self.url
+
+        def load_url(self, url):
+            self.loaded_urls.append(url)
+
+        def get_cookies(self):
+            jar = SimpleCookie()
+            jar["ezsession"] = "s1"
+            jar["ezsession"]["domain"], jar["ezsession"]["path"] = ".access.yonsei.ac.kr", "/"
+            return [jar]
+
+        def destroy(self):
+            self.events.closed.fire()
+
+    opened, result = [], {}
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=Window))
+    thread = threading.Thread(target=lambda: result.update(ok=DesktopApi().library_sign_in()))
+    thread.start()
+    while not opened:
+        time.sleep(0.01)
+    window = opened[0]
+    assert window.url == "https://library.yonsei.ac.kr/login"
+    window.url = "https://library.yonsei.ac.kr/"  # signed in
+    window.events.loaded.fire()
+    assert window.loaded_urls == [yonsei + "https://www.nature.com/"]
+    window.url = "https://www-nature-com-ssl.access.yonsei.ac.kr/"  # through the proxy now
+    window.events.loaded.fire()
+    thread.join(5)
+    assert result == {"ok": True} and library.signed_in(yonsei)

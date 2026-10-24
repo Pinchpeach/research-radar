@@ -91,4 +91,5 @@ def public_view() -> dict:
     from backend import library  # (imports settings)
 
     view["library_signed_in"] = library.signed_in(library.proxy())
+    view["library_sign_in_url"] = library.sign_in_url(library.proxy())
     return view

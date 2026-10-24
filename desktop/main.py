@@ -93,6 +93,53 @@ class DesktopApi:
         path.write_bytes(base64.b64decode(base64_content))
         return str(path)
 
+    def library_sign_in(self) -> bool:
+        """Sign in to the library once, from Settings: a window on the library's sign-in page
+        (or a publisher's page through the proxy), kept until it reaches a publisher's page
+        through the proxy; the proxy's cookies are kept for the papers opened later."""
+        import webview
+
+        from backend import library
+
+        prefix = library.proxy()
+        start = library.sign_in_url(prefix)
+        if not start:
+            return False
+        first, onward = library.login_page(prefix), library.through(prefix, library.SIGN_IN_TARGET)
+        done, lock, result = threading.Event(), threading.Lock(), {"ok": False}
+        state = {"to_proxy": bool(first)}
+        window = webview.create_window(f"{APP_NAME} — library", start, width=1100, height=820)
+
+        def loaded():
+            if done.is_set() or not lock.acquire(blocking=False):
+                return
+            try:
+                here = window.get_current_url() or ""
+                if state["to_proxy"]:
+                    now, page = urlsplit(here), urlsplit(first)
+                    if now.hostname == page.hostname and not now.path.startswith(page.path):  # signed in on the library's site
+                        state["to_proxy"] = False
+                        window.load_url(onward)
+                    return
+                if library.on_publisher(here, prefix):
+                    cookies = []
+                    for jar in window.get_cookies() or []:
+                        for name, morsel in jar.items():
+                            cookies.append({"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]})
+                    if library.save_cookies(prefix, cookies):
+                        result["ok"] = True
+                        done.set()
+                        window.destroy()
+            except Exception:  # still signing in
+                pass
+            finally:
+                lock.release()
+
+        window.events.loaded += loaded
+        window.events.closed += done.set
+        done.wait(15 * 60)
+        return result["ok"]
+
     def library_login(self, doi: str) -> bool:
         """Sign in to the library in a window of its own, opened on the paper.
 

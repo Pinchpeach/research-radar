@@ -341,6 +341,35 @@ test("a library that needs its own sign-in first (Yonsei): ① sign in there, �
   expect(await page.evaluate(() => window.chromeOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://doi.org/${DOI}`]);
 });
 
+test("signed in once in Settings (Android): papers then open in Chrome in one step", async ({ page }) => {
+  const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    window.chromeOpened = [];
+    window.Capacitor = { convertFileSrc: (u) => u, Plugins: {
+      InAppBrowser: { openInSystemBrowser: async ({ url }) => { window.chromeOpened.push(url); } },
+    } };
+  });
+  await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "text/html", body: "<html></html>" }));
+  await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
+  await page.goto("./");
+  await go(page, "settings");
+  await page.locator(".subtab[data-pane=library]").click();
+  await page.locator("#library-proxy").fill(YONSEI);
+  await page.locator("#library-form button[type=submit]").click();
+  await page.locator("#library-sign-in").click();
+  await expect(page.locator("#library-state")).toContainText("Chrome에서");
+  expect(await page.evaluate(() => window.chromeOpened)).toEqual(["https://library.yonsei.ac.kr/login"]);
+
+  await page.evaluate(async (doi) => {
+    const { openReader } = await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
+    await openReader({ paper: { id: "https://openalex.org/W1", title: "A paper", doi: `https://doi.org/${doi}` }, api: window.radarLocalApi, saveFile: () => {} });
+  }, DOI);
+  await expect(page.locator(".rd-login")).toHaveText("Chrome에서 논문 열기");
+  await page.locator(".rd-login").click();
+  expect(await page.evaluate(() => window.chromeOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://doi.org/${DOI}`]);
+});
+
 async function readAll(download) {
   const chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);

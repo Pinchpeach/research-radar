@@ -222,7 +222,8 @@ class Reader {
     const box = el("div", { class: "rd-unavailable" },
       el("h3", { text: this.url ? t("rd.cantOpen") : this.paper ? t("rd.noFree") : t("rd.noPdf") }),
       error ? el("p", { class: "rd-error", text: String(error.message || error) }) : null,
-      el("p", { text: this.libraryLogin ? t(this.libraryLogin.first && window.radarOpenInBrowser ? "rd.loginStepsHint" : "rd.loginHint")
+      el("p", { text: this.libraryLogin ? t(!(this.libraryLogin.first && window.radarOpenInBrowser) ? "rd.loginHint"
+        : window.radarChromeSignIn && window.radarChromeSignIn() ? "rd.openInChromeHint" : "rd.loginStepsHint")
         : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
       el("div", { class: "rd-row" },
         this.libraryLogin && signIn() ? this.loginButtons() : null,
@@ -244,6 +245,11 @@ class Reader {
   loginButtons() {
     const first = this.libraryLogin.first;
     if (!first || !window.radarOpenInBrowser) return this.loginButton();
+    if (window.radarChromeSignIn && window.radarChromeSignIn()) { // signed in lately (Settings): one step
+      const again = el("button", { type: "button", class: "link-button small rd-login-first", text: t("rd.loginAgain") });
+      again.addEventListener("click", () => window.radarOpenInBrowser(first));
+      return el("div", { class: "rd-row rd-login-steps" }, this.loginButton(t("rd.openInChrome")), again);
+    }
     const signInFirst = el("button", { type: "button", class: "rd-btn rd-login-first", text: t("rd.loginFirst") });
     signInFirst.addEventListener("click", () => window.radarOpenInBrowser(first));
     const box = el("div", { class: "rd-row rd-login-steps" }, signInFirst, this.loginButton(t("rd.loginThen")));
