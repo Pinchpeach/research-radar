@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.11.4",
+    "date": "2026-10-24",
+    "ko": [
+      "휴대폰 학교 로그인 고침: Android 앱이 http:// 페이지를 막아서 도서관을 거친 페이지가 흰 화면으로 뜰 수 있었어요. 학교 도서관 주소에서는 http도 열고, DOI가 가리키는 http:// 주소는 https로 바꿔서 열어요.",
+      "로그인이 끝나지 않고 창을 닫으면, 로그인 창이 마지막으로 연 주소를 보여 줘요."
+    ],
+    "en": [
+      "School sign-in on the phone: the Android app blocked http:// pages, so a page through the library could stay white. Library hosts may now use http, and http:// addresses a DOI points to are opened over https.",
+      "If the sign-in window is closed before it finishes, the reader shows the last address it opened."
+    ]
+  },
+  {
     "version": "0.11.3",
     "date": "2026-10-24",
     "ko": ["학교 계정 로그인 고침: 0.11.2부터 도서관 주소 뒤에 논문 주소를 인코딩해 붙여서 연세대 등 'link.n2s?url=' 도서관에서 빈 화면이 떴어요. 도서관 안내대로 주소를 그대로 붙여요."],

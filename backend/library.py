@@ -122,7 +122,9 @@ def publisher_url(doi: str, session=None) -> str:
         record = (session or requests).get(f"https://doi.org/api/handles/{quote(doi, safe='/')}", params={"type": "URL"}, timeout=15).json()
         url = next(v["data"]["value"] for v in record.get("values", []) if v.get("type") == "URL")
         if re.match(r"https?://", url, re.I):
-            return url
+            # many DOIs still point at http:// pages; proxies keep the scheme, and http pages
+            # are blocked in the Android app (and needlessly unencrypted anywhere)
+            return re.sub(r"^http://", "https://", url, flags=re.I)
     except (requests.RequestException, ValueError, KeyError, StopIteration, TypeError, AttributeError):
         pass
     return doi_url(doi)

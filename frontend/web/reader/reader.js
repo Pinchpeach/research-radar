@@ -246,6 +246,12 @@ class Reader {
       button.disabled = false;
       button.textContent = t("rd.login");
       this.toast(t("rd.loginClosed"));
+      if (window.radarLibraryLastUrl) { // where the sign-in window got to: helps tell what went wrong
+        const box = button.closest(".rd-unavailable");
+        let last = box && box.querySelector(".rd-last-url");
+        if (box && !last) box.append(last = el("p", { class: "rd-error rd-last-url" }));
+        if (last) last.textContent = t("rd.lastUrl", { url: window.radarLibraryLastUrl });
+      }
     });
     return button;
   }

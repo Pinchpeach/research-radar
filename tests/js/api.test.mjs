@@ -342,6 +342,8 @@ test("addresses through each kind of proxy, like tests/test_library.py", async (
   assert.deepEqual(await libraryPdf(fetch, KR.slice(0, -1), "10.1000/xyz"), PDF); // the "/" put back
   assert.equal(asked[1], page);
   assert.equal(await publisherUrl(async () => { throw new Error("offline"); }, "10.1000/xyz"), "https://doi.org/10.1000/xyz");
+  const httpOnly = async () => ({ json: async () => ({ values: [{ type: "URL", data: { value: "http://ieeexplore.ieee.org/document/1/" } }] }) });
+  assert.equal(await publisherUrl(httpOnly, "10.1000/xyz"), "https://ieeexplore.ieee.org/document/1/");
 });
 
 test("unknown routes are 404", async () => {
