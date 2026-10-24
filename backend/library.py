@@ -20,7 +20,7 @@ import tempfile
 import time
 from html import unescape
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import quote, unquote, urljoin, urlsplit
 
 import requests
 
@@ -32,6 +32,7 @@ PROXY = re.compile(r"^https?://[A-Za-z0-9.-]+(:\d+)?(/\S*)?$")
 _META_PDF = re.compile(r"""<meta\b[^>]*\bname\s*=\s*["']citation_pdf_url["'][^>]*>""", re.I)
 _CONTENT = re.compile(r"""\bcontent\s*=\s*["']([^"']+)["']""", re.I)
 _PASSWORD = re.compile(r"""<input\b[^>]*\btype\s*=\s*["']?password""", re.I)
+_FRAME = re.compile(r"""<(?:iframe|embed)\b[^>]*\bsrc\s*=\s*["']([^"']+)["']""", re.I)
 
 
 class NeedsLogin(Exception):
@@ -59,6 +60,26 @@ def school_for(email: str | None) -> dict | None:
     return None
 
 
+def normalize_proxy(text: str | None) -> str:
+    """The proxy prefix from what the person pasted: an example address from the library's guide
+    (prefix + https://publisher/...) is cut back to the prefix, and the "/" or "=" that ends a
+    prefix is added when it is missing."""
+    text = (text or "").strip()
+    found = re.search(r"https?(://|%3A%2F%2F)", text[8:], re.I)  # a second address inside the first
+    if found:
+        text = text[: 8 + found.start()]
+    if re.search(r"_Lib_Proxy_Url$", text, re.I):
+        text += "/"
+    elif re.search(r"[?&](q?url)$", text, re.I):
+        text += "="
+    return text
+
+
+def proxy() -> str:
+    """The saved proxy prefix, normalized."""
+    return normalize_proxy(settings.get("library_proxy"))
+
+
 def valid_proxy(prefix: str) -> bool:
     return bool(PROXY.match(prefix or ""))
 
@@ -73,12 +94,44 @@ def in_scope(url: str, prefix: str) -> bool:
 
 
 def through(prefix: str, url: str) -> str:
-    """The address of url through the library."""
-    return url if in_scope(url, prefix) else prefix + url
+    """The address of url through the library. A prefix ending in "=" takes the address as a query
+    value, so it is encoded (or its own ?/& would be read as the proxy's); a path prefix
+    (/_Lib_Proxy_Url/) takes it as it is."""
+    if in_scope(url, prefix):
+        return url
+    return prefix + (quote(url, safe="") if prefix.endswith("=") else url)
 
 
-def login_url(prefix: str, doi: str) -> str:
-    return through(prefix, f"https://doi.org/{doi}")
+def unwrap(prefix: str, url: str) -> str:
+    """The publisher's address inside a proxied one (the reverse of through), for resolving the
+    page's relative links; a host-rewriting proxy's addresses are left as they are."""
+    if not url.startswith(prefix):
+        return url
+    inner = url[len(prefix):]
+    if prefix.endswith("=") and inner.lower().startswith(("http%3a", "https%3a")):
+        inner = unquote(inner.split("&", 1)[0])
+    return inner if re.match(r"https?://", inner, re.I) else url
+
+
+def doi_url(doi: str) -> str:
+    return "https://doi.org/" + quote(doi, safe="/()<>;:-._")  # "#", "?" and spaces would cut the DOI short
+
+
+def publisher_url(doi: str, session=None) -> str:
+    """Where the DOI points (the publisher's page), asked of doi.org without the library: a proxy
+    serves the publishers its library subscribes to, which doi.org itself may not be among."""
+    try:
+        record = (session or requests).get(f"https://doi.org/api/handles/{quote(doi, safe='/')}", params={"type": "URL"}, timeout=15).json()
+        url = next(v["data"]["value"] for v in record.get("values", []) if v.get("type") == "URL")
+        if re.match(r"https?://", url, re.I):
+            return url
+    except (requests.RequestException, ValueError, KeyError, StopIteration, TypeError, AttributeError):
+        pass
+    return doi_url(doi)
+
+
+def login_url(prefix: str, doi: str, session=None) -> str:
+    return through(prefix, publisher_url(doi, session))
 
 
 # ---------- the signed-in session ----------
@@ -140,16 +193,20 @@ _recent: dict = {}  # the last PDF fetched: the sign-in window fetches it, then 
 
 
 def pdf_link(html: str, page_url: str) -> str | None:
-    """The publisher's PDF address from the page's citation_pdf_url tag (Google Scholar's)."""
+    """The publisher's PDF address from the page's citation_pdf_url tag (Google Scholar's), else a
+    PDF shown in a frame (IEEE's stamp page)."""
     for tag in _META_PDF.findall(html):
         found = _CONTENT.search(tag)
         if found:
             return urljoin(page_url, unescape(found.group(1)).strip())
+    for src in _FRAME.findall(html):
+        if "pdf" in src.lower():
+            return urljoin(page_url, unescape(src).strip())
     return None
 
 
 def fetch(doi: str, prefix: str | None = None, session: requests.Session | None = None) -> bytes:
-    prefix = prefix or settings.get("library_proxy")
+    prefix = normalize_proxy(prefix) if prefix else proxy()
     if not valid_proxy(prefix or ""):
         raise pdf_proxy.Refused("set your library's proxy address in Settings first")
     if not DOI.match(doi or ""):
@@ -157,14 +214,14 @@ def fetch(doi: str, prefix: str | None = None, session: requests.Session | None 
     if _recent.get("key") == (prefix, doi) and time.monotonic() - _recent["at"] < 120:
         return _recent["data"]
     session = session or _session(prefix)
-    start = login_url(prefix, doi)
+    start = login_url(prefix, doi, session)
 
     def stay(url: str) -> None:
         if not in_scope(url, prefix):
             raise NeedsLogin(start)
 
     url = start
-    for _ in range(2):  # the paper's page, then its PDF
+    for _ in range(3):  # the paper's page, its PDF link, and a frame around the PDF
         final, data = pdf_proxy.fetch(url, session, stay)
         if pdf_proxy.is_pdf(data):
             _recent.update(key=(prefix, doi), at=time.monotonic(), data=data)
@@ -172,7 +229,7 @@ def fetch(doi: str, prefix: str | None = None, session: requests.Session | None 
         html = data[:2_000_000].decode("utf-8", "replace")
         if _PASSWORD.search(html):
             raise NeedsLogin(start)
-        link = pdf_link(html, final)
+        link = pdf_link(html, unwrap(prefix, final))  # relative links are the publisher's
         if not link:
             raise NoPdf(final)
         url = through(prefix, link)

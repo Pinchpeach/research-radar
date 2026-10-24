@@ -11,6 +11,7 @@ import { kmeans } from "../../frontend/web/core/kmeans.js";
 import { buildFlow } from "../../frontend/web/core/flow.js";
 import { citationContext } from "../../frontend/web/core/context.js";
 import { VERSION } from "../../frontend/web/core/version.js";
+import { doiUrl, libraryPdf, normalizeProxy, publisherUrl, through, unwrap } from "../../frontend/web/core/library.js";
 
 const template = fs.readFileSync(new URL("../../frontend/web/shared/poster.html", import.meta.url), "utf8");
 const reply = (status, body, headers = {}) => ({ status, ok: status >= 200 && status < 300, headers: new Headers(headers), json: async () => body });
@@ -312,6 +313,34 @@ test("library PDF through the proxy: page, PDF link, sign-in when it lands elsew
   await api("DELETE", "/library/session");
   assert.equal((await api("GET", "/settings")).library_signed_in, false);
   assert.equal(cleared, 1);
+});
+
+test("addresses through each kind of proxy, like tests/test_library.py", async () => {
+  const pdf = "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4700287", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
+  const N2S = "https://libproxy.snu.ac.kr/link.n2s?url=";
+  assert.equal(through(N2S, pdf), N2S + "https%3A%2F%2Fieeexplore.ieee.org%2Fstamp%2Fstamp.jsp%3Ftp%3D%26arnumber%3D4700287");
+  assert.equal(unwrap(N2S, through(N2S, pdf)), pdf);
+  assert.equal(through(KR, pdf), KR + pdf);
+  assert.equal(normalizeProxy("https://libproxy.knu.ac.kr/_Lib_Proxy_Url"), "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/");
+  assert.equal(normalizeProxy(" https://libproxy.knu.ac.kr/_Lib_Proxy_Url/https://www.sciencedirect.com/ "), "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/");
+  assert.equal(normalizeProxy("https://ezproxy.uni.edu/login?url=https%3A%2F%2Fwww.nature.com"), "https://ezproxy.uni.edu/login?url=");
+  assert.equal(normalizeProxy("https://ezproxy.uni.edu/login?url"), "https://ezproxy.uni.edu/login?url=");
+  assert.equal(doiUrl("10.1002/(SICI)1097-4636#3 x?y"), "https://doi.org/10.1002/(SICI)1097-4636%233%20x%3Fy");
+
+  // doi.org says where the DOI points; a relative PDF link there, then IEEE's frame around the PDF
+  const page = KR + "https://ieeexplore.ieee.org/document/4700287/", PDF = new TextEncoder().encode("%PDF-1.7");
+  const reply = (url, body) => ({ ok: true, status: 200, url, json: async () => body, arrayBuffer: async () => (body instanceof Uint8Array ? body : new TextEncoder().encode(body)).buffer });
+  const pages = {
+    "https://doi.org/api/handles/10.1000/xyz?type=URL": () => reply("", { values: [{ type: "URL", data: { value: "https://ieeexplore.ieee.org/document/4700287/" } }] }),
+    [page]: () => reply(page, '<meta name="citation_pdf_url" content="/stamp/stamp.jsp?tp=&amp;arnumber=4700287">'),
+    [KR + pdf]: () => reply(KR + pdf, '<iframe src="https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287"></iframe>'),
+    [KR + "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287"]: () => reply(KR + "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287", PDF),
+  };
+  const asked = [];
+  const fetch = async (url) => { asked.push(url); return pages[url](); };
+  assert.deepEqual(await libraryPdf(fetch, KR.slice(0, -1), "10.1000/xyz"), PDF); // the "/" put back
+  assert.equal(asked[1], page);
+  assert.equal(await publisherUrl(async () => { throw new Error("offline"); }, "10.1000/xyz"), "https://doi.org/10.1000/xyz");
 });
 
 test("unknown routes are 404", async () => {

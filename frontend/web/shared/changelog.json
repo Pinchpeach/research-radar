@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.11.2",
+    "date": "2026-10-24",
+    "ko": [
+      "학교 도서관 주소 고침: 'link.n2s?url=' 같은 주소에 논문 주소를 넣을 때 ?·& 가 섞여 잘리던 문제, 상대 주소로 된 PDF 링크가 도서관을 벗어나던 문제를 고쳤어요.",
+      "도서관 주소를 붙여 넣을 때 끝의 '/'가 빠졌거나 안내문의 예시 주소를 통째로 넣어도 알아서 앞부분만 써요.",
+      "DOI를 먼저 출판사 주소로 바꾼 뒤 도서관을 거쳐 열고, IEEE처럼 PDF를 틀 안에 보여 주는 곳도 받아요. 로그인이 필요할 때 '브라우저에서 열기'는 도서관을 거친 주소로 열려요."
+    ],
+    "en": [
+      "Library addresses fixed: a paper's address put after a 'link.n2s?url=' style prefix was cut at its ? and &, and relative PDF links left the library; both now go through it.",
+      "A pasted library address without its closing '/', or a whole example address from the library's guide, is trimmed to the prefix.",
+      "A DOI is first turned into the publisher's address, then opened through the library; PDFs shown in a frame (IEEE) come through too. When signing in is needed, 'Open in browser' goes through the library."
+    ]
+  },
+  {
     "version": "0.11.1",
     "date": "2026-10-23",
     "ko": [

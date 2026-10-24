@@ -8,7 +8,7 @@ import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranki
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
-import { DOI, libraryPdf, NeedsLogin, NoPdf, PROXY, schoolFor, unpaywallLinks } from "./library.js";
+import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, unpaywallLinks } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -219,6 +219,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
         if (value != null && !["ko", "en", ""].includes(value)) throw invalid("language must be ko or en");
       } else if (name === "library_proxy") {
         if (value != null && (String(value).length > 300 || (value !== "" && !PROXY.test(String(value))))) throw invalid("library_proxy must be an http(s) address");
+        update[name] = value ? normalizeProxy(value) : value; // e.g. a pasted example address
+        continue;
       } else if (name === "reading_goal") {
         if (value != null && !/^([1-9][0-9]{0,2})?$/.test(String(value))) throw invalid("reading_goal must be 1-999");
       } else if (!(name in limits)) {

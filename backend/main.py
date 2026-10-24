@@ -255,7 +255,10 @@ def read_settings():
 
 @app.put("/settings")
 def update_settings(update: SettingsUpdate):
-    settings.save(update.model_dump(exclude_unset=True))
+    values = update.model_dump(exclude_unset=True)
+    if values.get("library_proxy"):
+        values["library_proxy"] = library.normalize_proxy(values["library_proxy"])  # e.g. a pasted example address
+    settings.save(values)
     return settings.public_view()
 
 

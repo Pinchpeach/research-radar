@@ -103,7 +103,7 @@ class DesktopApi:
 
         from backend import library, settings
 
-        prefix = settings.get("library_proxy")
+        prefix = library.proxy()
         if not library.valid_proxy(prefix or "") or not library.DOI.match(doi or ""):
             return False
         done, lock, result = threading.Event(), threading.Lock(), {"ok": False}

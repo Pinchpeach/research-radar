@@ -306,16 +306,19 @@ test.describe("through the university library (the Android app's in-app sign-in)
       return route.fulfill({ status: 404, headers: cors });
     });
 
+    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" },
+      contentType: "application/json", body: JSON.stringify({ responseCode: 100 }) })); // doi.org doesn't say: through doi.org itself
     await page.goto("./");
     await go(page, "settings");
     await page.locator(".subtab[data-pane=library]").click();
-    await page.locator("#library-proxy").fill(KR);
+    await page.locator("#library-proxy").fill(KR.slice(0, -1)); // without its closing "/": put back
     await page.locator("#library-form button[type=submit]").click();
     await expect(page.locator("#library-state")).toContainText("아직 로그인하지 않았어요");
 
     await search(page);
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
     await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
+    await expect(page.locator(".rd-unavailable a")).toHaveAttribute("href", PAGE); // or open it through the library in the browser
     await page.locator(".rd-login").click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     expect(opened).toEqual([PAGE]);

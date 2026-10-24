@@ -35,6 +35,7 @@ export async function unpaywallLinks(fetch, doi, email) {
 
 const PASSWORD = /<input\b[^>]*\btype\s*=\s*["']?password/i;
 const META_PDF = /<meta\b[^>]*\bname\s*=\s*["']citation_pdf_url["'][^>]*>/gi;
+const FRAME = /<(?:iframe|embed)\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
 const CONTENT = /\bcontent\s*=\s*["']([^"']+)["']/i;
 
 export class NeedsLogin extends Error {
@@ -49,23 +50,59 @@ export function inScope(url, prefix) {
   const host = hostOf(url), base = hostOf(prefix);
   return Boolean(base) && (host === base || host.endsWith("." + base));
 }
-export const through = (prefix, url) => (inScope(url, prefix) ? url : prefix + url);
-export const loginUrl = (prefix, doi) => through(prefix, `https://doi.org/${doi}`);
+/** Like Python's urllib.parse.quote: percent-encodes all but letters, digits, "_.-~" and `safe`. */
+const quote = (text, safe = "/") => [...String(text)].map((c) =>
+  /[A-Za-z0-9_.\-~]/.test(c) || safe.includes(c) ? c : [...new TextEncoder().encode(c)].map((b) => "%" + b.toString(16).toUpperCase().padStart(2, "0")).join("")).join("");
+
+/** The proxy prefix from what the person pasted (see backend/library.py normalize_proxy). */
+export function normalizeProxy(text) {
+  text = String(text || "").trim();
+  const found = /https?(:\/\/|%3A%2F%2F)/i.exec(text.slice(8));
+  if (found) text = text.slice(0, 8 + found.index);
+  if (/_Lib_Proxy_Url$/i.test(text)) text += "/";
+  else if (/[?&](q?url)$/i.test(text)) text += "=";
+  return text;
+}
+
+/** url through the library: encoded after a "...=" prefix, as it is after a path prefix. */
+export const through = (prefix, url) => (inScope(url, prefix) ? url : prefix + (prefix.endsWith("=") ? quote(url, "") : url));
+
+/** The publisher's address inside a proxied one, for resolving the page's relative links. */
+export function unwrap(prefix, url) {
+  if (!url.startsWith(prefix)) return url;
+  let inner = url.slice(prefix.length);
+  if (prefix.endsWith("=") && /^https?%3a/i.test(inner)) inner = decodeURIComponent(inner.split("&")[0]);
+  return /^https?:\/\//i.test(inner) ? inner : url;
+}
+
+export const doiUrl = (doi) => "https://doi.org/" + quote(doi, "/()<>;:-._");
+
+/** Where the DOI points, asked of doi.org without the library (see backend/library.py). */
+export async function publisherUrl(fetch, doi) {
+  try {
+    const record = await (await fetch(`https://doi.org/api/handles/${quote(doi, "/")}?type=URL`)).json();
+    const value = (record.values || []).find((v) => v && v.type === "URL");
+    const url = value && value.data && value.data.value;
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url;
+  } catch { /* offline or unknown: doi.org itself */ }
+  return doiUrl(doi);
+}
+
+export const loginUrl = async (fetch, prefix, doi) => through(prefix, await publisherUrl(fetch, doi));
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
 const unescapeHtml = (text) => text.replace(/&(#x[0-9a-f]+|#\d+|\w+);/gi, (all, code) =>
   code[0] === "#" ? String.fromCodePoint(parseInt(code.slice(code[1] === "x" || code[1] === "X" ? 2 : 1), code[1] === "x" || code[1] === "X" ? 16 : 10))
     : ENTITIES[code.toLowerCase()] ?? all);
 
-/** The publisher's PDF address from the page's citation_pdf_url tag. */
+/** The publisher's PDF address from the page's citation_pdf_url tag, else a PDF in a frame (IEEE). */
 export function pdfLink(html, pageUrl) {
+  const resolve = (text) => { try { return new URL(unescapeHtml(text).trim(), pageUrl).href; } catch { return null; } };
   for (const tag of html.match(META_PDF) || []) {
     const found = CONTENT.exec(tag);
-    if (found) {
-      const text = unescapeHtml(found[1]).trim();
-      try { return new URL(text, pageUrl).href; } catch { /* not an address */ }
-    }
+    if (found && resolve(found[1])) return resolve(found[1]);
   }
+  for (const [, src] of html.matchAll(FRAME)) if (/pdf/i.test(src) && resolve(src)) return resolve(src);
   return null;
 }
 
@@ -73,9 +110,10 @@ const isPdf = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).trimStar
 
 /** A paper's PDF through the library proxy: the paper's page, then its PDF link. */
 export async function libraryPdf(fetch, prefix, doi) {
-  const start = loginUrl(prefix, doi);
+  prefix = normalizeProxy(prefix);
+  const start = await loginUrl(fetch, prefix, doi);
   let url = start;
-  for (let step = 0; step < 2; step++) {
+  for (let step = 0; step < 3; step++) { // the paper's page, its PDF link, and a frame around the PDF
     const response = await fetch(url);
     const final = response.url || url;
     if (!inScope(final, prefix)) throw new NeedsLogin(start);
@@ -84,7 +122,7 @@ export async function libraryPdf(fetch, prefix, doi) {
     if (isPdf(bytes)) return bytes;
     const html = new TextDecoder().decode(bytes.slice(0, 2_000_000));
     if (PASSWORD.test(html)) throw new NeedsLogin(start);
-    const link = pdfLink(html, final);
+    const link = pdfLink(html, unwrap(prefix, final)); // relative links are the publisher's
     if (!link) throw new NoPdf(final);
     url = through(prefix, link);
   }
