@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.5",
+    "date": "2026-10-24",
+    "ko": ["휴대폰 학교 로그인 고침: 로그인 창과 앱이 같은 쿠키를 써서, 앱이 미리 도서관에 물어본 기록이 로그인 진행을 꼬이게 했어요(연세대에서 흰 화면). 로그인 창을 열기 전에 그 기록을 지우고, 논문 페이지에 도착한 뒤에만 PDF를 받아요."],
+    "en": ["School sign-in on the phone: the sign-in window shares the app's cookies, and the app's earlier request to the library tangled the sign-in (a blank page at Yonsei). Those cookies are cleared before the window opens, and the PDF is only fetched once the window reaches the paper's page."]
+  },
+  {
     "version": "0.11.4",
     "date": "2026-10-24",
     "ko": [
