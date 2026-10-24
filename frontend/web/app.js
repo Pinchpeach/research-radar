@@ -787,11 +787,9 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
   $("school-state").textContent = "";
   state.librarySignInUrl = s.library_sign_in_url || null;
-  const chrome = window.radarChromeSignIn && window.radarChromeSignIn(); // Android: when Chrome was signed in
   $("library-state").textContent = !(s.library_proxy && s.library_proxy.value) ? ""
-    : window.radarLocalApi ? (chrome ? t("set.libraryChromeSignedIn", { time: new Date(chrome).toLocaleTimeString(LANG === "ko" ? "ko-KR" : "en-US", { hour: "numeric", minute: "2-digit" }) }) : t("set.libraryMobile"))
-    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn");
-  $("library-sign-in").hidden = !state.librarySignInUrl || !(window.radarOpenInBrowser || (window.pywebview && window.pywebview.api && window.pywebview.api.library_sign_in));
+    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") + (window.radarLocalApi && s.library_signed_in ? " " + t("set.libraryMobile") : "");
+  $("library-sign-in").hidden = !state.librarySignInUrl || !(window.radarLibrarySignIn || (window.pywebview && window.pywebview.api && window.pywebview.api.library_sign_in));
   $("library-sign-out").hidden = !s.library_signed_in;
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
@@ -908,13 +906,11 @@ $("library-form").addEventListener("submit", async (event) => {
 
 // sign in to the library once, here, instead of for each paper
 $("library-sign-in").addEventListener("click", async () => {
-  if (window.radarOpenInBrowser) { // Android: in Chrome, which keeps the sign-in (mobile.js)
-    await window.radarOpenInBrowser(state.librarySignInUrl, { signIn: true });
-    return loadSettings();
-  }
   setStatus("library-status", t("set.librarySigningIn"));
   let ok = false;
-  try { ok = await window.pywebview.api.library_sign_in(); } catch { /* the window failed to open */ }
+  try { // Android: a web view inside the app (mobile.js); the desktop app: a window of its own
+    ok = window.radarLibrarySignIn ? await window.radarLibrarySignIn() : await window.pywebview.api.library_sign_in();
+  } catch { /* the window failed to open */ }
   setStatus("library-status", t(ok ? "set.librarySignInDone" : "set.librarySignInClosed"), !ok);
   await loadSettings();
 });

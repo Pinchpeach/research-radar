@@ -2,8 +2,14 @@
   {
     "version": "0.11.8",
     "date": "2026-10-24",
-    "ko": ["설정에서 도서관 로그인: 설정 › 도서관의 '도서관에 로그인'으로 한 번 로그인해 두면, 논문을 열 때마다 로그인하지 않아도 돼요. PC는 로그인 정보를 저장해 두고, 휴대폰은 Chrome이 기억하는 동안(몇 시간) 'Chrome에서 논문 열기' 한 번이면 돼요."],
-    "en": ["Sign in to the library from Settings: sign in once with 'Sign in to the library' in Settings › Library instead of for every paper. The desktop app keeps the sign-in; on the phone, while Chrome remembers it (a few hours), 'Open the paper in Chrome' is one tap."]
+    "ko": [
+      "설정에서 도서관 로그인: 설정 › 도서관의 '도서관에 로그인'으로 한 번 로그인해 두면, 무료본이 없는 논문도 PDF를 알아서 받아 바로 열어요. 따로 내려받거나 '열기'로 넘길 필요가 없어요.",
+      "휴대폰도 다시 앱 안에서 로그인해요(연세대처럼 도서관 홈페이지 로그인이 먼저 필요한 곳은 그 순서대로). 앱을 완전히 닫았다 열면 다시 로그인해야 할 수 있어요."
+    ],
+    "en": [
+      "Sign in to the library from Settings: sign in once with 'Sign in to the library' in Settings › Library, and papers with no free copy are fetched and opened by themselves, with no download to hand over.",
+      "The phone signs in inside the app again (on the library's homepage first where that's needed, as at Yonsei). After closing the app completely you may need to sign in again."
+    ]
   },
   {
     "version": "0.11.7",
