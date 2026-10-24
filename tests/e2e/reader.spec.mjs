@@ -286,6 +286,7 @@ test.describe("through the university library (the Android app's in-app sign-in)
         },
         close: async () => fire("browserClosed"),
       } } };
+      window.fireWebView = fire;
       // like CapacitorHttp, which follows redirects natively and reports where it ended up
       // (a fulfilled cross-origin redirect fails in the test browser)
       const original = window.fetch;
@@ -330,6 +331,39 @@ test.describe("through the university library (the Android app's in-app sign-in)
     await page.locator(".subtab[data-pane=library]").click();
     await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
   });
+});
+
+test("a sign-in that doesn't finish shows where the web view got to", async ({ page }) => {
+  const DOI = "10.1109/TNN.2008.2005605", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    const listeners = {};
+    window.Capacitor = { Plugins: { InAppBrowser: {
+      addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => {} }; },
+      openInWebView: async () => setTimeout(() => {
+        (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: "http://sso.uni.example/login?x=1" }));
+        (listeners.browserClosed || []).forEach((f) => f({}));
+      }, 10),
+      close: async () => {},
+    } } };
+  });
+  await page.context().route((url) => url.href.startsWith(KR), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*",
+    "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" }, contentType: "text/html", body: "<form>sign in</form>" }));
+  await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
+  await page.addInitScript(() => { // as CapacitorHttp reports where it ended up
+    if (window !== window.top) return;
+    const original = window.fetch;
+    window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
+  });
+  await page.goto("./");
+  await page.evaluate(([KR]) => window.radarLocalApi("PUT", "/settings", { library_proxy: KR }), [KR]);
+  await page.evaluate(async ([DOI]) => {
+    const { openReader } = await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
+    await openReader({ paper: { id: "https://openalex.org/W1", title: "A paper", doi: `https://doi.org/${DOI}` }, api: window.radarLocalApi, saveFile: () => {} });
+  }, [DOI]);
+  await expect(page.locator(".rd-unavailable .rd-error").first()).toHaveText("학교 도서관 로그인이 필요해요");
+  await page.locator(".rd-login").click();
+  await expect(page.locator(".rd-last-url")).toHaveText("로그인 창의 마지막 주소: http://sso.uni.example/login?x=1");
 });
 
 async function readAll(download) {

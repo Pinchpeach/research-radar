@@ -284,6 +284,24 @@ def test_the_doi_is_followed_to_the_publisher_first():
 
     found = Session({"values": [{"type": "HS_ADMIN", "data": {}}, {"type": "URL", "data": {"value": "https://ieeexplore.ieee.org/document/4700287/"}}]})
     assert publisher_url(DOI, found) == "https://ieeexplore.ieee.org/document/4700287/"
+    old = Session({"values": [{"type": "URL", "data": {"value": "http://ieeexplore.ieee.org/document/4700287/"}}]})
+    assert publisher_url(DOI, old) == "https://ieeexplore.ieee.org/document/4700287/"  # proxies keep the scheme; Android blocks http
     assert found.asked == ("https://doi.org/api/handles/10.1000/xyz123", {"type": "URL"})
     assert publisher_url(DOI, Session({"responseCode": 100})) == "https://doi.org/10.1000/xyz123"  # unknown: doi.org itself
     assert publisher_url(DOI, Session({"values": [{"type": "URL", "data": {"value": "javascript:x"}}]})) == "https://doi.org/10.1000/xyz123"
+
+
+def test_the_android_app_lets_every_listed_library_use_plain_http():
+    """mobile/build.mjs writes network_security_config.xml from libraries.json; it must be current."""
+    from pathlib import Path
+    from urllib.parse import urlsplit
+
+    from backend.paths import shared_json
+
+    xml = (Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/res/xml/network_security_config.xml").read_text()
+    assert '<base-config cleartextTrafficPermitted="false" />' in xml
+    for school in shared_json("libraries.json")["schools"]:
+        for host in (school["domain"], urlsplit(school["proxy"]).hostname):
+            assert f'<domain includeSubdomains="true">{host}</domain>' in xml, f"run node mobile/build.mjs ({host})"
+    manifest = (Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/AndroidManifest.xml").read_text()
+    assert 'android:networkSecurityConfig="@xml/network_security_config"' in manifest

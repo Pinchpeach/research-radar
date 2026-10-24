@@ -37,9 +37,13 @@ if (InAppBrowser) {
         await InAppBrowser.close().catch(() => {});
       } catch { /* not signed in yet: the person carries on in the web view */ } finally { busy = false; }
     };
+    window.radarLibraryLastUrl = url; // where the web view got to, shown if signing in doesn't finish
     const handles = await Promise.all([
       InAppBrowser.addListener("browserPageLoaded", tryPdf),
-      InAppBrowser.addListener("browserPageNavigationCompleted", tryPdf),
+      InAppBrowser.addListener("browserPageNavigationCompleted", (data) => {
+        if (data && data.url) window.radarLibraryLastUrl = data.url;
+        tryPdf();
+      }),
       InAppBrowser.addListener("browserClosed", () => finish(false)),
     ]);
     try {

@@ -83,7 +83,7 @@ export async function publisherUrl(fetch, doi) {
     const record = await (await fetch(`https://doi.org/api/handles/${quote(doi, "/")}?type=URL`)).json();
     const value = (record.values || []).find((v) => v && v.type === "URL");
     const url = value && value.data && value.data.value;
-    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url;
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) return url.replace(/^http:\/\//i, "https://"); // see backend/library.py
   } catch { /* offline or unknown: doi.org itself */ }
   return doiUrl(doi);
 }
