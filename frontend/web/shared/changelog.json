@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.10",
+    "date": "2026-10-24",
+    "ko": ["휴대폰 도서관 로그인 화면이 Chrome처럼 접속해요: 일부 학교 로그인은 앱 안의 웹 화면을 막아서 검은 화면만 떴어요. 페이지를 열지 못하면 위쪽 주소 칸에 이유를 보여 줘요."],
+    "en": ["The phone's library sign-in screen now connects as Chrome does: some schools' sign-in turned away an app's web view and the screen stayed black. When a page can't open, the address bar says why."]
+  },
+  {
     "version": "0.11.9",
     "date": "2026-10-24",
     "ko": ["휴대폰 도서관 로그인 창을 새로 만들었어요: 이전 로그인 창은 학교 로그인처럼 여러 번 넘어가는 페이지에서 로딩만 계속됐어요. 이제 앱의 로그인 화면이 보통 브라우저처럼 페이지를 넘기고, 로그인을 마치면 알아서 닫혀요."],
