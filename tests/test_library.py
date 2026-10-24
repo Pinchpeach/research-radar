@@ -305,3 +305,69 @@ def test_the_android_app_lets_every_listed_library_use_plain_http():
             assert f'<domain includeSubdomains="true">{host}</domain>' in xml, f"run node mobile/build.mjs ({host})"
     manifest = (Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/AndroidManifest.xml").read_text()
     assert 'android:networkSecurityConfig="@xml/network_security_config"' in manifest
+
+
+def test_a_library_that_needs_its_own_sign_in_first(monkeypatch):
+    """Yonsei's link.n2s shows a blank page until the person has signed in on the library's site."""
+    import sys
+    import threading
+    import time
+    import types
+
+    from desktop.main import DesktopApi
+
+    yonsei = "https://access.yonsei.ac.kr/link.n2s?url="
+    assert library.login_page(yonsei) == "https://library.yonsei.ac.kr/login"
+    assert library.login_page(KR) is None
+    with pytest.raises(library.NeedsLogin) as caught:
+        library.fetch(DOI, yonsei, Site({yonsei + "https://doi.org/" + DOI: Answer(body=b"<html></html>")}))
+    assert caught.value.login_page == "https://library.yonsei.ac.kr/login"
+
+    settings.save({"library_proxy": yonsei})
+    monkeypatch.setattr(library, "fetch", lambda doi, prefix=None, session=None: (_ for _ in ()).throw(library.NeedsLogin("")))
+
+    class Hook:
+        def __init__(self):
+            self.handlers = []
+
+        def __iadd__(self, handler):
+            self.handlers.append(handler)
+            return self
+
+        def fire(self):
+            for handler in self.handlers:
+                handler()
+
+    class Window:
+        def __init__(self, title, url, **kwargs):
+            self.url, self.loaded_urls = url, []
+            self.events = types.SimpleNamespace(loaded=Hook(), closed=Hook())
+            opened.append(self)
+
+        def get_current_url(self):
+            return self.url
+
+        def load_url(self, url):
+            self.loaded_urls.append(url)
+
+        def get_cookies(self):
+            return []
+
+        def destroy(self):
+            self.events.closed.fire()
+
+    opened = []
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=Window))
+    thread = threading.Thread(target=lambda: DesktopApi().library_login(DOI))
+    thread.start()
+    while not opened:
+        time.sleep(0.01)
+    window = opened[0]
+    assert window.url == "https://library.yonsei.ac.kr/login"  # the library's sign-in page first
+    window.events.loaded.fire()
+    assert window.loaded_urls == []  # still signing in
+    window.url = "https://library.yonsei.ac.kr/"  # signed in: back on the library's homepage
+    window.events.loaded.fire()
+    assert window.loaded_urls == [yonsei + "https://doi.org/" + DOI]  # on to the paper through the proxy
+    window.destroy()
+    thread.join(5)

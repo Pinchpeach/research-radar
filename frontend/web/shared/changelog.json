@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.7",
+    "date": "2026-10-24",
+    "ko": ["연세대 도서관 로그인 고침: 연세대 교외접속 주소는 도서관 홈페이지에 먼저 로그인해야 열리고, 아니면 흰 화면이 떠요. 이제 ① 도서관 로그인 → ② 논문 열기 순서로 안내해요(PC 앱은 로그인한 뒤 알아서 논문으로 넘어가요)."],
+    "en": ["Yonsei library sign-in: Yonsei's off-campus address opens only after signing in on the library's homepage, and shows a blank page otherwise. The app now goes ① sign in to the library, ② open the paper (the desktop app moves on to the paper by itself once you've signed in)."]
+  },
+  {
     "version": "0.11.6",
     "date": "2026-10-24",
     "ko": ["휴대폰 학교 로그인을 Chrome으로: 앱 안의 창 대신 Chrome에서 학교 계정으로 로그인해요. Chrome에서 PDF를 내려받고 다운로드 알림의 '열기'에서 Research Radar를 고르면 그 논문으로 바로 열려 필기할 수 있어요."],

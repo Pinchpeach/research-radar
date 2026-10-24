@@ -25,14 +25,17 @@ window.radarLocalApi = createApi({
 // opens it with Research Radar (AndroidManifest's PDF intent filter), and it opens on the paper
 // they were signing in for (remembered for two hours).
 const PENDING = "radar.library.pending";
+const CHROME = {
+  android: { showTitle: true, hideToolbarOnScroll: false, viewStyle: 1, startAnimation: 0, exitAnimation: 1 }, // full screen
+  iOS: { closeButtonText: 2, viewStyle: 2, animationEffect: 2, enableBarsCollapsing: true, enableReadersMode: false },
+};
 if (InAppBrowser) {
+  // the library's own sign-in page first, for proxies that need it (reader.js loginButtons)
+  window.radarOpenInBrowser = (url) => InAppBrowser.openInSystemBrowser({ url, options: CHROME });
   window.radarLibraryLogin = async (doi, url, paper) => {
     if (!url) return false;
     try { localStorage.setItem(PENDING, JSON.stringify({ paper, at: Date.now() })); } catch { /* still works, without the paper */ }
-    await InAppBrowser.openInSystemBrowser({ url, options: {
-      android: { showTitle: true, hideToolbarOnScroll: false, viewStyle: 1, startAnimation: 0, exitAnimation: 1 }, // full screen
-      iOS: { closeButtonText: 2, viewStyle: 2, animationEffect: 2, enableBarsCollapsing: true, enableReadersMode: false },
-    } });
+    await InAppBrowser.openInSystemBrowser({ url, options: CHROME });
     return "browser";
   };
 }

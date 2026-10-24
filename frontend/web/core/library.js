@@ -12,6 +12,14 @@ import { webUrl } from "./openalex.js";
 export const DOI = /^10\.\d{4,9}\/\S{1,300}$/;
 export const PROXY = /^https?:\/\/[A-Za-z0-9.-]+(:\d+)?(\/\S*)?$/;
 
+/** The library's sign-in page to visit first, for proxies like Yonsei's (see backend/library.py login_page). */
+export function loginPage(prefix) {
+  let host = "";
+  try { host = new URL(prefix).hostname; } catch { return null; }
+  const school = LIBRARIES.schools.find((s) => s.login && new URL(s.proxy).hostname === host);
+  return school ? school.login : null;
+}
+
 export function schoolFor(email) {
   const text = String(email || "");
   const domain = text.includes("@") ? text.split("@").pop().trim().toLowerCase() : "";
@@ -39,7 +47,7 @@ const FRAME = /<(?:iframe|embed)\b[^>]*\bsrc\s*=\s*["']([^"']+)["']/gi;
 const CONTENT = /\bcontent\s*=\s*["']([^"']+)["']/i;
 
 export class NeedsLogin extends Error {
-  constructor(loginUrl) { super("sign in to your library"); this.loginUrl = loginUrl; }
+  constructor(loginUrl, loginPage = null) { super("sign in to your library"); this.loginUrl = loginUrl; this.loginPage = loginPage; }
 }
 export class NoPdf extends Error {
   constructor(pageUrl) { super("no PDF link on the paper's page"); this.pageUrl = pageUrl; }
@@ -116,14 +124,18 @@ export async function libraryPdf(fetch, prefix, doi) {
   for (let step = 0; step < 3; step++) { // the paper's page, its PDF link, and a frame around the PDF
     const response = await fetch(url);
     const final = response.url || url;
-    if (!inScope(final, prefix)) throw new NeedsLogin(start);
+    if (!inScope(final, prefix)) throw new NeedsLogin(start, loginPage(prefix));
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
     if (isPdf(bytes)) return bytes;
     const html = new TextDecoder().decode(bytes.slice(0, 2_000_000));
-    if (PASSWORD.test(html)) throw new NeedsLogin(start);
+    if (PASSWORD.test(html)) throw new NeedsLogin(start, loginPage(prefix));
     const link = pdfLink(html, unwrap(prefix, final)); // relative links are the publisher's
-    if (!link) throw new NoPdf(final);
+    if (!link) {
+      // still on the proxy's own link page (see backend/library.py): sign in first
+      if (loginPage(prefix) || (prefix.endsWith("=") && hostOf(final) === hostOf(prefix))) throw new NeedsLogin(start, loginPage(prefix));
+      throw new NoPdf(final);
+    }
     url = through(prefix, link);
   }
   throw new NoPdf(url);

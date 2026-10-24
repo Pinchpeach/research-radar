@@ -163,7 +163,7 @@ class Reader {
       try { detail = (await response.json()).detail; } catch { /* not JSON */ }
     }
     if (status === 422) return null; // no library set up: nothing to say
-    if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url };
+    if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url, first: detail && detail.library_login };
     if (status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
     const key = { 401: "rd.library401", 404: "rd.library404" }[status] || "rd.libraryFailed";
     throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${status}` }));
@@ -222,9 +222,10 @@ class Reader {
     const box = el("div", { class: "rd-unavailable" },
       el("h3", { text: this.url ? t("rd.cantOpen") : this.paper ? t("rd.noFree") : t("rd.noPdf") }),
       error ? el("p", { class: "rd-error", text: String(error.message || error) }) : null,
-      el("p", { text: this.libraryLogin ? t("rd.loginHint") : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
+      el("p", { text: this.libraryLogin ? t(this.libraryLogin.first && window.radarOpenInBrowser ? "rd.loginStepsHint" : "rd.loginHint")
+        : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
       el("div", { class: "rd-row" },
-        this.libraryLogin && signIn() ? this.loginButton() : null,
+        this.libraryLogin && signIn() ? this.loginButtons() : null,
         this.browserLink() ? el("a", { href: this.browserLink(), target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
         el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick)));
     this.pagesEl.replaceChildren(box);
@@ -236,9 +237,22 @@ class Reader {
     return /^https?:\/\//i.test(link || "") ? link : null;
   }
 
+  /**
+   * On Android, a library whose proxy needs signing in on its own site first (Yonsei) gets two
+   * steps in Chrome: sign in there, then open the paper. The desktop window does both itself.
+   */
+  loginButtons() {
+    const first = this.libraryLogin.first;
+    if (!first || !window.radarOpenInBrowser) return this.loginButton();
+    const signInFirst = el("button", { type: "button", class: "rd-btn rd-login-first", text: t("rd.loginFirst") });
+    signInFirst.addEventListener("click", () => window.radarOpenInBrowser(first));
+    const box = el("div", { class: "rd-row rd-login-steps" }, signInFirst, this.loginButton(t("rd.loginThen")));
+    return box;
+  }
+
   /** Sign in to the library in a window of its own (signIn()), then open the paper from there. */
-  loginButton() {
-    const button = el("button", { type: "button", class: "rd-btn primary rd-login", text: t("rd.login") });
+  loginButton(label = t("rd.login")) {
+    const button = el("button", { type: "button", class: "rd-btn primary rd-login", text: label });
     button.addEventListener("click", async () => {
       button.disabled = true;
       button.textContent = t("rd.loggingIn");
@@ -246,7 +260,7 @@ class Reader {
       try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url, this.paper); } catch { /* the window failed to open */ }
       if (ok === true) return this.reopen({ libraryOnly: true });
       button.disabled = false;
-      button.textContent = t("rd.login");
+      button.textContent = label;
       if (ok === "browser") { // Android: signed in in Chrome, the PDF comes back with "Open with" (mobile.js)
         const box = button.closest(".rd-unavailable");
         let note = box && box.querySelector(".rd-in-browser");

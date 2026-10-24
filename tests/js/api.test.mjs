@@ -342,6 +342,10 @@ test("addresses through each kind of proxy, like tests/test_library.py", async (
   assert.deepEqual(await libraryPdf(fetch, KR.slice(0, -1), "10.1000/xyz"), PDF); // the "/" put back
   assert.equal(asked[1], page);
   assert.equal(await publisherUrl(async () => { throw new Error("offline"); }, "10.1000/xyz"), "https://doi.org/10.1000/xyz");
+  // Yonsei's link page stays blank until the person has signed in on the library's site
+  const YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
+  const blank = async (url) => (url.startsWith(YONSEI) ? reply(url, "<html></html>") : { json: async () => ({}) });
+  await assert.rejects(libraryPdf(blank, YONSEI, "10.1000/xyz"), (e) => e.constructor.name === "NeedsLogin" && e.loginPage === "https://library.yonsei.ac.kr/login");
   const httpOnly = async () => ({ json: async () => ({ values: [{ type: "URL", data: { value: "http://ieeexplore.ieee.org/document/1/" } }] }) });
   assert.equal(await publisherUrl(httpOnly, "10.1000/xyz"), "https://ieeexplore.ieee.org/document/1/");
 });

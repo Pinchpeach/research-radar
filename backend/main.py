@@ -333,7 +333,7 @@ def library_pdf(doi: str):
     try:
         data = library.fetch(doi)
     except library.NeedsLogin as exc:
-        raise HTTPException(status_code=401, detail={"message": "Sign in to your library", "login_url": exc.login_url}) from exc
+        raise HTTPException(status_code=401, detail={"message": "Sign in to your library", "login_url": exc.login_url, "library_login": exc.login_page}) from exc
     except library.NoPdf as exc:
         raise HTTPException(status_code=404, detail={"message": "No PDF link on the paper's page", "page_url": exc.page_url}) from exc
     except pdf_proxy.Refused as exc:

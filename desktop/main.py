@@ -16,6 +16,7 @@ import threading
 import time
 import webbrowser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 APP_NAME = "Research Radar"
 APP_ID = "ResearchRadar"
@@ -107,12 +108,22 @@ class DesktopApi:
         if not library.valid_proxy(prefix or "") or not library.DOI.match(doi or ""):
             return False
         done, lock, result = threading.Event(), threading.Lock(), {"ok": False}
-        window = webview.create_window(f"{APP_NAME} — library", library.login_url(prefix, doi), width=1100, height=820)
+        link, first = library.login_url(prefix, doi), library.login_page(prefix)
+        # some proxies (Yonsei's) show a blank page until the person has signed in on the library's
+        # site: start there, and go on to the paper once they've left the sign-in page
+        state = {"to_paper": bool(first)}
+        window = webview.create_window(f"{APP_NAME} — library", first or link, width=1100, height=820)
 
         def loaded():
             if done.is_set() or not lock.acquire(blocking=False):
                 return
             try:
+                if state["to_paper"]:
+                    here, page = urlsplit(window.get_current_url() or ""), urlsplit(first)
+                    if here.hostname == page.hostname and not here.path.startswith(page.path):  # signed in: back on the library's site
+                        state["to_paper"] = False
+                        window.load_url(link)
+                    return
                 cookies = []
                 for jar in window.get_cookies() or []:
                     for name, morsel in jar.items():
