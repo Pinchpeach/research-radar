@@ -32,6 +32,13 @@
 
         </activity>
 
+        <!-- signing in to the university library (LibraryWebPlugin) -->
+        <activity
+            android:name=".LibraryWebActivity"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|uiMode"
+            android:theme="@style/AppTheme.NoActionBar"
+            android:exported="false" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
