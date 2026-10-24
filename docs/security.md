@@ -127,7 +127,7 @@ PDF 본문은 pdf.js가 `isEvalSupported: false`로 그리고, 필기는 SVG의 
 
 PC 앱은 학교 도서관 프록시(EZproxy 등)에 로그인한 세션 쿠키를 `library-session.json`에 사용자만 읽을 수 있게 저장합니다(`backend/library.py`). 로그인 창(`desktop/main.py`)에서 받은 쿠키 가운데 프록시 호스트와 그 하위 도메인의 것만 남기고(`ezproxy.school.edu.attacker.example` 같은 이름은 버림), 요청에도 그 도메인 쿠키로만 붙입니다. 받아 오는 동안 프록시 밖으로 리다이렉트되면 쿠키를 보내기 전에 멈추고 다시 로그인하라고 알립니다. 주소마다 공인 IP 검사(11번)도 그대로 합니다. 프록시 주소를 바꾸면 이전 세션은 쓰지 않고, 설정 › 도서관에서 지울 수 있습니다. 사람이 연 논문 한 편씩만 받습니다. 테스트: `tests/test_library.py`.
 
-Android 앱은 로그인을 앱 안의 웹 뷰(`@capacitor/inappbrowser`)에서 받습니다. 쿠키를 앱의 쿠키 저장소와 함께 쓰도록 같은 프로세스에서 열고(`isIsolated: false`), 열 때 쿠키를 지우지 않게 합니다. 그 안의 페이지는 다른 출처라 앱의 데이터(localStorage의 키·북마크)를 읽지 못합니다. PDF는 CapacitorHttp가 받으며 쿠키는 브라우저처럼 그 도메인에만 붙습니다(`core/library.js`). 로그인 정보 지우기는 웹 뷰 쿠키를 모두 지웁니다.
+Android 앱은 로그인을 Chrome(Custom Tabs, `@capacitor/inappbrowser`의 `openInSystemBrowser`)에 맡깁니다. 학교 계정과 쿠키는 Chrome에만 남고 앱은 보지 못합니다. 사람이 Chrome에서 받은 PDF를 "Research Radar로 열기"로 넘기면(`content://` PDF만 받는 인텐트 필터) 앱이 그 파일을 읽어 엽니다. 넘겨받은 파일은 PDF로만 다루며(pdf.js, 11번과 같은 방식), 어느 논문의 것인지는 로그인 버튼을 누를 때 기억해 둔 논문(2시간까지)으로 정합니다.
 
 ## 그대로 안전한 부분
 

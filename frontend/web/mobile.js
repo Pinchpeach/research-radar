@@ -3,7 +3,6 @@
 // usual app.js starts.
 
 import { createApi } from "./core/api.js";
-import { inScope, normalizeProxy } from "./core/library.js";
 import { RELEASES_REPO, VERSION } from "./core/version.js";
 
 const plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -20,67 +19,41 @@ window.radarLocalApi = createApi({
   clearCookies: async () => { if (CapacitorCookies) await CapacitorCookies.clearAllCookies(); },
 });
 
-// Sign in to the library (core/library.js): an in-app web view on the paper through the proxy.
-// It runs in the app's own process with its cookie store kept, so the session cookies it gets
-// are the ones CapacitorHttp sends. Once the web view is on the paper's page through the proxy,
-// the PDF is tried; when it comes through, the web view closes and the reader asks again.
-//
-// The two share one cookie store, so nothing else may talk to the proxy while the person signs
-// in: the proxy keeps its sign-in progress in a session cookie, and a request of ours in between
-// would start that over (Yonsei's link.n2s then shows a blank page). So the proxy's old cookies
-// (from the reader's first try) are cleared first, and the PDF is only asked for from the
-// paper's page.
+// Sign in to the library in Chrome (a Custom Tab, from @capacitor/inappbrowser). An in-app web
+// view left Yonsei's proxy on a blank page, and Chrome is where people sign in anyway. Chrome
+// keeps its cookies to itself, so the app can't fetch the PDF: the person downloads it there and
+// opens it with Research Radar (AndroidManifest's PDF intent filter), and it opens on the paper
+// they were signing in for (remembered for two hours).
+const PENDING = "radar.library.pending";
 if (InAppBrowser) {
-  window.radarLibraryLogin = async (doi, url) => {
+  window.radarLibraryLogin = async (doi, url, paper) => {
     if (!url) return false;
-    let prefix = "";
-    try { prefix = normalizeProxy((await window.radarLocalApi("GET", "/settings")).library_proxy.value); } catch { /* none */ }
-    const proxyHost = (() => { try { return new URL(prefix).hostname; } catch { return ""; } })();
-    /** The paper's page through the proxy: past the link and the sign-in pages. */
-    const onPaper = (page) => {
-      if (!page || page === url || !inScope(page, prefix)) return false;
-      const host = new URL(page).hostname;
-      return host !== proxyHost || page.startsWith(prefix); // www-nature-com-ssl.access.yonsei.ac.kr, or .../_Lib_Proxy_Url/https://...
-    };
-    let busy = false, finish;
-    const done = new Promise((resolve) => (finish = resolve));
-    const tryPdf = async () => {
-      if (busy || !onPaper(window.radarLibraryLastUrl)) return;
-      busy = true;
-      try {
-        await window.radarLocalApi("GET", `/library/pdf?doi=${encodeURIComponent(doi)}`);
-        finish(true);
-        await InAppBrowser.close().catch(() => {});
-      } catch { /* not signed in yet: the person carries on in the web view */ } finally { busy = false; }
-    };
-    window.radarLibraryLastUrl = url; // where the web view got to, shown if signing in doesn't finish
-    const handles = await Promise.all([
-      InAppBrowser.addListener("browserPageLoaded", tryPdf),
-      InAppBrowser.addListener("browserPageNavigationCompleted", (data) => {
-        if (data && data.url) window.radarLibraryLastUrl = data.url;
-        tryPdf();
-      }),
-      InAppBrowser.addListener("browserClosed", async () => { // closed by hand, maybe on the paper's page: one last try
-        let ok = false;
-        try { await window.radarLocalApi("GET", `/library/pdf?doi=${encodeURIComponent(doi)}`); ok = true; } catch { /* no */ }
-        finish(ok);
-      }),
-    ]);
-    try {
-      if (CapacitorCookies) await CapacitorCookies.clearAllCookies().catch(() => {});
-      await InAppBrowser.openInWebView({ url, options: {
-        showToolbar: true, showURL: true, clearCache: false, clearSessionCache: false, // keep the sign-in
-        mediaPlaybackRequiresUserAction: true, closeButtonText: t("rd.close"), toolbarPosition: 0,
-        showNavigationButtons: true, leftToRight: false, customWebViewUserAgent: null,
-        android: { allowZoom: true, hardwareBack: true, pauseMedia: true, isIsolated: false }, // the app's cookie store
-        iOS: { allowOverScroll: true, enableViewportScale: false, allowInLineMediaPlayback: false, surpressIncrementalRendering: false,
-          viewStyle: 2, animationEffect: 2, allowsBackForwardNavigationGestures: true },
-      } });
-      return await done;
-    } finally {
-      for (const handle of handles) handle.remove();
-    }
+    try { localStorage.setItem(PENDING, JSON.stringify({ paper, at: Date.now() })); } catch { /* still works, without the paper */ }
+    await InAppBrowser.openInSystemBrowser({ url, options: {
+      android: { showTitle: true, hideToolbarOnScroll: false, viewStyle: 1, startAnimation: 0, exitAnimation: 1 }, // full screen
+      iOS: { closeButtonText: 2, viewStyle: 2, animationEffect: 2, enableBarsCollapsing: true, enableReadersMode: false },
+    } });
+    return "browser";
   };
+}
+
+/** A PDF handed to the app ("Open with Research Radar"): opened on the paper being signed in for. */
+async function openHandedPdf(uri) {
+  if (!/^(content|file):/i.test(uri || "")) return;
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem(PENDING) || "null"); } catch { /* none */ }
+  const paper = pending && Date.now() - pending.at < 2 * 3600 * 1000 ? pending.paper : null;
+  try { localStorage.removeItem(PENDING); } catch { /* fine */ }
+  // the app's local server reads content:// addresses for the page (Capacitor's convertFileSrc)
+  const blob = await (await fetch(window.Capacitor.convertFileSrc(uri))).blob();
+  const name = (paper && paper.title ? paper.title.slice(0, 80) : "paper") + ".pdf";
+  while (!window.radarOpenFile) await new Promise((resolve) => setTimeout(resolve, 100)); // app.js still loading
+  window.radarOpenFile(new File([blob], name, { type: "application/pdf" }), paper);
+}
+const { App } = plugins;
+if (App) {
+  App.addListener("appUrlOpen", (event) => openHandedPdf(event && event.url).catch(() => {}));
+  App.getLaunchUrl().then((launch) => launch && openHandedPdf(launch.url)).catch(() => {});
 }
 
 // Save a file: write it to the app's cache and open Android's share sheet (Drive, e-mail, Files...).

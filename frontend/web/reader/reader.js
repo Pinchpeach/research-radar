@@ -68,8 +68,10 @@ async function fileId(bytes) {
  *   saveFile  app.js's saveFile(name, content, mime)
  *   onOpened(paper), onFinished(paper)   reading-record hooks
  */
+let current = null; // one reader at a time: a PDF handed to the app replaces the one waiting for it
 export async function openReader(options) {
-  const reader = new Reader(options);
+  if (current && current.root && current.root.isConnected) current.close(false);
+  const reader = current = new Reader(options);
   await reader.start();
   return reader;
 }
@@ -241,17 +243,16 @@ class Reader {
       button.disabled = true;
       button.textContent = t("rd.loggingIn");
       let ok = false;
-      try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url); } catch { /* the window failed to open */ }
-      if (ok) return this.reopen({ libraryOnly: true });
+      try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url, this.paper); } catch { /* the window failed to open */ }
+      if (ok === true) return this.reopen({ libraryOnly: true });
       button.disabled = false;
       button.textContent = t("rd.login");
-      this.toast(t("rd.loginClosed"));
-      if (window.radarLibraryLastUrl) { // where the sign-in window got to: helps tell what went wrong
+      if (ok === "browser") { // Android: signed in in Chrome, the PDF comes back with "Open with" (mobile.js)
         const box = button.closest(".rd-unavailable");
-        let last = box && box.querySelector(".rd-last-url");
-        if (box && !last) box.append(last = el("p", { class: "rd-error rd-last-url" }));
-        if (last) last.textContent = t("rd.lastUrl", { url: window.radarLibraryLastUrl });
-      }
+        let note = box && box.querySelector(".rd-in-browser");
+        if (box && !note) box.append(note = el("p", { class: "rd-in-browser" }));
+        if (note) note.textContent = t("rd.inBrowser");
+      } else this.toast(t("rd.loginClosed"));
     });
     return button;
   }

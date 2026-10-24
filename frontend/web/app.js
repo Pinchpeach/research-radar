@@ -514,6 +514,9 @@ async function openReader(options) {
     onAttachNote: attachToNote, onClose: () => { loadBookmarks(); if (currentTab === "reading") renderDocs(); }, ...options });
 }
 
+// Android: a PDF opened with the app (mobile.js), on the paper it was fetched for, if any.
+window.radarOpenFile = (file, paper) => openReader({ paper: paper ? pick(paper) : null, file });
+
 /** Ask for a PDF file; resolves to the File, or null if the person cancels. */
 function pickPdf() {
   const input = $("pick-pdf");
@@ -784,7 +787,8 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
   $("school-state").textContent = "";
   $("library-state").textContent = !(s.library_proxy && s.library_proxy.value) ? ""
-    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") + (window.radarLocalApi ? " " + t("set.libraryMobile") : "");
+    : window.radarLocalApi ? t("set.libraryMobile") // Chrome keeps the sign-in (mobile.js)
+    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn");
   $("library-sign-out").hidden = !s.library_signed_in;
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
