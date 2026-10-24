@@ -91,6 +91,25 @@ def login_page(prefix: str | None) -> str | None:
     return None
 
 
+SIGN_IN_TARGET = "https://www.nature.com/"  # any publisher page: signing in once is the point
+
+
+def sign_in_url(prefix: str | None) -> str | None:
+    """Where signing in from Settings starts: the library's sign-in page, else a publisher's page
+    through the proxy (which sends the person to sign in)."""
+    if not valid_proxy(prefix or ""):
+        return None
+    return login_page(prefix) or through(prefix, SIGN_IN_TARGET)
+
+
+def on_publisher(url: str, prefix: str) -> bool:
+    """A publisher's page through the proxy: past the proxy's link and the sign-in pages
+    (www-nature-com-ssl.access.yonsei.ac.kr/..., or .../_Lib_Proxy_Url/https://...)."""
+    if not in_scope(url, prefix):
+        return False
+    return (urlsplit(url).hostname or "").lower() != proxy_host(prefix) or (url.startswith(prefix) and re.match(r"https?://", url[len(prefix):], re.I) is not None and not prefix.endswith("="))
+
+
 def valid_proxy(prefix: str) -> bool:
     return bool(PROXY.match(prefix or ""))
 

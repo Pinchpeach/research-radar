@@ -786,9 +786,10 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("openalex-email").value = s.openalex_email.value || "";
   $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
   $("school-state").textContent = "";
+  state.librarySignInUrl = s.library_sign_in_url || null;
   $("library-state").textContent = !(s.library_proxy && s.library_proxy.value) ? ""
-    : window.radarLocalApi ? t("set.libraryMobile") // Chrome keeps the sign-in (mobile.js)
-    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn");
+    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") + (window.radarLocalApi && s.library_signed_in ? " " + t("set.libraryMobile") : "");
+  $("library-sign-in").hidden = !state.librarySignInUrl || !(window.radarLibrarySignIn || (window.pywebview && window.pywebview.api && window.pywebview.api.library_sign_in));
   $("library-sign-out").hidden = !s.library_signed_in;
   if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
@@ -901,6 +902,17 @@ $("library-form").addEventListener("submit", async (event) => {
   } catch (e) {
     setStatus("library-status", t("set.saveFailed", { error: e.message }), true);
   }
+});
+
+// sign in to the library once, here, instead of for each paper
+$("library-sign-in").addEventListener("click", async () => {
+  setStatus("library-status", t("set.librarySigningIn"));
+  let ok = false;
+  try { // Android: a web view inside the app (mobile.js); the desktop app: a window of its own
+    ok = window.radarLibrarySignIn ? await window.radarLibrarySignIn() : await window.pywebview.api.library_sign_in();
+  } catch { /* the window failed to open */ }
+  setStatus("library-status", t(ok ? "set.librarySignInDone" : "set.librarySignInClosed"), !ok);
+  await loadSettings();
 });
 
 $("library-sign-out").addEventListener("click", async () => {

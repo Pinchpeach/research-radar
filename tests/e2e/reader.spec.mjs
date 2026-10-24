@@ -262,83 +262,94 @@ test.describe("no free copy on OpenAlex", () => {
   });
 });
 
-test.describe("through the university library on Android: sign in in Chrome, open the PDF with the app", () => {
-  const DOI = "10.1109/TNN.2008.2005605", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
-  const PAGE = `${KR}https://doi.org/${DOI}`;
+/**
+ * A stand-in for @capacitor/inappbrowser's web view: `walk` lists the pages each opening goes
+ * through (signing in happens there), sharing the page's cookie store as the real one does.
+ */
+async function fakeWebView(page, walk) {
+  await page.addInitScript((walk) => {
+    if (window !== window.top) return;
+    const listeners = {};
+    const fire = (name, data) => (listeners[name] || []).forEach((f) => f(data || {}));
+    window.webViewOpened = [];
+    window.Capacitor = { convertFileSrc: (u) => "https://handed.example/" + encodeURIComponent(u), Plugins: {
+      InAppBrowser: {
+        addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
+        openInWebView: async ({ url, options }) => {
+          window.webViewOpened.push(url);
+          window.webViewOptions = options;
+          const pages = walk[url] || [];
+          pages.forEach((here, i) => setTimeout(async () => {
+            if (here === "SIGNED-IN") return window.signInAtLibrary();
+            fire("browserPageNavigationCompleted", { url: here });
+          }, 20 * (i + 1)));
+        },
+        close: async () => setTimeout(() => fire("browserClosed"), 10),
+      },
+      App: { addListener: (name, f) => { window.handPdf = (uri) => f({ url: uri }); }, getLaunchUrl: async () => null },
+    } };
+  }, walk);
+}
+
+test.describe("through the university library on Android, signed in inside the app", () => {
+  const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
+  const LINK = `${YONSEI}https://doi.org/${DOI}`, PDF = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/stamp/gnn.pdf";
+  // the library's sign-in page, signing in, back on the library's homepage; then the proxy, onto a publisher's page
+  const WALK = {
+    "https://library.yonsei.ac.kr/login": ["https://library.yonsei.ac.kr/login", "SIGNED-IN", "https://library.yonsei.ac.kr/"],
+    [`${YONSEI}https://www.nature.com/`]: ["https://www-nature-com-ssl.access.yonsei.ac.kr/"],
+  };
   test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
     (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
 
-  test("the login button opens Chrome; the downloaded PDF, opened with the app, opens on the paper", async ({ page }) => {
-    // stand-ins for @capacitor/inappbrowser (Chrome Custom Tabs) and @capacitor/app ("Open with")
-    await page.addInitScript(() => {
-      if (window !== window.top) return;
-      const appListeners = [];
-      window.chromeOpened = [];
-      window.Capacitor = {
-        convertFileSrc: (uri) => "https://handed.example/" + encodeURIComponent(uri),
-        Plugins: {
-          InAppBrowser: { openInSystemBrowser: async ({ url }) => { window.chromeOpened.push(url); } },
-          App: { addListener: (name, f) => { if (name === "appUrlOpen") appListeners.push(f); }, getLaunchUrl: async () => null },
-        },
-      };
-      window.handPdf = (uri) => appListeners.forEach((f) => f({ url: uri }));
-    });
-    await page.context().route((url) => url.href.startsWith(KR), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*",
-      "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" }, contentType: "text/html", body: "<form>sign in</form>" }));
-    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
-    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
-    await page.addInitScript(() => { // as CapacitorHttp reports where it ended up
-      if (window !== window.top) return;
-      const original = window.fetch;
-      window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
-    });
-
+  async function library(page) {
+    let signedIn = false;
+    await page.exposeFunction("signInAtLibrary", () => { signedIn = true; });
+    await fakeWebView(page, WALK);
+    const cors = { "access-control-allow-origin": "*" };
+    // not signed in: Yonsei's link page stays blank; signed in: the paper's page, then its PDF
+    await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: cors, contentType: "text/html",
+      body: signedIn && route.request().url() === LINK ? `<meta name="citation_pdf_url" content="${PDF}">` : "<html></html>" }));
+    await page.context().route(PDF, async (route) => route.fulfill({ headers: cors, contentType: "application/pdf", body: await samplePdf(3) }));
+    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: cors, body: "{}" }));
     await page.goto("./");
     await go(page, "settings");
     await page.locator(".subtab[data-pane=library]").click();
-    await page.locator("#library-proxy").fill(KR.slice(0, -1)); // without its closing "/": put back
+    await page.locator("#library-proxy").fill(YONSEI);
     await page.locator("#library-form button[type=submit]").click();
-    await expect(page.locator("#library-state")).toContainText("Chrome에서 로그인");
+    await expect(page.locator("#library-state")).toContainText("아직 로그인하지 않았어요");
+  }
 
+  test("sign in once in Settings, then a paper's PDF opens by itself", async ({ page }) => {
+    await library(page);
+    await page.locator("#library-sign-in").click();
+    await expect(page.locator("#library-status")).toContainText("도서관에 로그인했어요");
+    await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
+    expect(await page.evaluate(() => window.webViewOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://www.nature.com/`]);
+    const options = await page.evaluate(() => window.webViewOptions);
+    expect([options.clearCache, options.clearSessionCache, options.android.isIsolated]).toEqual([false, false, false]); // the app's cookies
+
+    await search(page);
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 }); // no sign-in screen, no download to hand over
+  });
+
+  test("not signed in yet: the reader signs in the same way, then opens the paper", async ({ page }) => {
+    await library(page);
     await search(page);
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
     await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
     await page.locator(".rd-login").click();
-    await expect(page.locator(".rd-in-browser")).toContainText("Research Radar를 고르면");
-    expect(await page.evaluate(() => window.chromeOpened)).toEqual([PAGE]);
-
-    // back from Chrome: the download, opened with the app, replaces the waiting reader
-    await page.evaluate(() => window.handPdf("content://com.android.providers.downloads.documents/document/42"));
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
-    await expect(page.locator(".reader")).toHaveCount(1);
-    await expect(page.locator(".rd-title")).toHaveText("The Graph Neural Network Model");
   });
-});
 
-test("a library that needs its own sign-in first (Yonsei): ① sign in there, ② then the paper, both in Chrome", async ({ page }) => {
-  const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
-  await page.addInitScript(() => {
-    if (window !== window.top) return;
-    window.chromeOpened = [];
-    window.Capacitor = { convertFileSrc: (u) => u, Plugins: {
-      InAppBrowser: { openInSystemBrowser: async ({ url }) => { window.chromeOpened.push(url); } },
-    } };
-    const original = window.fetch; // as CapacitorHttp: the blank page stays on the proxy, as Yonsei's does
-    window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
+  test("a PDF opened with the app from elsewhere opens in the reader", async ({ page }) => {
+    await fakeWebView(page, {});
+    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+    await page.goto("./");
+    await page.evaluate(() => window.handPdf("content://downloads/42"));
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
   });
-  // not signed in on the library's site: the link page stays where it is, blank
-  await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "text/html", body: "<html><body></body></html>" }));
-  await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
-  await page.goto("./");
-  await page.evaluate((proxy) => window.radarLocalApi("PUT", "/settings", { library_proxy: proxy }), YONSEI);
-  await page.evaluate(async (doi) => {
-    const { openReader } = await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
-    await openReader({ paper: { id: "https://openalex.org/W1", title: "A paper", doi: `https://doi.org/${doi}` }, api: window.radarLocalApi, saveFile: () => {} });
-  }, DOI);
-  await expect(page.locator(".rd-unavailable")).toContainText("도서관 홈페이지에 먼저 로그인");
-  await page.locator(".rd-login-first").click();
-  await page.locator(".rd-login").click();
-  expect(await page.evaluate(() => window.chromeOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://doi.org/${DOI}`]);
 });
 
 async function readAll(download) {

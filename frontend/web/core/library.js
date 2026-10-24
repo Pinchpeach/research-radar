@@ -96,6 +96,16 @@ export async function publisherUrl(fetch, doi) {
   return doiUrl(doi);
 }
 
+export const SIGN_IN_TARGET = "https://www.nature.com/";
+
+/** A publisher's page through the proxy, past its link and sign-in pages (see backend/library.py on_publisher). */
+export function onPublisher(url, prefix) {
+  if (!inScope(url, prefix)) return false;
+  return hostOf(url) !== hostOf(prefix) || (!prefix.endsWith("=") && url.startsWith(prefix) && /^https?:\/\//i.test(url.slice(prefix.length)));
+}
+/** Where signing in from Settings starts (see backend/library.py sign_in_url). */
+export const signInUrl = (prefix) => (PROXY.test(prefix || "") ? loginPage(prefix) || through(prefix, SIGN_IN_TARGET) : null);
+
 export const loginUrl = async (fetch, prefix, doi) => through(prefix, await publisherUrl(fetch, doi));
 
 const ENTITIES = { amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };

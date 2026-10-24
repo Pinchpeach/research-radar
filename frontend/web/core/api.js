@@ -8,7 +8,7 @@ import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranki
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
-import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, unpaywallLinks } from "./library.js";
+import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -264,6 +264,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
   const settingsView = () => {
     const view = settings.publicView(dataDir), proxy = settings.get("library_proxy");
     view.library_signed_in = Boolean(proxy) && storage.getItem(LIBRARY_SESSION) === proxy;
+    view.library_sign_in_url = proxy ? signInUrl(normalizeProxy(proxy)) : null;
     return view;
   };
 
