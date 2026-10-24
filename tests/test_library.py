@@ -307,6 +307,25 @@ def test_the_android_app_lets_every_listed_library_use_plain_http():
     assert 'android:networkSecurityConfig="@xml/network_security_config"' in manifest
 
 
+def test_the_android_app_fills_in_a_certificate_a_server_leaves_out():
+    """Yonsei's library sends no intermediate certificate: the sign-in screen and the app's HTTP
+    fetch it as Chrome does (AiaTrust), and only an untrusted chain is retried, never an expired,
+    misnamed or not-yet-valid certificate."""
+    from pathlib import Path
+
+    java = Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/java/io/github/pinchpeach/researchradar"
+    main = (java / "MainActivity.java").read_text()
+    assert "AiaTrust.install();" in main
+    screen = (java / "LibraryWebActivity.java").read_text()
+    assert "AiaTrust.trusted(error.getCertificate(), host)" in screen
+    for refused in ("SSL_NOTYETVALID", "SSL_EXPIRED", "SSL_IDMISMATCH", "SSL_DATE_INVALID"):
+        assert f"!error.hasError(SslError.{refused})" in screen
+    trust = (java / "AiaTrust.java").read_text()
+    assert "extensions.checkServerTrusted(completed, authType, host)" in trust  # the system's check, with the host
+    xml = (java.parents[4] / "res/xml/network_security_config.xml").read_text()
+    assert '<domain includeSubdomains="true">sectigo.com</domain>' in xml, "run node mobile/build.mjs"
+
+
 def test_a_library_that_needs_its_own_sign_in_first(monkeypatch):
     """Yonsei's link.n2s shows a blank page until the person has signed in on the library's site."""
     import sys
