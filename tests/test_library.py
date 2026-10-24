@@ -16,6 +16,7 @@ EZ = "https://ezproxy.uni.example/login?url="
 KR = "https://libproxy.uni.example/_Lib_Proxy_Url/"
 DOI = "10.1000/xyz123"
 PDF = b"%PDF-1.7 the paper"
+publisher_url = library.publisher_url  # the real one (the fixture below stands in for it)
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,8 @@ def home(tmp_path, monkeypatch):
     monkeypatch.setenv("RADAR_HOME", str(tmp_path))
     monkeypatch.setattr(socket, "getaddrinfo", lambda host, port, *a, **k: [(socket.AF_INET, 1, 6, "", ("93.184.216.34", port))])
     library._recent.clear()
+    # doi.org is asked where a DOI points (publisher_url); here it doesn't know, so doi.org itself
+    monkeypatch.setattr(library, "publisher_url", lambda doi, session=None: library.doi_url(doi))
 
 
 class Answer:
@@ -61,7 +64,7 @@ class Site:
 def test_landing_page_then_its_pdf_link_through_an_ezproxy():
     landing = "https://www-publisher-com.ezproxy.uni.example/article/xyz"
     site = Site({
-        EZ + "https://doi.org/" + DOI: Answer(302, location=landing),
+        EZ + "https%3A%2F%2Fdoi.org%2F10.1000%2Fxyz123": Answer(302, location=landing),
         landing: Answer(body=b'<html><meta name="citation_pdf_url" content="/article/xyz.pdf"></html>'),
         "https://www-publisher-com.ezproxy.uni.example/article/xyz.pdf": Answer(body=PDF),
     })
@@ -230,3 +233,54 @@ def test_the_desktop_sign_in_window_keeps_the_cookies_and_closes_on_the_pdf(monk
     window.events.loaded.fire()  # signed in: the paper
     thread.join(5)
     assert result == {"ok": True} and window.destroyed and tries == ["abc", "abc"]
+
+
+def test_addresses_through_each_kind_of_proxy():
+    """How the publisher's address goes into the library's (the user's report: links didn't go through)."""
+    pdf = "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4700287"
+    # a query-style prefix takes the address encoded, or its "&arnumber=" would be the proxy's own
+    assert library.through("https://libproxy.snu.ac.kr/link.n2s?url=", pdf) == (
+        "https://libproxy.snu.ac.kr/link.n2s?url=https%3A%2F%2Fieeexplore.ieee.org%2Fstamp%2Fstamp.jsp%3Ftp%3D%26arnumber%3D4700287")
+    assert library.through(KR, pdf) == KR + pdf  # a path-style prefix takes it as it is
+    # a relative link on a proxied page is the publisher's, then goes through the proxy again
+    page = KR + "https://ieeexplore.ieee.org/document/4700287/"
+    site = Site({
+        KR + "https://doi.org/" + DOI: Answer(302, location=page),
+        page: Answer(body=b'<meta name="citation_pdf_url" content="/stamp/stamp.jsp?tp=&amp;arnumber=4700287">'),
+        KR + pdf: Answer(body=b'<iframe src="https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287"></iframe>'),
+        KR + "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287": Answer(body=PDF),  # IEEE's frame around the PDF
+    })
+    assert library.fetch(DOI, KR, site) == PDF
+    # what people paste: no closing "/", or a whole example address from the library's guide
+    assert library.normalize_proxy("https://libproxy.knu.ac.kr/_Lib_Proxy_Url") == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
+    assert library.normalize_proxy(" https://libproxy.knu.ac.kr/_Lib_Proxy_Url/https://www.sciencedirect.com/ ") == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
+    assert library.normalize_proxy("https://ezproxy.uni.edu/login?url=https%3A%2F%2Fwww.nature.com") == "https://ezproxy.uni.edu/login?url="
+    assert library.normalize_proxy("https://ezproxy.uni.edu/login?url") == "https://ezproxy.uni.edu/login?url="
+    assert api.put("/settings", json={"library_proxy": "https://libproxy.knu.ac.kr/_Lib_Proxy_Url"}).json()["library_proxy"]["value"] == (
+        "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/")
+    # a DOI's own "#", "?" or spaces don't cut it short
+    assert library.doi_url("10.1002/(SICI)1097-4636#3 x?y") == "https://doi.org/10.1002/(SICI)1097-4636%233%20x%3Fy"
+
+
+def test_the_doi_is_followed_to_the_publisher_first():
+
+    class Reply:
+        def __init__(self, record):
+            self.record = record
+
+        def json(self):
+            return self.record
+
+    class Session:
+        def __init__(self, record):
+            self.record, self.asked = record, None
+
+        def get(self, url, params=None, timeout=None):
+            self.asked = (url, params)
+            return Reply(self.record)
+
+    found = Session({"values": [{"type": "HS_ADMIN", "data": {}}, {"type": "URL", "data": {"value": "https://ieeexplore.ieee.org/document/4700287/"}}]})
+    assert publisher_url(DOI, found) == "https://ieeexplore.ieee.org/document/4700287/"
+    assert found.asked == ("https://doi.org/api/handles/10.1000/xyz123", {"type": "URL"})
+    assert publisher_url(DOI, Session({"responseCode": 100})) == "https://doi.org/10.1000/xyz123"  # unknown: doi.org itself
+    assert publisher_url(DOI, Session({"values": [{"type": "URL", "data": {"value": "javascript:x"}}]})) == "https://doi.org/10.1000/xyz123"

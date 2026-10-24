@@ -223,9 +223,15 @@ class Reader {
       el("p", { text: this.libraryLogin ? t("rd.loginHint") : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
       el("div", { class: "rd-row" },
         this.libraryLogin && signIn() ? this.loginButton() : null,
-        this.url || this.libraryPage ? el("a", { href: this.url || this.libraryPage, target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
+        this.browserLink() ? el("a", { href: this.browserLink(), target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
         el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick)));
     this.pagesEl.replaceChildren(box);
+  }
+
+  /** Where the browser can try: the free copy, else the paper through the library. */
+  browserLink() {
+    const link = this.url || this.libraryPage || (this.libraryLogin && this.libraryLogin.url);
+    return /^https?:\/\//i.test(link || "") ? link : null;
   }
 
   /** Sign in to the library in a window of its own (signIn()), then open the paper from there. */
