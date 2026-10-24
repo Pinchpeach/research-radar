@@ -64,7 +64,7 @@ class Site:
 def test_landing_page_then_its_pdf_link_through_an_ezproxy():
     landing = "https://www-publisher-com.ezproxy.uni.example/article/xyz"
     site = Site({
-        EZ + "https%3A%2F%2Fdoi.org%2F10.1000%2Fxyz123": Answer(302, location=landing),
+        EZ + "https://doi.org/" + DOI: Answer(302, location=landing),
         landing: Answer(body=b'<html><meta name="citation_pdf_url" content="/article/xyz.pdf"></html>'),
         "https://www-publisher-com.ezproxy.uni.example/article/xyz.pdf": Answer(body=PDF),
     })
@@ -238,9 +238,12 @@ def test_the_desktop_sign_in_window_keeps_the_cookies_and_closes_on_the_pdf(monk
 def test_addresses_through_each_kind_of_proxy():
     """How the publisher's address goes into the library's (the user's report: links didn't go through)."""
     pdf = "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4700287"
-    # a query-style prefix takes the address encoded, or its "&arnumber=" would be the proxy's own
-    assert library.through("https://libproxy.snu.ac.kr/link.n2s?url=", pdf) == (
-        "https://libproxy.snu.ac.kr/link.n2s?url=https%3A%2F%2Fieeexplore.ieee.org%2Fstamp%2Fstamp.jsp%3Ftp%3D%26arnumber%3D4700287")
+    # the address goes after the prefix as it is, like the libraries' guides show; encoded, Yonsei's
+    # proxy showed a blank page (the user's screenshot of access.yonsei.ac.kr/link.n2s?url=http%3A%...)
+    n2s = "https://access.yonsei.ac.kr/link.n2s?url="
+    assert library.through(n2s, pdf) == n2s + pdf
+    assert library.through(n2s, "http://www.dbpia.co.kr") == "https://access.yonsei.ac.kr/link.n2s?url=http://www.dbpia.co.kr"  # the guide's example
+    assert library.unwrap(n2s, n2s + pdf) == pdf
     assert library.through(KR, pdf) == KR + pdf  # a path-style prefix takes it as it is
     # a relative link on a proxied page is the publisher's, then goes through the proxy again
     page = KR + "https://ieeexplore.ieee.org/document/4700287/"
