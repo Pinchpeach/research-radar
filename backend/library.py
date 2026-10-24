@@ -38,9 +38,10 @@ _FRAME = re.compile(r"""<(?:iframe|embed)\b[^>]*\bsrc\s*=\s*["']([^"']+)["']""",
 class NeedsLogin(Exception):
     """Sign in to the library first (or again)."""
 
-    def __init__(self, login_url: str):
+    def __init__(self, login_url: str, login_page: str | None = None):
         super().__init__("sign in to your library")
         self.login_url = login_url
+        self.login_page = login_page  # the library's own sign-in page, to visit first (login_page())
 
 
 class NoPdf(Exception):
@@ -78,6 +79,16 @@ def normalize_proxy(text: str | None) -> str:
 def proxy() -> str:
     """The saved proxy prefix, normalized."""
     return normalize_proxy(settings.get("library_proxy"))
+
+
+def login_page(prefix: str | None) -> str | None:
+    """The library's sign-in page, for a proxy that shows a blank page until the person has signed
+    in on the library's site (Yonsei: "sign in on the library's homepage before connecting")."""
+    host = proxy_host(prefix or "")
+    for school in shared_json("libraries.json")["schools"]:
+        if school.get("login") and urlsplit(school["proxy"]).hostname == host:
+            return school["login"]
+    return None
 
 
 def valid_proxy(prefix: str) -> bool:
@@ -218,7 +229,7 @@ def fetch(doi: str, prefix: str | None = None, session: requests.Session | None 
 
     def stay(url: str) -> None:
         if not in_scope(url, prefix):
-            raise NeedsLogin(start)
+            raise NeedsLogin(start, login_page(prefix))
 
     url = start
     for _ in range(3):  # the paper's page, its PDF link, and a frame around the PDF
@@ -228,9 +239,13 @@ def fetch(doi: str, prefix: str | None = None, session: requests.Session | None 
             return data
         html = data[:2_000_000].decode("utf-8", "replace")
         if _PASSWORD.search(html):
-            raise NeedsLogin(start)
+            raise NeedsLogin(start, login_page(prefix))
         link = pdf_link(html, unwrap(prefix, final))  # relative links are the publisher's
         if not link:
+            if login_page(prefix) or (prefix.endswith("=") and urlsplit(final).hostname == proxy_host(prefix)):
+                # still on the proxy's own link page (not a publisher's through it): Yonsei's shows
+                # a blank page there until the person has signed in on the library's site
+                raise NeedsLogin(start, login_page(prefix))
             raise NoPdf(final)
         url = through(prefix, link)
     raise NoPdf(url)

@@ -1,8 +1,8 @@
 {
-  "_about": "University libraries' off-campus proxy prefixes, by e-mail domain (subdomains match too), read by backend/library.py and core/library.js. Each was taken from the library's own pages (source); a school may change its address, and Settings lets the person edit it.",
+  "_about": "University libraries' off-campus proxy prefixes, by e-mail domain (subdomains match too), read by backend/library.py and core/library.js. Each was taken from the library's own pages (source); a school may change its address, and Settings lets the person edit it. \"login\": the library's sign-in page, for proxies that show a blank page until the person has signed in on the library's site (Yonsei's link.n2s) instead of sending them there.",
   "schools": [
     {"domain": "snu.ac.kr", "name_ko": "서울대학교", "name_en": "Seoul National University", "proxy": "https://libproxy.snu.ac.kr/link.n2s?url=", "source": "https://libguides.snu.ac.kr/c.php?g=319147&p=2131809"},
-    {"domain": "yonsei.ac.kr", "name_ko": "연세대학교", "name_en": "Yonsei University", "proxy": "https://access.yonsei.ac.kr/link.n2s?url=", "source": "https://library.yonsei.ac.kr/local/html/off-campusAccess"},
+    {"domain": "yonsei.ac.kr", "name_ko": "연세대학교", "name_en": "Yonsei University", "proxy": "https://access.yonsei.ac.kr/link.n2s?url=", "login": "https://library.yonsei.ac.kr/login", "source": "https://library.yonsei.ac.kr/local/html/off-campusAccess"},
     {"domain": "korea.ac.kr", "name_ko": "고려대학교", "name_en": "Korea University", "proxy": "https://oca.korea.ac.kr/link.n2s?url=", "source": "https://library.korea.ac.kr/datause/proxy/guide/?lang=en"},
     {"domain": "khu.ac.kr", "name_ko": "경희대학교", "name_en": "Kyung Hee University", "proxy": "https://openlink.khu.ac.kr/link.n2s?url=", "source": "https://lib.khu.ac.kr/webcontent/info/1"},
     {"domain": "sogang.ac.kr", "name_ko": "서강대학교", "name_en": "Sogang University", "proxy": "https://libproxy.sogang.ac.kr/_Lib_Proxy_Url/", "source": "https://library.sogang.ac.kr"},

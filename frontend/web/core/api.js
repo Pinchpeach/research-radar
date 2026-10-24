@@ -309,7 +309,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       } catch (error) {
         if (error instanceof NeedsLogin) {
           storage.removeItem(LIBRARY_SESSION);
-          throw new ApiError(401, { message: "Sign in to your library", login_url: error.loginUrl });
+          throw new ApiError(401, { message: "Sign in to your library", login_url: error.loginUrl, library_login: error.loginPage });
         }
         if (error instanceof NoPdf) throw new ApiError(404, { message: "No PDF link on the paper's page", page_url: error.pageUrl });
         throw new ApiError(502, "Could not reach the library");

@@ -315,6 +315,32 @@ test.describe("through the university library on Android: sign in in Chrome, ope
   });
 });
 
+test("a library that needs its own sign-in first (Yonsei): ① sign in there, ② then the paper, both in Chrome", async ({ page }) => {
+  const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    window.chromeOpened = [];
+    window.Capacitor = { convertFileSrc: (u) => u, Plugins: {
+      InAppBrowser: { openInSystemBrowser: async ({ url }) => { window.chromeOpened.push(url); } },
+    } };
+    const original = window.fetch; // as CapacitorHttp: the blank page stays on the proxy, as Yonsei's does
+    window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
+  });
+  // not signed in on the library's site: the link page stays where it is, blank
+  await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "text/html", body: "<html><body></body></html>" }));
+  await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
+  await page.goto("./");
+  await page.evaluate((proxy) => window.radarLocalApi("PUT", "/settings", { library_proxy: proxy }), YONSEI);
+  await page.evaluate(async (doi) => {
+    const { openReader } = await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
+    await openReader({ paper: { id: "https://openalex.org/W1", title: "A paper", doi: `https://doi.org/${doi}` }, api: window.radarLocalApi, saveFile: () => {} });
+  }, DOI);
+  await expect(page.locator(".rd-unavailable")).toContainText("도서관 홈페이지에 먼저 로그인");
+  await page.locator(".rd-login-first").click();
+  await page.locator(".rd-login").click();
+  expect(await page.evaluate(() => window.chromeOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://doi.org/${DOI}`]);
+});
+
 async function readAll(download) {
   const chunks = [];
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
