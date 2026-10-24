@@ -3,6 +3,7 @@
 // usual app.js starts.
 
 import { createApi } from "./core/api.js";
+import { inScope, normalizeProxy } from "./core/library.js";
 import { RELEASES_REPO, VERSION } from "./core/version.js";
 
 const plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
@@ -21,15 +22,30 @@ window.radarLocalApi = createApi({
 
 // Sign in to the library (core/library.js): an in-app web view on the paper through the proxy.
 // It runs in the app's own process with its cookie store kept, so the session cookies it gets
-// are the ones CapacitorHttp sends. After each page, the PDF is tried; once it comes through,
-// the web view closes and the reader asks again (core/library.js keeps nothing in between).
+// are the ones CapacitorHttp sends. Once the web view is on the paper's page through the proxy,
+// the PDF is tried; when it comes through, the web view closes and the reader asks again.
+//
+// The two share one cookie store, so nothing else may talk to the proxy while the person signs
+// in: the proxy keeps its sign-in progress in a session cookie, and a request of ours in between
+// would start that over (Yonsei's link.n2s then shows a blank page). So the proxy's old cookies
+// (from the reader's first try) are cleared first, and the PDF is only asked for from the
+// paper's page.
 if (InAppBrowser) {
   window.radarLibraryLogin = async (doi, url) => {
     if (!url) return false;
+    let prefix = "";
+    try { prefix = normalizeProxy((await window.radarLocalApi("GET", "/settings")).library_proxy.value); } catch { /* none */ }
+    const proxyHost = (() => { try { return new URL(prefix).hostname; } catch { return ""; } })();
+    /** The paper's page through the proxy: past the link and the sign-in pages. */
+    const onPaper = (page) => {
+      if (!page || page === url || !inScope(page, prefix)) return false;
+      const host = new URL(page).hostname;
+      return host !== proxyHost || page.startsWith(prefix); // www-nature-com-ssl.access.yonsei.ac.kr, or .../_Lib_Proxy_Url/https://...
+    };
     let busy = false, finish;
     const done = new Promise((resolve) => (finish = resolve));
     const tryPdf = async () => {
-      if (busy) return;
+      if (busy || !onPaper(window.radarLibraryLastUrl)) return;
       busy = true;
       try {
         await window.radarLocalApi("GET", `/library/pdf?doi=${encodeURIComponent(doi)}`);
@@ -44,9 +60,14 @@ if (InAppBrowser) {
         if (data && data.url) window.radarLibraryLastUrl = data.url;
         tryPdf();
       }),
-      InAppBrowser.addListener("browserClosed", () => finish(false)),
+      InAppBrowser.addListener("browserClosed", async () => { // closed by hand, maybe on the paper's page: one last try
+        let ok = false;
+        try { await window.radarLocalApi("GET", `/library/pdf?doi=${encodeURIComponent(doi)}`); ok = true; } catch { /* no */ }
+        finish(ok);
+      }),
     ]);
     try {
+      if (CapacitorCookies) await CapacitorCookies.clearAllCookies().catch(() => {});
       await InAppBrowser.openInWebView({ url, options: {
         showToolbar: true, showURL: true, clearCache: false, clearSessionCache: false, // keep the sign-in
         mediaPlaybackRequiresUserAction: true, closeButtonText: t("rd.close"), toolbarPosition: 0,

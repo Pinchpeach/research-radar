@@ -277,15 +277,21 @@ test.describe("through the university library (the Android app's in-app sign-in)
       if (window !== window.top) return;
       const listeners = {};
       const fire = (name) => (listeners[name] || []).forEach((f) => f({}));
-      window.Capacitor = { Plugins: { InAppBrowser: {
-        addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
-        openInWebView: async ({ url, options }) => {
-          window.webViewOptions = options;
-          await window.signInAtLibrary(url);
-          setTimeout(() => fire("browserPageLoaded"), 10);
+      window.cookiesCleared = 0;
+      window.Capacitor = { Plugins: {
+        CapacitorCookies: { clearAllCookies: async () => { window.cookiesCleared++; } },
+        InAppBrowser: {
+          addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
+          openInWebView: async ({ url, options }) => {
+            window.webViewOptions = options;
+            await window.signInAtLibrary(url);
+            // the sign-in page (nothing is fetched there), then the paper's page through the proxy
+            setTimeout(() => (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: "https://sso.uni.example/login" })), 10);
+            setTimeout(() => (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: window.paperPage })), 30);
+          },
+          close: async () => {},
         },
-        close: async () => fire("browserClosed"),
-      } } };
+      } };
       window.fireWebView = fire;
       // like CapacitorHttp, which follows redirects natively and reports where it ended up
       // (a fulfilled cross-origin redirect fails in the test browser)
@@ -309,6 +315,7 @@ test.describe("through the university library (the Android app's in-app sign-in)
 
     await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" },
       contentType: "application/json", body: JSON.stringify({ responseCode: 100 }) })); // doi.org doesn't say: through doi.org itself
+    await page.addInitScript((paper) => { window.paperPage = paper; }, `${KR}https://ieeexplore.example/document/1`);
     await page.goto("./");
     await go(page, "settings");
     await page.locator(".subtab[data-pane=library]").click();
@@ -323,6 +330,7 @@ test.describe("through the university library (the Android app's in-app sign-in)
     await page.locator(".rd-login").click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     expect(opened).toEqual([PAGE]);
+    expect(await page.evaluate(() => window.cookiesCleared)).toBe(1); // the reader's first try left the proxy's cookies: gone
     const options = await page.evaluate(() => window.webViewOptions);
     expect([options.clearCache, options.clearSessionCache, options.android.isIsolated]).toEqual([false, false, false]); // keeps the cookies
 
