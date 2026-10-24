@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.6",
+    "date": "2026-10-24",
+    "ko": ["휴대폰 학교 로그인을 Chrome으로: 앱 안의 창 대신 Chrome에서 학교 계정으로 로그인해요. Chrome에서 PDF를 내려받고 다운로드 알림의 '열기'에서 Research Radar를 고르면 그 논문으로 바로 열려 필기할 수 있어요."],
+    "en": ["School sign-in on the phone moves to Chrome: sign in with your school account there instead of a window inside the app. Download the PDF in Chrome, choose Research Radar under 'Open' in the download notice, and it opens on that paper, ready to write on."]
+  },
+  {
     "version": "0.11.5",
     "date": "2026-10-24",
     "ko": ["휴대폰 학교 로그인 고침: 로그인 창과 앱이 같은 쿠키를 써서, 앱이 미리 도서관에 물어본 기록이 로그인 진행을 꼬이게 했어요(연세대에서 흰 화면). 로그인 창을 열기 전에 그 기록을 지우고, 논문 페이지에 도착한 뒤에만 PDF를 받아요."],

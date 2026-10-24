@@ -262,116 +262,57 @@ test.describe("no free copy on OpenAlex", () => {
   });
 });
 
-test.describe("through the university library (the Android app's in-app sign-in)", () => {
+test.describe("through the university library on Android: sign in in Chrome, open the PDF with the app", () => {
   const DOI = "10.1109/TNN.2008.2005605", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
-  const PAGE = `${KR}https://doi.org/${DOI}`, PDF = `${KR}https://ieeexplore.example/stamp/gnn.pdf`;
+  const PAGE = `${KR}https://doi.org/${DOI}`;
   test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
     (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
 
-  test("signing in once in the web view, then the paper opens", async ({ page }) => {
-    let signedIn = false;
-    const opened = [];
-    await page.exposeFunction("signInAtLibrary", (url) => { opened.push(url); signedIn = true; });
-    // a stand-in for @capacitor/inappbrowser: "signing in" happens when the web view opens
+  test("the login button opens Chrome; the downloaded PDF, opened with the app, opens on the paper", async ({ page }) => {
+    // stand-ins for @capacitor/inappbrowser (Chrome Custom Tabs) and @capacitor/app ("Open with")
     await page.addInitScript(() => {
       if (window !== window.top) return;
-      const listeners = {};
-      const fire = (name) => (listeners[name] || []).forEach((f) => f({}));
-      window.cookiesCleared = 0;
-      window.Capacitor = { Plugins: {
-        CapacitorCookies: { clearAllCookies: async () => { window.cookiesCleared++; } },
-        InAppBrowser: {
-          addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
-          openInWebView: async ({ url, options }) => {
-            window.webViewOptions = options;
-            await window.signInAtLibrary(url);
-            // the sign-in page (nothing is fetched there), then the paper's page through the proxy
-            setTimeout(() => (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: "https://sso.uni.example/login" })), 10);
-            setTimeout(() => (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: window.paperPage })), 30);
-          },
-          close: async () => {},
+      const appListeners = [];
+      window.chromeOpened = [];
+      window.Capacitor = {
+        convertFileSrc: (uri) => "https://handed.example/" + encodeURIComponent(uri),
+        Plugins: {
+          InAppBrowser: { openInSystemBrowser: async ({ url }) => { window.chromeOpened.push(url); } },
+          App: { addListener: (name, f) => { if (name === "appUrlOpen") appListeners.push(f); }, getLaunchUrl: async () => null },
         },
-      } };
-      window.fireWebView = fire;
-      // like CapacitorHttp, which follows redirects natively and reports where it ended up
-      // (a fulfilled cross-origin redirect fails in the test browser)
-      const original = window.fetch;
-      window.fetch = async (...args) => {
-        const response = await original(...args), final = response.headers.get("x-final-url");
-        if (final) Object.defineProperty(response, "url", { value: final });
-        return response;
       };
+      window.handPdf = (uri) => appListeners.forEach((f) => f({ url: uri }));
     });
-    await page.context().route((url) => url.href.startsWith(KR), async (route) => {
-      const url = route.request().url(), cors = { "access-control-allow-origin": "*" };
-      if (!signedIn) { // off to the school's sign-in page
-        return route.fulfill({ headers: { ...cors, "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" },
-          contentType: "text/html", body: "<form>sign in</form>" });
-      }
-      if (url === PAGE) return route.fulfill({ headers: cors, contentType: "text/html", body: `<meta name="citation_pdf_url" content="https://ieeexplore.example/stamp/gnn.pdf">` });
-      if (url === PDF) return route.fulfill({ headers: cors, contentType: "application/pdf", body: await samplePdf(3) });
-      return route.fulfill({ status: 404, headers: cors });
+    await page.context().route((url) => url.href.startsWith(KR), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*",
+      "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" }, contentType: "text/html", body: "<form>sign in</form>" }));
+    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
+    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+    await page.addInitScript(() => { // as CapacitorHttp reports where it ended up
+      if (window !== window.top) return;
+      const original = window.fetch;
+      window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
     });
 
-    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" },
-      contentType: "application/json", body: JSON.stringify({ responseCode: 100 }) })); // doi.org doesn't say: through doi.org itself
-    await page.addInitScript((paper) => { window.paperPage = paper; }, `${KR}https://ieeexplore.example/document/1`);
     await page.goto("./");
     await go(page, "settings");
     await page.locator(".subtab[data-pane=library]").click();
     await page.locator("#library-proxy").fill(KR.slice(0, -1)); // without its closing "/": put back
     await page.locator("#library-form button[type=submit]").click();
-    await expect(page.locator("#library-state")).toContainText("아직 로그인하지 않았어요");
+    await expect(page.locator("#library-state")).toContainText("Chrome에서 로그인");
 
     await search(page);
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
     await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
-    await expect(page.locator(".rd-unavailable a")).toHaveAttribute("href", PAGE); // or open it through the library in the browser
     await page.locator(".rd-login").click();
+    await expect(page.locator(".rd-in-browser")).toContainText("Research Radar를 고르면");
+    expect(await page.evaluate(() => window.chromeOpened)).toEqual([PAGE]);
+
+    // back from Chrome: the download, opened with the app, replaces the waiting reader
+    await page.evaluate(() => window.handPdf("content://com.android.providers.downloads.documents/document/42"));
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
-    expect(opened).toEqual([PAGE]);
-    expect(await page.evaluate(() => window.cookiesCleared)).toBe(1); // the reader's first try left the proxy's cookies: gone
-    const options = await page.evaluate(() => window.webViewOptions);
-    expect([options.clearCache, options.clearSessionCache, options.android.isIsolated]).toEqual([false, false, false]); // keeps the cookies
-
-    await page.locator(".rd-close").click();
-    await go(page, "settings");
-    await page.locator(".subtab[data-pane=library]").click();
-    await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
+    await expect(page.locator(".reader")).toHaveCount(1);
+    await expect(page.locator(".rd-title")).toHaveText("The Graph Neural Network Model");
   });
-});
-
-test("a sign-in that doesn't finish shows where the web view got to", async ({ page }) => {
-  const DOI = "10.1109/TNN.2008.2005605", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
-  await page.addInitScript(() => {
-    if (window !== window.top) return;
-    const listeners = {};
-    window.Capacitor = { Plugins: { InAppBrowser: {
-      addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => {} }; },
-      openInWebView: async () => setTimeout(() => {
-        (listeners.browserPageNavigationCompleted || []).forEach((f) => f({ url: "http://sso.uni.example/login?x=1" }));
-        (listeners.browserClosed || []).forEach((f) => f({}));
-      }, 10),
-      close: async () => {},
-    } } };
-  });
-  await page.context().route((url) => url.href.startsWith(KR), (route) => route.fulfill({ headers: { "access-control-allow-origin": "*",
-    "access-control-expose-headers": "x-final-url", "x-final-url": "https://sso.uni.example/login" }, contentType: "text/html", body: "<form>sign in</form>" }));
-  await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: { "access-control-allow-origin": "*" }, body: "{}" }));
-  await page.addInitScript(() => { // as CapacitorHttp reports where it ended up
-    if (window !== window.top) return;
-    const original = window.fetch;
-    window.fetch = async (...args) => { const r = await original(...args), f = r.headers.get("x-final-url"); if (f) Object.defineProperty(r, "url", { value: f }); return r; };
-  });
-  await page.goto("./");
-  await page.evaluate(([KR]) => window.radarLocalApi("PUT", "/settings", { library_proxy: KR }), [KR]);
-  await page.evaluate(async ([DOI]) => {
-    const { openReader } = await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
-    await openReader({ paper: { id: "https://openalex.org/W1", title: "A paper", doi: `https://doi.org/${DOI}` }, api: window.radarLocalApi, saveFile: () => {} });
-  }, [DOI]);
-  await expect(page.locator(".rd-unavailable .rd-error").first()).toHaveText("학교 도서관 로그인이 필요해요");
-  await page.locator(".rd-login").click();
-  await expect(page.locator(".rd-last-url")).toHaveText("로그인 창의 마지막 주소: http://sso.uni.example/login?x=1");
 });
 
 async function readAll(download) {
