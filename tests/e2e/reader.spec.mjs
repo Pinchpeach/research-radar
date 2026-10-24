@@ -263,7 +263,7 @@ test.describe("no free copy on OpenAlex", () => {
 });
 
 /**
- * A stand-in for @capacitor/inappbrowser's web view: `walk` lists the pages each opening goes
+ * A stand-in for the app's LibraryWeb sign-in screen: `walk` lists the pages each address goes
  * through (signing in happens there), sharing the page's cookie store as the real one does.
  */
 async function fakeWebView(page, walk) {
@@ -272,19 +272,19 @@ async function fakeWebView(page, walk) {
     const listeners = {};
     const fire = (name, data) => (listeners[name] || []).forEach((f) => f(data || {}));
     window.webViewOpened = [];
+    const visit = (url) => {
+      window.webViewOpened.push(url);
+      (walk[url] || []).forEach((here, i) => setTimeout(async () => {
+        if (here === "SIGNED-IN") return window.signInAtLibrary();
+        fire("navigated", { url: here });
+      }, 20 * (i + 1)));
+    };
     window.Capacitor = { convertFileSrc: (u) => "https://handed.example/" + encodeURIComponent(u), Plugins: {
-      InAppBrowser: {
+      LibraryWeb: {
         addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
-        openInWebView: async ({ url, options }) => {
-          window.webViewOpened.push(url);
-          window.webViewOptions = options;
-          const pages = walk[url] || [];
-          pages.forEach((here, i) => setTimeout(async () => {
-            if (here === "SIGNED-IN") return window.signInAtLibrary();
-            fire("browserPageNavigationCompleted", { url: here });
-          }, 20 * (i + 1)));
-        },
-        close: async () => setTimeout(() => fire("browserClosed"), 10),
+        open: async ({ url }) => visit(url),
+        navigate: async ({ url }) => visit(url),
+        close: async () => setTimeout(() => fire("closed"), 10),
       },
       App: { addListener: (name, f) => { window.handPdf = (uri) => f({ url: uri }); }, getLaunchUrl: async () => null },
     } };
@@ -326,8 +326,6 @@ test.describe("through the university library on Android, signed in inside the a
     await expect(page.locator("#library-status")).toContainText("도서관에 로그인했어요");
     await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
     expect(await page.evaluate(() => window.webViewOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://www.nature.com/`]);
-    const options = await page.evaluate(() => window.webViewOptions);
-    expect([options.clearCache, options.clearSessionCache, options.android.isIsolated]).toEqual([false, false, false]); // the app's cookies
 
     await search(page);
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();

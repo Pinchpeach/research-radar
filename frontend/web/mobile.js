@@ -7,7 +7,7 @@ import { loginPage, normalizeProxy, onPublisher, SIGN_IN_TARGET, through } from 
 import { RELEASES_REPO, VERSION } from "./core/version.js";
 
 const plugins = (window.Capacitor && window.Capacitor.Plugins) || {};
-const { CapacitorCookies, InAppBrowser } = plugins;
+const { CapacitorCookies, LibraryWeb } = plugins;
 
 window.radarLocalApi = createApi({
   // With CapacitorHttp enabled, fetch goes through Android's network stack (no CORS limits).
@@ -20,24 +20,15 @@ window.radarLocalApi = createApi({
   clearCookies: async () => { if (CapacitorCookies) await CapacitorCookies.clearAllCookies(); },
 });
 
-// Sign in to the library inside the app (@capacitor/inappbrowser's web view, in the app's own
-// process with its cookies kept), so the downloads the app makes with CapacitorHttp carry the
-// same sign-in and papers open by themselves. Some proxies (Yonsei's link.n2s) show a blank page
-// until the person has signed in on the library's site, so that page comes first; once they've
-// left it, a publisher's page through the proxy follows, and reaching it means done. Nothing
-// else talks to the proxy meanwhile: its sign-in lives in the same cookie store.
+// Sign in to the library inside the app: LibraryWeb (mobile/android/.../LibraryWebPlugin.java),
+// a plain web view in a screen of its own that shares the app's cookie store, so the downloads
+// the app makes with CapacitorHttp carry the same sign-in and papers open by themselves. Some
+// proxies (Yonsei's link.n2s) show a blank page until the person has signed in on the library's
+// site, so that page comes first; once they've left it the view goes on to a publisher's page
+// through the proxy, and reaching it means done. Nothing else talks to the proxy meanwhile: its
+// sign-in lives in the same cookie store.
 const LIBRARY_SESSION = "radar.library.session";
-const WEBVIEW = {
-  showToolbar: true, showURL: true, clearCache: false, clearSessionCache: false, // keep the sign-in
-  mediaPlaybackRequiresUserAction: true, closeButtonText: "✕", toolbarPosition: 0,
-  showNavigationButtons: true, leftToRight: false, customWebViewUserAgent: null,
-  android: { allowZoom: true, hardwareBack: true, pauseMedia: true, isIsolated: false }, // the app's cookie store
-  iOS: { allowOverScroll: true, enableViewportScale: false, allowInLineMediaPlayback: false, surpressIncrementalRendering: false,
-    viewStyle: 2, animationEffect: 2, allowsBackForwardNavigationGestures: true },
-};
-const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/** Sign in to the library; true once the web view reached a publisher's page through the proxy. */
 async function signInInApp() {
   let prefix = "";
   try { prefix = normalizeProxy((await window.radarLocalApi("GET", "/settings")).library_proxy.value); } catch { /* none */ }
@@ -45,33 +36,25 @@ async function signInInApp() {
   const first = loginPage(prefix), onward = through(prefix, SIGN_IN_TARGET);
   let stage = first ? "library" : "proxy", finish;
   const done = new Promise((resolve) => (finish = resolve));
-  const open = (url) => InAppBrowser.openInWebView({ url, options: { ...WEBVIEW, closeButtonText: t("rd.close") } });
   const handles = await Promise.all([
-    InAppBrowser.addListener("browserPageNavigationCompleted", (data) => {
+    LibraryWeb.addListener("navigated", (data) => {
       const here = data && data.url;
       if (!here) return;
       if (stage === "library") {
         const now = new URL(here), page = new URL(first);
         if (now.hostname === page.hostname && !now.pathname.startsWith(page.pathname)) { // signed in: on the library's site
-          stage = "to-proxy";
-          InAppBrowser.close().catch(() => {});
+          stage = "proxy";
+          LibraryWeb.navigate({ url: onward });
         }
       } else if (stage === "proxy" && onPublisher(here, prefix)) {
         stage = "done";
-        InAppBrowser.close().catch(() => {});
+        LibraryWeb.close();
       }
     }),
-    InAppBrowser.addListener("browserClosed", async () => {
-      if (stage === "to-proxy") { // the web view can't be pointed elsewhere: open it again on the proxy
-        stage = "proxy";
-        await pause(300);
-        return open(onward).catch(() => finish(false));
-      }
-      finish(stage === "done");
-    }),
+    LibraryWeb.addListener("closed", () => finish(stage === "done")),
   ]);
   try {
-    await open(first || onward);
+    await LibraryWeb.open({ url: first || onward, closeText: t("rd.close") });
     const ok = await done;
     if (ok) try { localStorage.setItem(LIBRARY_SESSION, prefix); } catch { /* fine */ }
     return ok;
@@ -80,7 +63,7 @@ async function signInInApp() {
   }
 }
 
-if (InAppBrowser) {
+if (LibraryWeb) {
   window.radarLibrarySignIn = signInInApp; // Settings › Library
   window.radarLibraryLogin = () => signInInApp(); // the reader, when a paper needs it: then it fetches again
 }
