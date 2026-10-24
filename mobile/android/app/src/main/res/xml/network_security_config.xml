@@ -26,4 +26,29 @@
         <domain includeSubdomains="true">kdis.ac.kr</domain>
         <domain includeSubdomains="true">lib.kdiproxy.kr</domain>
     </domain-config>
+    <!-- certificate authorities' own hosts, where the certificates a server leaves out of its chain
+         are downloaded from (AiaTrust.java): they are published over http, and are checked against
+         the phone's trusted roots, not trusted for coming from here -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">amazontrust.com</domain>
+        <domain includeSubdomains="true">certum.pl</domain>
+        <domain includeSubdomains="true">comodoca.com</domain>
+        <domain includeSubdomains="true">crosscert.com</domain>
+        <domain includeSubdomains="true">digicert.com</domain>
+        <domain includeSubdomains="true">entrust.net</domain>
+        <domain includeSubdomains="true">geotrust.com</domain>
+        <domain includeSubdomains="true">globalsign.com</domain>
+        <domain includeSubdomains="true">godaddy.com</domain>
+        <domain includeSubdomains="true">identrust.com</domain>
+        <domain includeSubdomains="true">lencr.org</domain>
+        <domain includeSubdomains="true">pki.goog</domain>
+        <domain includeSubdomains="true">rapidssl.com</domain>
+        <domain includeSubdomains="true">sectigo.com</domain>
+        <domain includeSubdomains="true">signgate.com</domain>
+        <domain includeSubdomains="true">ssl.com</domain>
+        <domain includeSubdomains="true">starfieldtech.com</domain>
+        <domain includeSubdomains="true">symcb.com</domain>
+        <domain includeSubdomains="true">thawte.com</domain>
+        <domain includeSubdomains="true">usertrust.com</domain>
+    </domain-config>
 </network-security-config>

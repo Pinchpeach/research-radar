@@ -2,6 +2,7 @@ package io.github.pinchpeach.researchradar;
 
 import android.graphics.Bitmap;
 import android.graphics.Color;
+import android.net.Uri;
 import android.net.http.SslError;
 import android.os.Bundle;
 import android.text.TextUtils;
@@ -95,6 +96,26 @@ public class LibraryWebActivity extends AppCompatActivity {
 
             @Override
             public void onReceivedSslError(WebView view, SslErrorHandler handler, SslError error) {
+                String host = Uri.parse(error.getUrl()).getHost();
+                boolean onlyUntrusted = error.getPrimaryError() == SslError.SSL_UNTRUSTED
+                    && !error.hasError(SslError.SSL_NOTYETVALID) && !error.hasError(SslError.SSL_EXPIRED)
+                    && !error.hasError(SslError.SSL_IDMISMATCH) && !error.hasError(SslError.SSL_DATE_INVALID);
+                if (!onlyUntrusted) {
+                    refuse(handler, error);
+                    return;
+                }
+                // a server that leaves out a certificate of its chain (library.yonsei.ac.kr): fetch
+                // it as Chrome does and go on only if the phone then trusts the chain (AiaTrust)
+                new Thread(() -> {
+                    boolean trusted = AiaTrust.trusted(error.getCertificate(), host);
+                    runOnUiThread(() -> {
+                        if (trusted) handler.proceed();
+                        else refuse(handler, error);
+                    });
+                }).start();
+            }
+
+            private void refuse(SslErrorHandler handler, SslError error) {
                 handler.cancel(); // never past a certificate problem: just say so
                 address.setText("⚠ certificate error " + error.getPrimaryError() + " — " + error.getUrl());
             }

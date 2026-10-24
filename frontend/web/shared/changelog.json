@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.11",
+    "date": "2026-10-24",
+    "ko": ["휴대폰 도서관 로그인 화면이 인증서를 빠뜨린 학교 사이트(연세대 도서관)에도 접속해요: Chrome처럼 빠진 중간 인증서를 받아 와서, 휴대폰이 믿는 인증 기관까지 이어질 때만 열어요."],
+    "en": ["The phone's library sign-in screen now opens school sites that leave out a certificate (Yonsei's library): like Chrome, it fetches the missing intermediate certificate, and goes on only if the chain then reaches a root the phone trusts."]
+  },
+  {
     "version": "0.11.10",
     "date": "2026-10-24",
     "ko": ["휴대폰 도서관 로그인 화면이 Chrome처럼 접속해요: 일부 학교 로그인은 앱 안의 웹 화면을 막아서 검은 화면만 떴어요. 페이지를 열지 못하면 위쪽 주소 칸에 이유를 보여 줘요."],
