@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.11.3",
+    "date": "2026-10-24",
+    "ko": ["학교 계정 로그인 고침: 0.11.2부터 도서관 주소 뒤에 논문 주소를 인코딩해 붙여서 연세대 등 'link.n2s?url=' 도서관에서 빈 화면이 떴어요. 도서관 안내대로 주소를 그대로 붙여요."],
+    "en": ["School sign-in fixed: since 0.11.2 the paper's address was encoded after the library's address, which left 'link.n2s?url=' libraries (Yonsei and others) on a blank page. It goes in as it is again, as the libraries' guides show."]
+  },
+  {
     "version": "0.11.2",
     "date": "2026-10-24",
     "ko": [

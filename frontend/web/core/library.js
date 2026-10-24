@@ -64,8 +64,8 @@ export function normalizeProxy(text) {
   return text;
 }
 
-/** url through the library: encoded after a "...=" prefix, as it is after a path prefix. */
-export const through = (prefix, url) => (inScope(url, prefix) ? url : prefix + (prefix.endsWith("=") ? quote(url, "") : url));
+/** url through the library: after the prefix as it is, as the libraries' guides show (see backend/library.py). */
+export const through = (prefix, url) => (inScope(url, prefix) ? url : prefix + url);
 
 /** The publisher's address inside a proxied one, for resolving the page's relative links. */
 export function unwrap(prefix, url) {

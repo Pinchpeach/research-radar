@@ -318,7 +318,8 @@ test("library PDF through the proxy: page, PDF link, sign-in when it lands elsew
 test("addresses through each kind of proxy, like tests/test_library.py", async () => {
   const pdf = "https://ieeexplore.ieee.org/stamp/stamp.jsp?tp=&arnumber=4700287", KR = "https://libproxy.uni.example/_Lib_Proxy_Url/";
   const N2S = "https://libproxy.snu.ac.kr/link.n2s?url=";
-  assert.equal(through(N2S, pdf), N2S + "https%3A%2F%2Fieeexplore.ieee.org%2Fstamp%2Fstamp.jsp%3Ftp%3D%26arnumber%3D4700287");
+  assert.equal(through(N2S, pdf), N2S + pdf); // as it is: encoded, Yonsei's proxy shows a blank page
+  assert.equal(through("https://access.yonsei.ac.kr/link.n2s?url=", "http://www.dbpia.co.kr"), "https://access.yonsei.ac.kr/link.n2s?url=http://www.dbpia.co.kr");
   assert.equal(unwrap(N2S, through(N2S, pdf)), pdf);
   assert.equal(through(KR, pdf), KR + pdf);
   assert.equal(normalizeProxy("https://libproxy.knu.ac.kr/_Lib_Proxy_Url"), "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/");

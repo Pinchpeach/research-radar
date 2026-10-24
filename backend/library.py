@@ -94,12 +94,10 @@ def in_scope(url: str, prefix: str) -> bool:
 
 
 def through(prefix: str, url: str) -> str:
-    """The address of url through the library. A prefix ending in "=" takes the address as a query
-    value, so it is encoded (or its own ?/& would be read as the proxy's); a path prefix
-    (/_Lib_Proxy_Url/) takes it as it is."""
-    if in_scope(url, prefix):
-        return url
-    return prefix + (quote(url, safe="") if prefix.endswith("=") else url)
+    """The address of url through the library: put after the prefix as it is, as the libraries'
+    guides show (link.n2s?url=http://www.dbpia.co.kr). Their proxies read everything after "url="
+    as the address, so an encoded one (http%3A%2F%2F...) leaves Yonsei's on a blank page."""
+    return url if in_scope(url, prefix) else prefix + url
 
 
 def unwrap(prefix: str, url: str) -> str:
