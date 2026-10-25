@@ -34,6 +34,22 @@ def test_handwriting_size_is_capped(monkeypatch):
     assert api.put("/annotations/W2", json={"pages": {"1": [INK] * 20}}).status_code == 413
 
 
+def test_a_picked_pdf_is_kept_with_its_handwriting(monkeypatch):
+    pdf = b"%PDF-1.7\n" + b"x" * 100
+    assert api.get("/annotations/file-ab12/pdf").status_code == 404
+    assert api.put("/annotations/file-ab12/pdf", content=pdf, headers={"content-type": "application/pdf"}).status_code == 204
+    got = api.get("/annotations/file-ab12/pdf")
+    assert got.status_code == 200 and got.content == pdf and got.headers["content-type"] == "application/pdf"
+    api.put("/annotations/file-ab12", json={"title": "mine.pdf"})
+    assert [d["has_pdf"] for d in api.get("/annotations").json() if d["id"] == "file-ab12"] == [True]
+    assert api.put("/annotations/file-ab12/pdf", content=b"<html>").status_code == 422  # only PDFs
+    assert api.put("/annotations/..x/pdf", content=pdf).status_code in (404, 422)
+    monkeypatch.setattr(annotations, "MAX_PDF", 50)
+    assert api.put("/annotations/file-ab12/pdf", content=pdf).status_code == 413
+    assert api.delete("/annotations/file-ab12").status_code == 204  # the PDF goes with it
+    assert api.get("/annotations/file-ab12/pdf").status_code == 404
+
+
 def _resolve(ip):
     return lambda host, port, *a, **k: [(socket.AF_INET, socket.SOCK_STREAM, 6, "", (ip, port))]
 

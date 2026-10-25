@@ -1,5 +1,17 @@
 [
   {
+    "version": "0.11.12",
+    "date": "2026-10-25",
+    "ko": [
+      "휴대폰: 도서관으로 들어간 논문 페이지에서 PDF를 받을 수 있는데도 '도서관에 연결하지 못했어요'로 끝나던 문제를 고쳤어요. 출판사가 앱의 요청을 막으면 도서관 로그인 화면이 논문 페이지의 PDF를 직접 받아 와서 바로 열어요.",
+      "직접 고른 PDF는 그 논문(또는 문서)과 함께 보관해서, 다음에 열 때 다시 고르거나 받지 않고 바로 열려요. 읽기 목록에서 문서를 지우면 PDF도 함께 지워져요."
+    ],
+    "en": [
+      "Phone: a paper reached through the library whose PDF could be downloaded no longer ends on 'Could not reach the library'. When a publisher turns the app's own request away, the library's sign-in screen fetches the PDF from the paper's page and opens it.",
+      "A PDF you pick is kept with its paper (or document), so it opens straight away next time, without picking or fetching it again. Removing the document from the reading list removes the PDF too."
+    ]
+  },
+  {
     "version": "0.11.11",
     "date": "2026-10-24",
     "ko": ["휴대폰 도서관 로그인 화면이 인증서를 빠뜨린 학교 사이트(연세대 도서관)에도 접속해요: Chrome처럼 빠진 중간 인증서를 받아 와서, 휴대폰이 믿는 인증 기관까지 이어질 때만 열어요."],

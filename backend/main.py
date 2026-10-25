@@ -6,7 +6,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
@@ -375,6 +375,30 @@ def get_annotations(doc_id: str):
 def put_annotations(doc_id: str, doc: AnnotationDoc):
     try:
         return annotations.save(doc_id, doc.model_dump())
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+
+
+@app.get("/annotations/{doc_id}/pdf")
+def get_kept_pdf(doc_id: str):
+    """The PDF the person picked for this document, kept so it opens again without picking."""
+    try:
+        data = annotations.load_pdf(doc_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if data is None:
+        raise HTTPException(status_code=404, detail="No PDF kept for this document")
+    return Response(content=data, media_type="application/pdf")
+
+
+@app.put("/annotations/{doc_id}/pdf", status_code=204)
+async def put_kept_pdf(doc_id: str, request: Request):
+    if int(request.headers.get("content-length") or 0) > annotations.MAX_PDF:
+        raise HTTPException(status_code=413, detail="PDF too large")
+    try:
+        annotations.save_pdf(doc_id, await request.body())
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except OverflowError as exc:
