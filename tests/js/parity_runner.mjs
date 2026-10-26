@@ -6,7 +6,7 @@ import { createApi } from "../../frontend/web/core/api.js";
 import { dedupe, titleKey } from "../../frontend/web/core/dedupe.js";
 import { buildFlow, labelTerms, longestChain, nameClusters, outsideReferences, queryWords, tidyPhrase, titleCase } from "../../frontend/web/core/flow.js";
 import { normalizeWork, workPath, yearFilter } from "../../frontend/web/core/openalex.js";
-import { rankPapers } from "../../frontend/web/core/ranking.js";
+import { acronyms, expandQuery, rankPapers, singular } from "../../frontend/web/core/ranking.js";
 import { memoryStorage, toBibtex } from "../../frontend/web/core/store.js";
 import { layout, renderHtml } from "../../frontend/web/core/techtree.js";
 import { ndcgAt, precisionAt } from "../../frontend/web/core/evaluation.js";
@@ -39,6 +39,14 @@ if (input.flow_papers) out.flow_build = buildFlow(input.flow_papers.papers, { bo
 if (input.chain) out.chain = longestChain(input.chain.nodes, input.chain.edges);
 if (input.dedupe) out.dedupe = dedupe(input.dedupe);
 if (input.outside) out.outside = outsideReferences(input.outside.papers, input.outside.min_count, input.outside.limit);
+if (input.matching) {
+  const m = input.matching;
+  out.matching = {
+    singular: m.words.map(singular),
+    acronyms: Object.fromEntries(acronyms(m.texts)),
+    expanded: m.queries.map((q) => expandQuery(q, m.texts)),
+  };
+}
 if (input.strings) {
   const s = input.strings;
   out.strings = {

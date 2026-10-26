@@ -1,12 +1,60 @@
 // Port of backend/services/ranking.py. See that file for the reasoning behind each score.
 
-import { cosine, pyRound, tfidf } from "./text.js";
+import { byCodePoint, cosine, cosineDense, DEFAULT_TOKENS, meanRow, pyRound, tfidf } from "./text.js";
 import { citationContext } from "./context.js";
 
 export const RECENCY_HALF_LIFE_YEARS = 5;
 export const DEFAULT_WEIGHTS = { relevance: 0.35, influence: 0.45, seed: 0.2, recency: 0.05, impact: 0.15 };
 
 export const paperText = (paper) => `${paper.title || ""} ${paper.abstract || ""}`.trim();
+
+// ---------- matching the query to papers (relevance): see ranking.py ----------
+
+const ACRONYM = /((?:[A-Za-z][A-Za-z0-9-]*\s+){1,7}[A-Za-z][A-Za-z0-9-]*)\s*\(\s*([A-Z][A-Za-z0-9]{1,9})\s*\)/g;
+export const FEEDBACK_DOCS = 10, FEEDBACK_SHARE = 0.2;
+
+export const matchText = (paper) => [paperText(paper), ...(paper.keywords || [])].join(" ").trim();
+
+/** Fold a plural: networks -> network, studies -> study, classes -> class. */
+export function singular(word) {
+  if (word.length > 4 && word.endsWith("ies")) return word.slice(0, -3) + "y";
+  if (word.length > 4 && ["sses", "xes", "ches", "shes"].some((e) => word.endsWith(e))) return word.slice(0, -2);
+  if (word.length > 3 && word.endsWith("s") && !["ss", "us", "is"].some((e) => word.endsWith(e))) return word.slice(0, -1);
+  return word;
+}
+
+/** Acronyms the texts define ("gnn"), each with its most common spelled-out term. */
+export function acronyms(texts) {
+  const seen = new Map();
+  for (const text of texts) {
+    for (const [, long, short] of String(text).matchAll(ACRONYM)) {
+      const letters = [...short].filter((c) => /[A-Z0-9]/.test(c));
+      let words = long.split(/[\s-]+/).filter(Boolean);
+      if (letters.length < 2 || words.length < letters.length) continue;
+      words = words.slice(-letters.length);
+      if (words.every((w, i) => w[0].toLowerCase() === letters[i].toLowerCase())) {
+        const key = JSON.stringify([letters.join("").toLowerCase(), words.map((w) => singular(w.toLowerCase())).join(" ")]);
+        seen.set(key, (seen.get(key) || 0) + 1);
+      }
+    }
+  }
+  const pairs = [...seen].map(([key, count]) => [...JSON.parse(key), count])
+    .sort((a, b) => byCodePoint(a[0], b[0]) || byCodePoint(a[1], b[1]));
+  const best = new Map();
+  for (const [short, long, count] of pairs) if (!best.has(short) || count > best.get(short)[0]) best.set(short, [count, long]);
+  return new Map([...best].map(([short, [, long]]) => [short, long]));
+}
+
+/** The query with its acronyms spelled out, and its spelled-out terms abbreviated. */
+export function expandQuery(query, texts) {
+  const words = (String(query).toLowerCase().match(DEFAULT_TOKENS) || []).map(singular);
+  const plain = words.join(" "), extra = [];
+  for (const [short, long] of acronyms(texts)) {
+    if (words.includes(short) && !plain.includes(long)) extra.push(long);
+    else if (` ${plain} `.includes(` ${long} `) && !words.includes(short)) extra.push(short);
+  }
+  return [query, ...extra].join(" ");
+}
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 
 export function scaleToMax(values) {
@@ -119,10 +167,11 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
   if (!seeds.length) weights.seed = 0;
   currentYear = currentYear || new Date().getFullYear();
 
-  const docs = [query, ...papers.map(paperText), ...seeds.map(paperText)];
-  let rows;
+  const texts = papers.map(matchText);
+  const docs = [expandQuery(query, texts), ...texts, ...seeds.map(matchText)];
+  let rows, terms = [];
   try {
-    ({ rows } = tfidf(docs));
+    ({ rows, terms } = tfidf(docs, { fold: singular }));
   } catch {
     rows = docs.map(() => new Map());
   }
@@ -130,6 +179,14 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
 
   const tfidfScores = paperVecs.map((v) => cosine(queryVec, v));
   let relevance = scaleToMax(tfidfScores);
+  // pseudo-relevance feedback: likeness to the best text matches, as a share of relevance
+  const top = papers.map((_, i) => i).sort((a, b) => tfidfScores[b] - tfidfScores[a] || a - b)
+    .slice(0, FEEDBACK_DOCS).filter((i) => tfidfScores[i] > 0);
+  if (top.length >= 3) {
+    const centroid = meanRow(top.map((i) => paperVecs[i]), terms.length);
+    const feedback = scaleToMax(paperVecs.map((v) => cosineDense(centroid, v)));
+    relevance = relevance.map((r, i) => (1 - FEEDBACK_SHARE) * r + FEEDBACK_SHARE * feedback[i]);
+  }
   const context = citationContext(papers, relevance);
   if (Math.max(...context) > 0) {
     const c = scaleToMax(context);
