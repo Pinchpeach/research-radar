@@ -13,8 +13,9 @@ export const DEFAULT_TOKENS = new RegExp(`${WORD}{2,}`, "gu");
 // (?u)\b[^\W\d_][\w-]+[^\W_]\b: at least 3 characters, starts with a letter, hyphens inside
 export const TOPIC_TOKENS = new RegExp(`(?<!${WORD})\\p{L}[\\p{L}\\p{N}_-]+[\\p{L}\\p{N}](?!${WORD})`, "gu");
 
-export function analyze(text, { tokens = DEFAULT_TOKENS, stopWords = ENGLISH_STOP_WORDS, maxN = 2 } = {}) {
-  const words = (String(text || "").toLowerCase().match(tokens) || []).filter((w) => !stopWords.has(w));
+export function analyze(text, { tokens = DEFAULT_TOKENS, stopWords = ENGLISH_STOP_WORDS, maxN = 2, fold = null } = {}) {
+  let words = (String(text || "").toLowerCase().match(tokens) || []).filter((w) => !stopWords.has(w));
+  if (fold) words = words.map(fold);
   const out = [...words];
   for (let n = 2; n <= Math.min(maxN, words.length); n++) {
     for (let i = 0; i + n <= words.length; i++) out.push(words.slice(i, i + n).join(" "));
@@ -29,10 +30,10 @@ export const byCodePoint = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
  * Fit and transform `docs`. Returns { terms (sorted), rows } where each row is a Map
  * term index -> weight (l2-normalized). Throws "empty vocabulary" like scikit-learn.
  */
-export function tfidf(docs, { tokens, stopWords, maxN = 2, maxDf = 1.0 } = {}) {
+export function tfidf(docs, { tokens, stopWords, maxN = 2, maxDf = 1.0, fold = null } = {}) {
   const counts = docs.map((doc) => {
     const c = new Map();
-    for (const term of analyze(doc, { tokens, stopWords, maxN })) c.set(term, (c.get(term) || 0) + 1);
+    for (const term of analyze(doc, { tokens, stopWords, maxN, fold })) c.set(term, (c.get(term) || 0) + 1);
     return c;
   });
   const df = new Map();
@@ -77,6 +78,15 @@ const norm = (row) => Math.sqrt([...row.values()].reduce((s, w) => s + w * w, 0)
 export function cosine(a, b) {
   const na = norm(a), nb = norm(b);
   return na && nb ? dot(a, b) / (na * nb) : 0;
+}
+
+/** Cosine similarity of a dense array and a sparse row (0 when either is empty). */
+export function cosineDense(dense, row) {
+  let d = 0, nd = 0;
+  for (const v of dense) nd += v * v;
+  for (const [i, w] of row) d += dense[i] * w;
+  const nr = norm(row);
+  return nd && nr ? d / (Math.sqrt(nd) * nr) : 0;
 }
 
 /** Mean of the rows as a dense array. */

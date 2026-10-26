@@ -274,6 +274,18 @@ def test_small_helpers_match():
     assert [tuple(x) for x in js["outside"]] == flow.outside_references(outside["papers"], 2, 3)
 
 
+def test_query_matching_helpers_match():
+    """Plurals, acronyms the candidates define, and the query they expand (ranking.py)."""
+    words = ["networks", "studies", "classes", "boxes", "analysis", "corpus", "gas", "bus", "series", "graphs", "ies", "xes"]
+    texts = ["Graph neural networks (GNNs) pass messages.", "We use graph neural networks (GNN) and long short-term memory (LSTM).",
+             "Convolutional neural networks (CNNs); a graph convolutional network (GCN)", "Wrong (ABC) here", "x (Y)"]
+    queries = ["GNN", "GNNs for molecules", "long short-term memory", "graph neural network GNN", "LSTM and CNN", ""]
+    js = run_js({"matching": {"words": words, "texts": texts, "queries": queries}})["matching"]
+    assert js["singular"] == [ranking.singular(w) for w in words]
+    assert js["acronyms"] == ranking.acronyms(texts)
+    assert js["expanded"] == [ranking.expand_query(q, texts) for q in queries]
+
+
 def test_shared_words_and_version_stay_in_step():
     from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 

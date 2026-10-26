@@ -1,8 +1,10 @@
 import math
+import re
+from collections import Counter
 from datetime import date
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS, TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
 from backend.services.context import citation_context
@@ -13,6 +15,73 @@ DEFAULT_WEIGHTS = {"relevance": 0.35, "influence": 0.45, "seed": 0.2, "recency":
 
 def paper_text(paper: dict) -> str:
     return f"{paper.get('title', '')} {paper.get('abstract', '')}".strip()
+
+
+# ---------- matching the query to papers (relevance) ----------
+# Without a language model: words compared with plurals folded, the query's acronyms spelled out
+# (and spelled-out terms abbreviated) as the candidates themselves define them, OpenAlex's
+# keywords counted as part of the text, and pseudo-relevance feedback: papers that resemble the
+# best text matches count as relevant too, though they use other words. core/ranking.js does the same.
+
+_WORDS = re.compile(r"(?u)\b\w\w+\b")  # scikit-learn's default token pattern
+# a spelled-out term and its acronym in brackets: "graph neural networks (GNNs)"
+_ACRONYM = re.compile(r"((?:[A-Za-z][A-Za-z0-9-]*\s+){1,7}[A-Za-z][A-Za-z0-9-]*)\s*\(\s*([A-Z][A-Za-z0-9]{1,9})\s*\)")
+FEEDBACK_DOCS, FEEDBACK_SHARE = 10, 0.2
+
+
+def match_text(paper: dict) -> str:
+    return " ".join([paper_text(paper), *(paper.get("keywords") or [])]).strip()
+
+
+def singular(word: str) -> str:
+    """Fold a plural: networks -> network, studies -> study, classes -> class; others as they are."""
+    if len(word) > 4 and word.endswith("ies"):
+        return word[:-3] + "y"
+    if len(word) > 4 and word.endswith(("sses", "xes", "ches", "shes")):
+        return word[:-2]
+    if len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us", "is")):
+        return word[:-1]
+    return word
+
+
+def analyze(text: str) -> list[str]:
+    """Words (stop words dropped, plurals folded) and word pairs, as TfidfVectorizer's analyzer."""
+    words = [singular(w) for w in _WORDS.findall(text.lower()) if w not in ENGLISH_STOP_WORDS]
+    return words + [f"{a} {b}" for a, b in zip(words, words[1:])]
+
+
+def acronyms(texts: list[str]) -> dict[str, str]:
+    """Acronyms the texts define, lowercased and singular ("gnn"), each with its most common
+    spelled-out term ("graph neural network")."""
+    seen: Counter = Counter()
+    for text in texts:
+        for long, short in _ACRONYM.findall(text):
+            letters = [c for c in short if c.isupper() or c.isdigit()]
+            words = [w for w in re.split(r"[\s-]+", long) if w]
+            if len(letters) < 2 or len(words) < len(letters):
+                continue
+            words = words[-len(letters):]
+            if all(w[0].lower() == c.lower() for w, c in zip(words, letters)):
+                seen[("".join(letters).lower(), " ".join(singular(w.lower()) for w in words))] += 1
+    best: dict[str, tuple[int, str]] = {}
+    for (short, long), count in sorted(seen.items()):
+        if short not in best or count > best[short][0]:
+            best[short] = (count, long)
+    return {short: long for short, (_, long) in best.items()}
+
+
+def expand_query(query: str, texts: list[str]) -> str:
+    """The query with its acronyms spelled out, and its spelled-out terms abbreviated."""
+    known = acronyms(texts)
+    words = [singular(w) for w in _WORDS.findall(query.lower())]
+    plain = " ".join(words)
+    extra = []
+    for short, long in known.items():
+        if short in words and long not in plain:
+            extra.append(long)
+        elif f" {long} " in f" {plain} " and short not in words:
+            extra.append(short)
+    return " ".join([query, *extra])
 
 
 def scale_to_max(values: np.ndarray) -> np.ndarray:
@@ -173,7 +242,8 @@ def rank_papers(
     """Score and sort candidates.
 
     Every component is in [0, 1]:
-    - relevance: TF-IDF cosine to the query, scaled so the best candidate is 1, averaged with
+    - relevance: TF-IDF cosine to the query (see match_text, analyze, expand_query), scaled so the
+      best candidate is 1, with a share for likeness to the best matches, averaged with
       the citation context (ties to the best text matches through references; see context.py)
       when any candidate has references
     - seed: 1 for papers that cite or are cited by a seed, otherwise text similarity to the
@@ -193,17 +263,26 @@ def rank_papers(
         weights["seed"] = 0
     current_year = current_year or date.today().year
 
-    texts = [paper_text(paper) for paper in papers]
-    seed_texts = [paper_text(seed) for seed in seeds]
+    texts = [match_text(paper) for paper in papers]
+    seed_texts = [match_text(seed) for seed in seeds]
 
-    vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), sublinear_tf=True)
-    vectors = vectorizer.fit_transform([query, *texts, *seed_texts])
-    query_vec = vectors[0]
+    vectorizer = TfidfVectorizer(analyzer=analyze, sublinear_tf=True)
+    try:
+        vectors = vectorizer.fit_transform([expand_query(query, texts), *texts, *seed_texts])
+    except ValueError:  # no words at all
+        vectors = np.zeros((1 + len(papers) + len(seeds), 1))
+    query_vec = vectors[0:1]
     paper_vecs = vectors[1 : 1 + len(papers)]
     seed_vecs = vectors[1 + len(papers) :]
 
     tfidf = cosine_similarity(query_vec, paper_vecs)[0]
     relevance = scale_to_max(tfidf)
+    # pseudo-relevance feedback: likeness to the best text matches, as a share of relevance
+    top = [i for i in sorted(range(len(papers)), key=lambda i: (-tfidf[i], i))[:FEEDBACK_DOCS] if tfidf[i] > 0]
+    if len(top) >= 3:
+        centroid = np.asarray(paper_vecs[top].mean(axis=0)).reshape(1, -1)
+        feedback = cosine_similarity(centroid, paper_vecs)[0]
+        relevance = (1 - FEEDBACK_SHARE) * relevance + FEEDBACK_SHARE * scale_to_max(feedback)
     context = citation_context(papers, relevance)
     if context.max() > 0:
         relevance = 0.5 * relevance + 0.5 * scale_to_max(context)

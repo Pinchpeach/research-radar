@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.11.12**:
+최신 버전 **v0.12.0**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.11.12-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.11.12/ResearchRadar-0.11.12-windows.zip) | [ResearchRadar-0.11.12-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.11.12/ResearchRadar-0.11.12-macos.zip) | [ResearchRadar-0.11.12-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.11.12/ResearchRadar-0.11.12-linux.tar.gz) | [ResearchRadar-0.11.12-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.11.12/ResearchRadar-0.11.12-android.apk) |
+| [ResearchRadar-0.12.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-windows.zip) | [ResearchRadar-0.12.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-macos.zip) | [ResearchRadar-0.12.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-linux.tar.gz) | [ResearchRadar-0.12.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.11.12/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -102,7 +102,7 @@ OpenAlex는 키 없는 요청을 **같은 인터넷 주소(IP)를 쓰는 모든 
 
    | 신호 | 기본 가중치 | 의미 |
    |---|---|---|
-   | 주제 관련도 | 0.35 | 검색어와 제목·초록의 TF-IDF 유사도와 **인용 맥락**의 평균. 인용 맥락은 검색어와 가장 잘 맞는 논문 20편과 참고문헌을 얼마나 공유하고 서로 인용하는지입니다. 그래서 검색어와 표현이 달라도 같은 주제의 논문은 올라가고, 제목만 같은 색인·장 제목 같은 항목은 내려갑니다. 언어 모델 없이 후보 안에서 계산합니다. |
+   | 주제 관련도 | 0.35 | 검색어와 제목·초록·OpenAlex 키워드의 TF-IDF 유사도와 **인용 맥락**의 평균. 복수형은 단수로 맞추고(networks = network), 후보 논문들이 정의한 약어를 풀어서 비교합니다(GNN ↔ graph neural network). 가장 잘 맞는 논문 10편과 닮은 논문도 일부(20%) 관련 있는 것으로 셉니다(유사 적합성 피드백). 인용 맥락은 검색어와 가장 잘 맞는 논문 20편과 참고문헌을 얼마나 공유하고 서로 인용하는지입니다. 그래서 검색어와 표현이 달라도 같은 주제의 논문은 올라가고, 제목만 같은 색인·장 제목 같은 항목은 내려갑니다. 언어 모델 없이 후보 안에서 계산합니다. |
    | **흐름 중요도** | 0.45 | 관련 논문들이 계속 바탕으로 삼는 논문일수록 높습니다. 후보들의 인용 관계에서, 관련도에 비례해 출발한 독자가 참고문헌을 따라갈 때 도착하는 비율(개인화 PageRank)입니다. 주제와 무관한 범용 논문은 낮춰서 반영합니다. 0.5 이상이면 결과에 ◆ **핵심 논문** 표시가 붙습니다. |
    | 인용 영향력 | 0.15 | 연간 인용 수(로그) |
    | 최신성 | 0.05 | 5년마다 절반. 최신 연구를 더 보고 싶으면 올리세요. |

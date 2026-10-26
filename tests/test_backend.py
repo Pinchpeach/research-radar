@@ -4,7 +4,7 @@ from fastapi.testclient import TestClient
 
 from backend import main
 from backend.evaluation import ndcg_at_k, precision_at_k
-from backend.services import openalex
+from backend.services import openalex, ranking
 from backend.services.context import citation_context
 from backend.services.ranking import rank_papers, recency_score
 
@@ -110,6 +110,31 @@ def test_relevance_is_text_only_without_references():
     ranked = rank_papers(QUERY, candidates(), current_year=2026)
     top = max(p["relevance_score"] for p in ranked)
     assert [p["scores"]["relevance"] for p in ranked] == pytest.approx([p["relevance_score"] / top for p in ranked], abs=0.01)
+
+
+def test_an_acronym_finds_the_spelled_out_term_and_plurals_match():
+    papers = [
+        paper("W1", "Graph neural networks for molecules", "We study graph neural networks (GNNs) on molecular graphs.", 2020, 10),
+        paper("W2", "A survey of convolution", "Convolutional neural networks (CNNs) for images.", 2020, 10),
+        paper("W3", "Message passing", "A graph neural network passes messages between atoms.", 2021, 10),
+    ]
+    ranked = rank_papers("GNN", papers, weights={"relevance": 1, "influence": 0, "impact": 0, "recency": 0}, current_year=2026)
+    assert [p["id"].rsplit("/", 1)[-1] for p in ranked][:2] in (["W1", "W3"], ["W3", "W1"])  # neither says "GNN" alone
+    assert ranked[-1]["id"].endswith("W2")
+    assert ranking.expand_query("graph neural network", [p["abstract"] for p in papers]) == "graph neural network gnn"
+    assert ranking.singular("studies") == "study" and ranking.singular("analysis") == "analysis"
+
+
+def test_keywords_count_as_text_and_feedback_lifts_like_papers():
+    def one(pid, title, abstract, keywords=()):
+        return {**paper(pid, title, abstract, 2020, 10), "keywords": list(keywords)}
+
+    papers = [one(f"W{i}", f"Pulsar timing {i}", "pulsar timing arrays detect gravitational waves") for i in range(1, 5)]
+    papers.append(one("W8", "Nanohertz background", "a background of nanohertz gravitational waves", ["Pulsar timing"]))
+    papers.append(one("W9", "Cooking", "recipes for bread"))
+    ranked = {p["id"].rsplit("/", 1)[-1]: p for p in rank_papers("pulsar timing", papers, current_year=2026)}
+    assert ranked["W8"]["relevance_score"] > 0  # matched through its OpenAlex keyword
+    assert ranked["W8"]["scores"]["relevance"] > ranked["W9"]["scores"]["relevance"] == 0
 
 
 def test_citation_context_lifts_papers_that_share_references():
