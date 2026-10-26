@@ -1,5 +1,5 @@
 {
-  "_about": "University libraries' off-campus proxy prefixes, by e-mail domain (subdomains match too), read by backend/library.py and core/library.js. Each was taken from the library's own pages (source); a school may change its address, and Settings lets the person edit it. \"login\": the library's sign-in page, for proxies that show a blank page until the person has signed in on the library's site (Yonsei's link.n2s) instead of sending them there.",
+  "_about": "University libraries' off-campus proxy prefixes, by e-mail domain (subdomains match too), read by backend/library.py and core/library.js. Each was taken from the library's own pages (source; the later ones as search engines quote those pages); a school may change its address, and Settings lets the person edit it. \"login\": the library's sign-in page, for proxies that show a blank page until the person has signed in on the library's site (Yonsei's link.n2s) instead of sending them there.",
   "schools": [
     {"domain": "snu.ac.kr", "name_ko": "서울대학교", "name_en": "Seoul National University", "proxy": "https://libproxy.snu.ac.kr/link.n2s?url=", "source": "https://libguides.snu.ac.kr/c.php?g=319147&p=2131809"},
     {"domain": "yonsei.ac.kr", "name_ko": "연세대학교", "name_en": "Yonsei University", "proxy": "https://access.yonsei.ac.kr/link.n2s?url=", "login": "https://library.yonsei.ac.kr/login", "source": "https://library.yonsei.ac.kr/local/html/off-campusAccess"},
@@ -10,6 +10,14 @@
     {"domain": "knu.ac.kr", "name_ko": "경북대학교", "name_en": "Kyungpook National University", "proxy": "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/", "source": "https://kudos.knu.ac.kr/pages/sub.htm?nav_code=kud1641347132"},
     {"domain": "unist.ac.kr", "name_ko": "UNIST", "name_en": "UNIST", "proxy": "https://libproxy.unist.ac.kr/_Lib_Proxy_Url/", "source": "https://library.unist.ac.kr/wp-content/uploads/2025/08/전자자료-교외접속-가이드한글.pdf"},
     {"domain": "dgist.ac.kr", "name_ko": "DGIST", "name_en": "DGIST", "proxy": "https://libproxy.dgist.ac.kr/_Lib_Proxy_Url/", "source": "https://curation.dgist.ac.kr/curation/fJMeQOgUjbTwTu/WpoG6WNBtJmf.html"},
-    {"domain": "kdis.ac.kr", "name_ko": "KDI국제정책대학원", "name_en": "KDI School", "proxy": "https://lib.kdiproxy.kr/_Lib_Proxy_Url/", "source": "https://kdischool.libguides.com/remote_access"}
+    {"domain": "kdis.ac.kr", "name_ko": "KDI국제정책대학원", "name_en": "KDI School", "proxy": "https://lib.kdiproxy.kr/_Lib_Proxy_Url/", "source": "https://kdischool.libguides.com/remote_access"},
+    {"domain": "hanyang.ac.kr", "name_ko": "한양대학교", "name_en": "Hanyang University", "proxy": "https://access.hanyang.ac.kr/link.n2s?url=", "source": "https://hanyang-kr.libguides.com/c.php?g=675136&p=6591827&t=34646"},
+    {"domain": "ewhain.net", "name_ko": "이화여자대학교", "name_en": "Ewha Womans University", "proxy": "https://access.ewha.ac.kr/link.n2s?url=", "source": "https://ewha.libguides.com/dbtips"},
+    {"domain": "ewha.ac.kr", "name_ko": "이화여자대학교", "name_en": "Ewha Womans University", "proxy": "https://access.ewha.ac.kr/link.n2s?url=", "source": "https://ewha.libguides.com/dbtips"},
+    {"domain": "inha.edu", "name_ko": "인하대학교", "name_en": "Inha University", "proxy": "https://openlink.inha.ac.kr/link.n2s?url=", "source": "https://lib.inha.ac.kr/research/offcampus"},
+    {"domain": "inha.ac.kr", "name_ko": "인하대학교", "name_en": "Inha University", "proxy": "https://openlink.inha.ac.kr/link.n2s?url=", "source": "https://lib.inha.ac.kr/research/offcampus"},
+    {"domain": "cnu.ac.kr", "name_ko": "충남대학교", "name_en": "Chungnam National University", "proxy": "https://libra.cnu.ac.kr/_Lib_Proxy_Url/", "source": "https://library.cnu.ac.kr/webcontent/info/2"},
+    {"domain": "ulsan.ac.kr", "name_ko": "울산대학교", "name_en": "University of Ulsan", "proxy": "https://ulibx.ulsan.ac.kr/_Lib_Proxy_Url/", "source": "https://lib.ulsan.ac.kr/?lang=en"},
+    {"domain": "catholic.ac.kr", "name_ko": "가톨릭대학교", "name_en": "The Catholic University of Korea", "proxy": "https://libproxy.catholic.ac.kr/_Lib_Proxy_Url/", "source": "https://library.catholic.ac.kr"}
   ]
 }

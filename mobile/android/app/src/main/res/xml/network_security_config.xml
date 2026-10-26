@@ -25,6 +25,20 @@
         <domain includeSubdomains="true">libproxy.dgist.ac.kr</domain>
         <domain includeSubdomains="true">kdis.ac.kr</domain>
         <domain includeSubdomains="true">lib.kdiproxy.kr</domain>
+        <domain includeSubdomains="true">hanyang.ac.kr</domain>
+        <domain includeSubdomains="true">access.hanyang.ac.kr</domain>
+        <domain includeSubdomains="true">ewhain.net</domain>
+        <domain includeSubdomains="true">access.ewha.ac.kr</domain>
+        <domain includeSubdomains="true">ewha.ac.kr</domain>
+        <domain includeSubdomains="true">inha.edu</domain>
+        <domain includeSubdomains="true">openlink.inha.ac.kr</domain>
+        <domain includeSubdomains="true">inha.ac.kr</domain>
+        <domain includeSubdomains="true">cnu.ac.kr</domain>
+        <domain includeSubdomains="true">libra.cnu.ac.kr</domain>
+        <domain includeSubdomains="true">ulsan.ac.kr</domain>
+        <domain includeSubdomains="true">ulibx.ulsan.ac.kr</domain>
+        <domain includeSubdomains="true">catholic.ac.kr</domain>
+        <domain includeSubdomains="true">libproxy.catholic.ac.kr</domain>
     </domain-config>
     <!-- certificate authorities' own hosts, where the certificates a server leaves out of its chain
          are downloaded from (AiaTrust.java): they are published over http, and are checked against
