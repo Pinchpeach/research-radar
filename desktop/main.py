@@ -9,6 +9,7 @@ bookmarks are kept in the user's app-data folder (shown in Settings).
 """
 
 import argparse
+import base64
 import os
 import socket
 import sys
@@ -141,15 +142,17 @@ class DesktopApi:
         return result["ok"]
 
     def library_login(self, doi: str) -> bool:
-        """Sign in to the library in a window of its own, opened on the paper.
+        """Get a paper through the library in a window of its own, signing in there if need be.
 
-        After each page loads, the proxy's cookies are kept and the PDF tried; when it comes, the
-        window closes and the page asks the server for it again. True when it worked; False if the
-        person closed the window first (they can also download by hand in it).
+        After each page loads, the proxy's cookies are kept and the PDF tried, first by the app's
+        own request (backend/library.py); when a publisher turns that away (bot checks), the page's
+        PDF link (shared/find-pdf.js) is fetched in the page itself, as the browser it is. When the
+        PDF comes, the window closes and the page asks the server for it again. True when it
+        worked; False if the person closed the window first (they can also download by hand in it).
         """
         import webview
 
-        from backend import library, settings
+        from backend import library
 
         prefix = library.proxy()
         if not library.valid_proxy(prefix or "") or not library.DOI.match(doi or ""):
@@ -157,9 +160,9 @@ class DesktopApi:
         done, lock, result = threading.Event(), threading.Lock(), {"ok": False}
         link, first = library.login_url(prefix, doi), library.login_page(prefix)
         # some proxies (Yonsei's) show a blank page until the person has signed in on the library's
-        # site: start there, and go on to the paper once they've left the sign-in page
-        state = {"to_paper": bool(first)}
-        window = webview.create_window(f"{APP_NAME} — library", first or link, width=1100, height=820)
+        # site: start there, unless signed in already, and go on to the paper once they've left it
+        state = {"to_paper": bool(first) and not library.signed_in(prefix), "steps": 0}
+        window = webview.create_window(f"{APP_NAME} — library", link if not state["to_paper"] else first, width=1100, height=820)
 
         def loaded():
             if done.is_set() or not lock.acquire(blocking=False):
@@ -175,11 +178,25 @@ class DesktopApi:
                 for jar in window.get_cookies() or []:
                     for name, morsel in jar.items():
                         cookies.append({"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]})
-                if library.save_cookies(prefix, cookies):
-                    library.fetch(doi)  # raises until the session reaches the PDF
-                    result["ok"] = True
-                    done.set()
-                    window.destroy()
+                if not library.save_cookies(prefix, cookies):
+                    return
+                try:
+                    library.fetch(doi)
+                except library.NeedsLogin:
+                    return  # still signing in
+                except Exception:  # turned away, or no link the app can follow: try in the page
+                    got = in_page_pdf(window)
+                    if got and got.get("pdf"):
+                        library.remember(prefix, doi, base64.b64decode(got["pdf"]))
+                    elif got and got.get("next") and state["steps"] < 3:
+                        state["steps"] += 1  # a page around the PDF (or another site's address): open it
+                        window.load_url(library.through(prefix, got["next"]))
+                        return
+                    else:
+                        return  # left to the person, in the window
+                result["ok"] = True
+                done.set()
+                window.destroy()
             except Exception:  # not signed in yet, or no PDF from here: the person carries on in the window
                 pass
             finally:
@@ -189,6 +206,41 @@ class DesktopApi:
         window.events.closed += done.set
         done.wait(15 * 60)
         return result["ok"]
+
+
+# The PDF on the page shown, fetched by the page with its own cookies: {"pdf": base64} or, when
+# what the link gives isn't a PDF (or can't be read from here), {"next": link}; null without one.
+IN_PAGE_PDF = """(async function () {
+  var link = %s;
+  if (!link) return null;
+  try {
+    var response = await fetch(link, { credentials: "include" });
+    var bytes = new Uint8Array(await response.arrayBuffer());
+    var head = String.fromCharCode.apply(null, bytes.subarray(0, 1024));
+    if (!response.ok || !/^\\s*%%PDF/.test(head)) return { next: link };
+    var text = "";
+    for (var i = 0; i < bytes.length; i += 32768) text += String.fromCharCode.apply(null, bytes.subarray(i, i + 32768));
+    return { pdf: btoa(text) };
+  } catch (e) {
+    return { next: link };
+  }
+})()"""
+
+
+def in_page_pdf(window, timeout: float = 120) -> dict | None:
+    from backend.paths import shared_text
+
+    finder = "\n".join(line for line in shared_text("find-pdf.js").splitlines() if not line.startswith("//")).strip()
+    got, box = threading.Event(), {}
+
+    def back(value):
+        box["value"] = value
+        got.set()
+
+    window.evaluate_js(IN_PAGE_PDF % finder, back)
+    got.wait(timeout)
+    value = box.get("value")
+    return value if isinstance(value, dict) else None
 
 
 def wait_forever() -> None:

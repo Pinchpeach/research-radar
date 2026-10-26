@@ -6,6 +6,7 @@ import socket
 import stat
 
 import pytest
+import requests
 from fastapi.testclient import TestClient
 
 from backend import library, main, settings
@@ -233,6 +234,83 @@ def test_the_desktop_sign_in_window_keeps_the_cookies_and_closes_on_the_pdf(monk
     window.events.loaded.fire()  # signed in: the paper
     thread.join(5)
     assert result == {"ok": True} and window.destroyed and tries == ["abc", "abc"]
+
+
+def test_the_desktop_window_gets_the_pdf_in_the_page_when_the_app_is_turned_away(monkeypatch):
+    """A publisher's bot check refuses the app's own request: the window's page fetches the PDF
+    link itself (shared/find-pdf.js), and the PDF is kept for the page to ask for."""
+    import base64
+    import sys
+    import threading
+    import time
+    import types
+    from http.cookies import SimpleCookie
+
+    from desktop.main import DesktopApi
+
+    settings.save({"library_proxy": KR})
+    library._recent.clear()
+
+    class Hook:
+        def __init__(self):
+            self.handlers = []
+
+        def __iadd__(self, handler):
+            self.handlers.append(handler)
+            return self
+
+        def fire(self):
+            for handler in self.handlers:
+                handler()
+
+    answers = [{"next": "https://www.sciencedirect.com/science/article/pii/X/pdfft"}, {"pdf": base64.b64encode(PDF).decode()}]
+
+    class Window:
+        def __init__(self, title, url, **kwargs):
+            self.url, self.loaded_urls, self.scripts, self.destroyed = url, [], [], False
+            self.events = types.SimpleNamespace(loaded=Hook(), closed=Hook())
+            opened.append(self)
+
+        def get_cookies(self):
+            jar = SimpleCookie()
+            jar["session"] = "abc"
+            jar["session"]["domain"], jar["session"]["path"] = ".libproxy.uni.example", "/"
+            return [jar]
+
+        def load_url(self, url):
+            self.loaded_urls.append(url)
+
+        def evaluate_js(self, script, callback):
+            self.scripts.append(script)
+            callback(answers.pop(0))
+
+        def destroy(self):
+            self.destroyed = True
+            self.events.closed.fire()
+
+    opened = []
+    monkeypatch.setitem(sys.modules, "webview", types.SimpleNamespace(create_window=Window))
+
+    def fetch(doi, prefix=None, session=None):
+        raise requests.HTTPError("HTTP 403")
+
+    real_fetch = library.fetch
+    monkeypatch.setattr(library, "fetch", fetch)
+    result = {}
+    thread = threading.Thread(target=lambda: result.update(ok=DesktopApi().library_login(DOI)))
+    thread.start()
+    while not opened:
+        time.sleep(0.01)
+    window = opened[0]
+    window.events.loaded.fire()  # the paper's page: its link gives a page around the PDF
+    assert window.loaded_urls == [KR + "https://www.sciencedirect.com/science/article/pii/X/pdfft"]
+    window.events.loaded.fire()  # that page: the PDF
+    thread.join(5)
+    assert result == {"ok": True} and window.destroyed
+    assert "citation_pdf_url" in window.scripts[0] and 'credentials: "include"' in window.scripts[0]
+    assert real_fetch(DOI, KR) == PDF  # what the reader asks for next
+    with pytest.raises(library.NoPdf):
+        library.remember(KR, DOI, b"<html>")
 
 
 def test_addresses_through_each_kind_of_proxy():

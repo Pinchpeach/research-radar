@@ -26,6 +26,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -48,13 +49,8 @@ public class LibraryWebActivity extends AppCompatActivity {
 
     static final String URL = "url", CLOSE = "close";
     private static final int MAX_PDF = 100 * 1024 * 1024;
-    // the page's PDF: Google Scholar's citation_pdf_url tag, else a PDF shown in a frame (IEEE)
-    private static final String FIND_PDF = "(function(){"
-        + "var m=document.querySelector('meta[name=\"citation_pdf_url\" i]');"
-        + "if(m&&m.content){try{return new URL(m.content,location.href).href}catch(e){}}"
-        + "var f=document.querySelectorAll('iframe[src],embed[src]');"
-        + "for(var i=0;i<f.length;i++){if(/pdf/i.test(f[i].getAttribute('src')))return f[i].src}"
-        + "return null})()";
+    // the page's PDF link (shared with the desktop app; www/shared, copied into the app's assets)
+    private static final String FIND_PDF = "public/shared/find-pdf.js";
     static LibraryWebActivity current;
 
     private WebView web;
@@ -178,7 +174,14 @@ public class LibraryWebActivity extends AppCompatActivity {
 
     /** The page's PDF link, or null (FIND_PDF; the result comes JSON-encoded). */
     void findPdf(ValueCallback<String> done) {
-        web.evaluateJavascript(FIND_PDF, done);
+        try (InputStream in = getAssets().open(FIND_PDF)) {
+            ByteArrayOutputStream script = new ByteArrayOutputStream();
+            byte[] buffer = new byte[8192];
+            for (int n; (n = in.read(buffer)) > 0; ) script.write(buffer, 0, n);
+            web.evaluateJavascript(script.toString("UTF-8"), done);
+        } catch (IOException e) {
+            done.onReceiveValue("null");
+        }
     }
 
     private void download(String url, String userAgent) {

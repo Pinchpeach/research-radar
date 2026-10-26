@@ -125,15 +125,15 @@ PDF 본문은 pdf.js가 `isEvalSupported: false`로 그리고, 필기는 SVG의 
 
 ### 13. 학교 도서관 로그인 쿠키
 
-PC 앱은 학교 도서관 프록시(EZproxy 등)에 로그인한 세션 쿠키를 `library-session.json`에 사용자만 읽을 수 있게 저장합니다(`backend/library.py`). 로그인 창(`desktop/main.py`)에서 받은 쿠키 가운데 프록시 호스트와 그 하위 도메인의 것만 남기고(`ezproxy.school.edu.attacker.example` 같은 이름은 버림), 요청에도 그 도메인 쿠키로만 붙입니다. 받아 오는 동안 프록시 밖으로 리다이렉트되면 쿠키를 보내기 전에 멈추고 다시 로그인하라고 알립니다. 주소마다 공인 IP 검사(11번)도 그대로 합니다. 프록시 주소를 바꾸면 이전 세션은 쓰지 않고, 설정 › 도서관에서 지울 수 있습니다. 사람이 연 논문 한 편씩만 받습니다. 테스트: `tests/test_library.py`.
+PC 앱은 학교 도서관 프록시(EZproxy 등)에 로그인한 세션 쿠키를 `library-session.json`에 사용자만 읽을 수 있게 저장합니다(`backend/library.py`). 로그인 창(`desktop/main.py`)에서 받은 쿠키 가운데 프록시 호스트와 그 하위 도메인의 것만 남기고(`ezproxy.school.edu.attacker.example` 같은 이름은 버림), 요청에도 그 도메인 쿠키로만 붙입니다. 받아 오는 동안 프록시 밖으로 리다이렉트되면 쿠키를 보내기 전에 멈추고 다시 로그인하라고 알립니다. 출판사가 앱의 요청을 막으면(봇 검사) 로그인 창의 페이지가 PDF 링크(`shared/find-pdf.js`)를 직접 받아(`credentials: "include"`, 그 페이지의 출처 규칙 그대로) base64로 앱에 넘기고, `%PDF`로 시작할 때만 씁니다. 그 창에는 앱의 API(`js_api`)가 없습니다. 주소마다 공인 IP 검사(11번)도 그대로 합니다. 프록시 주소를 바꾸면 이전 세션은 쓰지 않고, 설정 › 도서관에서 지울 수 있습니다. 사람이 연 논문 한 편씩만 받습니다. 테스트: `tests/test_library.py`.
 
 Android 앱은 로그인을 앱 안의 로그인 화면(`LibraryWebActivity`, 평범한 WebView)에서 받습니다. 앱과 같은 쿠키 저장소를 쓰고, 앱과 이어지는 기능(JavaScript 브리지)은 없으며, 로그인하는 동안에는 앱이 도서관에 요청하지 않습니다. 그 안의 페이지는 다른 출처라 앱의 데이터(localStorage의 키·북마크)를 읽지 못합니다. PDF는 먼저 CapacitorHttp가 받으며 쿠키는 브라우저처럼 그 도메인에만 붙습니다(`core/library.js`). 출판사가 앱의 요청을 막으면(봇 검사) 로그인 화면에서 논문 페이지를 열고, 앱이 그 페이지의 PDF 링크를 읽어(`evaluateJavascript`, 앱 쪽에서만 부르는 것이라 페이지가 앱을 부를 수는 없음) 따라갑니다. 화면이 받은 PDF는 화면과 같은 쿠키·브라우저 이름으로 앱 캐시에 내려받고, `%PDF`로 시작할 때만 리더에 넘깁니다(100MB까지). 로그인 정보 지우기는 웹 뷰 쿠키를 모두 지웁니다. 다른 앱에서 "Research Radar로 열기"로 넘긴 PDF(`content://` PDF만 받는 인텐트 필터)는 PDF로만 다룹니다.
 
 서버가 인증서 사슬의 중간 인증서를 빠뜨리면(연세대 도서관) Android의 WebView와 HTTP는 접속하지 못하지만 Chrome은 인증서에 적힌 주소(AIA)에서 받아 와 접속합니다. 앱도 같은 일을 합니다(`AiaTrust.java`). 빠진 인증서를 받아 붙인 뒤, 같은 호스트 이름으로 휴대폰이 믿는 루트 인증서까지 시스템 검사를 다시 하고 통과할 때만 엽니다. 받은 인증서는 믿을 근거가 아니라 사슬을 잇는 재료일 뿐이라, 인증 기관 호스트에서 http로 받아도 됩니다(`network_security_config.xml`). 기간 만료·이름 불일치 같은 다른 인증서 문제는 그대로 막습니다.
 
-### 14. 직접 고른 PDF 보관
+### 14. 연 PDF 보관
 
-사람이 고른 PDF(“PDF 파일 고르기”, “Research Radar로 열기”)는 다음에 고르지 않고 열리도록 그 문서의 필기 옆에 둡니다. PC는 데이터 폴더의 `annotations/<id>.pdf`, Android는 앱 저장소의 `pdfs/<id>.pdf`입니다(`backend/annotations.py`, `mobile.js`). id는 필기와 같은 규칙(영문·숫자·`_.-`, 80자, `.`로 시작 못 함)이라 폴더 밖으로 나가지 못하고, `%PDF`로 시작하는 100MB 이하 파일만 받습니다. 읽기 목록에서 문서를 지우면 PDF도 지워집니다. 테스트: `tests/test_reader_backend.py`, `tests/js/api.test.mjs`.
+리더에서 연 PDF(직접 고른 파일, “Research Radar로 열기”, 무료본·도서관에서 받은 논문)는 다음에 고르거나 다시 받지 않고 열리도록 그 문서의 필기 옆에 둡니다. PC는 데이터 폴더의 `annotations/<id>.pdf`, Android는 앱 저장소의 `pdfs/<id>.pdf`입니다(`backend/annotations.py`, `mobile.js`). id는 필기와 같은 규칙(영문·숫자·`_.-`, 80자, `.`로 시작 못 함)이라 폴더 밖으로 나가지 못하고, `%PDF`로 시작하는 100MB 이하 파일만 받습니다. 읽기 목록에서 문서를 지우면 PDF도 지워집니다. 테스트: `tests/test_reader_backend.py`, `tests/js/api.test.mjs`.
 
 ## 그대로 안전한 부분
 

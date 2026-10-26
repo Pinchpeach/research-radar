@@ -235,6 +235,13 @@ def pdf_link(html: str, page_url: str) -> str | None:
     return None
 
 
+def remember(prefix: str, doi: str, data: bytes) -> None:
+    """A PDF the sign-in window got itself (in the page, as a browser), for the page to ask for next."""
+    if not pdf_proxy.is_pdf(data):
+        raise NoPdf("")
+    _recent.update(key=(normalize_proxy(prefix), doi), at=time.monotonic(), data=data)
+
+
 def fetch(doi: str, prefix: str | None = None, session: requests.Session | None = None) -> bytes:
     prefix = normalize_proxy(prefix) if prefix else proxy()
     if not valid_proxy(prefix or ""):

@@ -385,6 +385,7 @@ test.describe("through the university library on Android, signed in inside the a
 
   test("a publisher that turns the app's own request away: the PDF comes through the library's screen", async ({ page }) => {
     await fakeWebView(page, { ...WALK, [LINK]: [PAPER], [PDF]: ["DOWNLOAD"] }, { [PAPER]: PDF });
+    await fakeFiles(page);
     await library(page, { skipFake: true });
     await page.locator("#library-sign-in").click();
     await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
@@ -396,6 +397,11 @@ test.describe("through the university library on Android, signed in inside the a
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     expect(await page.evaluate(() => window.webViewOpened)).toEqual([LINK, PDF]); // straight to the paper's page, then its PDF
+
+    await page.locator(".rd-close").click();
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 }); // kept: no library, no screen
+    expect(await page.evaluate(() => window.webViewOpened)).toEqual([LINK, PDF]);
   });
 
   test("a PDF opened with the app from elsewhere opens in the reader", async ({ page }) => {

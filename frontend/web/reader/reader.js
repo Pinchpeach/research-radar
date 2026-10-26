@@ -63,7 +63,7 @@ async function fileId(bytes) {
  * Open the reader.
  *   paper     the paper it belongs to (id, title, open_access_url), if any
  *   url       an http(s) PDF to fetch, or
- *   file      a File the person picked (kept, so it opens again without picking), or
+ *   file      a File the person picked, or
  *   pdfBytes  a PDF already fetched (the library's sign-in screen on Android)
  *   docId     a document opened again from the reading list
  *   api       app.js's api(method, path, body)
@@ -113,7 +113,8 @@ class Reader {
     if (this.bytes) {
       try { await this.loadPdf(); } catch (e) { error = e; this.bytes = null; }
     }
-    if (this.bytes && this.file) this.keep();
+    // kept with its document: opens again as it is, with no new download or sign-in (keptPdf)
+    if (this.bytes && !this.kept && (this.file || this.paper)) this.keep();
     const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
     if (!this.bytes && (wanted || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
@@ -154,7 +155,7 @@ class Reader {
     return null;
   }
 
-  /** The PDF the person picked for this document before (backend/annotations.py), or null. */
+  /** The PDF kept for this document when it was opened before (backend/annotations.py), or null. */
   async keptPdf(id) {
     const path = `/annotations/${encodeURIComponent(id)}/pdf`;
     try {
@@ -164,7 +165,7 @@ class Reader {
     } catch { return null; }
   }
 
-  /** Keep the PDF the person picked, with its document, so it opens again without picking. */
+  /** Keep the PDF with its document (picked, or fetched for a paper), so it opens again as it is. */
   async keep() {
     const path = `/annotations/${encodeURIComponent(this.docId)}/pdf`;
     try {
@@ -174,7 +175,7 @@ class Reader {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       }
       await this.flush(); // listed under Reading, where it opens again (and can be removed)
-    } catch { /* still open now; picked again next time */ }
+    } catch { /* still open now; found again next time */ }
   }
 
   /** The PDF through the library: the desktop server (backend/library.py) or, on Android, mobile.js. */
@@ -185,19 +186,31 @@ class Reader {
       try { return await (window.radarLibraryPdf ? window.radarLibraryPdf(doi) : window.radarLocalApi("GET", path)); }
       catch (e) { status = e.status || 502; detail = e.detail || e.message; }
     } else {
-      const response = await fetch(path);
-      if (response.ok) {
-        const bytes = new Uint8Array(await response.arrayBuffer());
-        if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
-        throw new Error(t("rd.notPdf"));
+      const get = async () => {
+        const response = await fetch(path);
+        if (response.ok) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
+          throw new Error(t("rd.notPdf"));
+        }
+        status = response.status;
+        try { detail = (await response.json()).detail; } catch { /* not JSON */ }
+        return null;
+      };
+      let bytes = await get();
+      // signed in, but the app's own request didn't bring it (a publisher's bot check): the
+      // library's window gets it in the page (desktop/main.py library_login), then it's asked again
+      const desktop = window.pywebview && window.pywebview.api;
+      if (!bytes && (status === 404 || status === 502) && desktop && desktop.library_login) {
+        this.pagesEl.replaceChildren(el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: t("rd.findingLibrary") })));
+        try { if (await desktop.library_login(doi)) bytes = await get(); } catch { /* the window failed to open */ }
       }
-      status = response.status;
-      try { detail = (await response.json()).detail; } catch { /* not JSON */ }
+      if (bytes) return bytes;
     }
     if (status === 422) return null; // no library set up: nothing to say
     if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url, first: detail && detail.library_login };
-    // Android: the library's web view can still try (mobile.js), where the app's own request failed
-    else if (window.radarLibraryPdf) this.libraryLogin = { doi, url: detail && (detail.page_url || detail.login_url) };
+    // the library's window can still try, where the app's own request failed (Android: mobile.js)
+    else if (signIn()) this.libraryLogin = { doi, url: detail && (detail.page_url || detail.login_url) };
     if (status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
     const key = { 401: "rd.library401", 404: "rd.library404" }[status] || "rd.libraryFailed";
     throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${status}` }));
