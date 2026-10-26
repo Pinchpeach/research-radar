@@ -252,31 +252,46 @@ test.describe("no free copy on OpenAlex", () => {
     expect(asked).toBe(`https://api.unpaywall.org/v2/${DOI}?email=student%40yonsei.ac.kr`);
   });
 
-  test("nowhere to get it: says how to add the library, or pick the file", async ({ page }) => {
+  test("nowhere to get it: says how to add the library, or pick the file, which is kept", async ({ page }) => {
+    await fakeFiles(page);
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    const read = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf");
+    await read.click();
     await expect(page.locator(".rd-unavailable h3")).toHaveText("무료로 받을 수 있는 PDF를 찾지 못했어요");
     await expect(page.locator(".rd-unavailable")).toContainText("설정 › 도서관");
     await page.locator(".rd-unavailable input[type=file]").setInputFiles({ name: "mine.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    await page.locator(".rd-close").click();
+
+    await read.click(); // the picked PDF again, without picking or looking for it
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    await expect(page.locator(".rd-unavailable")).toHaveCount(0);
+    await page.locator(".rd-close").click();
+    await go(page, "reading");
+    await page.locator("#doc-list .read-row .title").first().click(); // and from the reading list
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
   });
 });
 
 /**
  * A stand-in for the app's LibraryWeb sign-in screen: `walk` lists the pages each address goes
- * through (signing in happens there), sharing the page's cookie store as the real one does.
+ * through (signing in happens there; "DOWNLOAD": the address is a PDF, downloaded to the cache),
+ * `links` the PDF link each page has (findPdf), sharing the page's cookie store as the real one does.
  */
-async function fakeWebView(page, walk) {
-  await page.addInitScript((walk) => {
+async function fakeWebView(page, walk, links = {}) {
+  await page.addInitScript(({ walk, links }) => {
     if (window !== window.top) return;
     const listeners = {};
     const fire = (name, data) => (listeners[name] || []).forEach((f) => f(data || {}));
     window.webViewOpened = [];
+    let here = null;
     const visit = (url) => {
       window.webViewOpened.push(url);
-      (walk[url] || []).forEach((here, i) => setTimeout(async () => {
-        if (here === "SIGNED-IN") return window.signInAtLibrary();
-        fire("navigated", { url: here });
+      (walk[url] || []).forEach((step, i) => setTimeout(async () => {
+        if (step === "SIGNED-IN") return window.signInAtLibrary();
+        if (step === "DOWNLOAD") return fire("downloaded", { url, path: "/data/cache/library-paper.pdf" });
+        here = step;
+        fire("navigated", { url: step });
       }, 20 * (i + 1)));
     };
     window.Capacitor = { convertFileSrc: (u) => "https://handed.example/" + encodeURIComponent(u), Plugins: {
@@ -284,16 +299,39 @@ async function fakeWebView(page, walk) {
         addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
         open: async ({ url }) => visit(url),
         navigate: async ({ url }) => visit(url),
+        findPdf: async () => (links[here] ? { link: links[here] } : {}),
         close: async () => setTimeout(() => fire("closed"), 10),
       },
       App: { addListener: (name, f) => { window.handPdf = (uri) => f({ url: uri }); }, getLaunchUrl: async () => null },
     } };
-  }, walk);
+  }, { walk, links });
+}
+
+/** A stand-in for the app's storage (Capacitor's Filesystem), where picked PDFs are kept. */
+async function fakeFiles(page) {
+  await page.addInitScript(() => {
+    if (window !== window.top) return;
+    const files = {}; // path: blob URL
+    window.Capacitor ||= { Plugins: {} };
+    const handed = window.Capacitor.convertFileSrc;
+    window.Capacitor.convertFileSrc = (uri) => (uri.startsWith("kept://") ? files[uri.slice(7)] : handed(uri));
+    window.Capacitor.Plugins.Filesystem = {
+      stat: async ({ path }) => { if (!files[path]) throw new Error("no file"); return {}; },
+      getUri: async ({ path }) => ({ uri: "kept://" + path }),
+      writeFile: async ({ path, data }) => {
+        const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
+        files[path] = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
+        return { uri: "kept://" + path };
+      },
+      deleteFile: async ({ path }) => { if (!files[path]) throw new Error("no file"); delete files[path]; },
+    };
+  });
 }
 
 test.describe("through the university library on Android, signed in inside the app", () => {
   const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
   const LINK = `${YONSEI}https://doi.org/${DOI}`, PDF = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/stamp/gnn.pdf";
+  const PAPER = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/document/4700287"; // the paper's page through the proxy
   // the library's sign-in page, signing in, back on the library's homepage; then the proxy, onto a publisher's page
   const WALK = {
     "https://library.yonsei.ac.kr/login": ["https://library.yonsei.ac.kr/login", "SIGNED-IN", "https://library.yonsei.ac.kr/"],
@@ -302,10 +340,10 @@ test.describe("through the university library on Android, signed in inside the a
   test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
     (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
 
-  async function library(page) {
+  async function library(page, { skipFake = false } = {}) {
     let signedIn = false;
     await page.exposeFunction("signInAtLibrary", () => { signedIn = true; });
-    await fakeWebView(page, WALK);
+    if (!skipFake) await fakeWebView(page, WALK);
     const cors = { "access-control-allow-origin": "*" };
     // not signed in: Yonsei's link page stays blank; signed in: the paper's page, then its PDF
     await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: cors, contentType: "text/html",
@@ -332,13 +370,32 @@ test.describe("through the university library on Android, signed in inside the a
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 }); // no sign-in screen, no download to hand over
   });
 
-  test("not signed in yet: the reader signs in the same way, then opens the paper", async ({ page }) => {
-    await library(page);
+  test("not signed in yet: the reader signs in the same way, and the paper comes through its screen", async ({ page }) => {
+    await fakeWebView(page, { ...WALK, [LINK]: [PAPER], [PDF]: ["DOWNLOAD"] }, { [PAPER]: PDF });
+    await library(page, { skipFake: true });
+    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
     await search(page);
     await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
     await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
     await page.locator(".rd-login").click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    // the library's sign-in, then on to the paper, its PDF downloaded in the screen
+    expect(await page.evaluate(() => window.webViewOpened)).toEqual(["https://library.yonsei.ac.kr/login", LINK, PDF]);
+  });
+
+  test("a publisher that turns the app's own request away: the PDF comes through the library's screen", async ({ page }) => {
+    await fakeWebView(page, { ...WALK, [LINK]: [PAPER], [PDF]: ["DOWNLOAD"] }, { [PAPER]: PDF });
+    await library(page, { skipFake: true });
+    await page.locator("#library-sign-in").click();
+    await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
+    // a bot check: the page's PDF link answers the app's request with 403
+    await page.context().route(PDF, (route) => route.fulfill({ status: 403, headers: { "access-control-allow-origin": "*" }, body: "Access denied" }));
+    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+
+    await search(page);
+    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    expect(await page.evaluate(() => window.webViewOpened)).toEqual([LINK, PDF]); // straight to the paper's page, then its PDF
   });
 
   test("a PDF opened with the app from elsewhere opens in the reader", async ({ page }) => {

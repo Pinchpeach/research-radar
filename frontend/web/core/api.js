@@ -66,8 +66,11 @@ export function searchRequest(body) {
  * clearCookies: forgets the web view's cookies (signing out of the library); Android's mobile.js
  * passes Capacitor's.
  */
+const MAX_PDF = 100 * 1024 * 1024; // like backend/annotations.py
+const isPdfBytes = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF");
+
 export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date(),
-  clearCookies = async () => {} }) {
+  clearCookies = async () => {}, pdfFiles = null }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
   const history = new History(storage), annotations = new Annotations(storage);
   /** Like the AnnotationDoc model: the fields kept, with their limits. */
@@ -313,7 +316,7 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
           throw new ApiError(401, { message: "Sign in to your library", login_url: error.loginUrl, library_login: error.loginPage });
         }
         if (error instanceof NoPdf) throw new ApiError(404, { message: "No PDF link on the paper's page", page_url: error.pageUrl });
-        throw new ApiError(502, "Could not reach the library");
+        throw new ApiError(502, `Could not reach the library (${error.message || error})`);
       }
     }],
     ["DELETE", /^\/library\/session$/, async () => { storage.removeItem(LIBRARY_SESSION); await clearCookies(); return null; }],
@@ -335,10 +338,30 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       return doc;
     })],
     ["PUT", /^\/annotations\/([^/]+)$/, ([id], body) => annotationCall(() => annotations.save(decodeURIComponent(id), annotationDoc(body)))],
-    ["DELETE", /^\/annotations\/([^/]+)$/, ([id]) => annotationCall(() => {
-      if (!annotations.delete(decodeURIComponent(id))) throw new ApiError(404, "No handwriting for this document");
+    ["DELETE", /^\/annotations\/([^/]+)$/, async ([id]) => {
+      const doc = decodeURIComponent(id);
+      const found = annotationCall(() => annotations.delete(doc));
+      const pdf = pdfFiles ? await pdfFiles.remove(doc) : false; // the PDF goes with its handwriting
+      if (!found && !pdf) throw new ApiError(404, "No handwriting for this document");
       return null;
-    })],
+    }],
+    // a PDF the person picked, kept so it opens again without picking (pdfFiles: mobile.js's app storage)
+    ["GET", /^\/annotations\/([^/]+)\/pdf$/, async ([id]) => {
+      const doc = decodeURIComponent(id);
+      annotationCall(() => annotations.key(doc));
+      const bytes = pdfFiles ? await pdfFiles.read(doc) : null;
+      if (!bytes) throw new ApiError(404, "No PDF kept for this document");
+      return bytes;
+    }],
+    ["PUT", /^\/annotations\/([^/]+)\/pdf$/, async ([id], bytes) => {
+      const doc = decodeURIComponent(id);
+      annotationCall(() => annotations.key(doc));
+      if (!(bytes instanceof Uint8Array) || !isPdfBytes(bytes)) throw new ApiError(422, "not a PDF");
+      if (bytes.length > MAX_PDF) throw new ApiError(413, "PDF too large");
+      if (!pdfFiles) throw new ApiError(501, "PDFs are not kept here");
+      await pdfFiles.write(doc, bytes);
+      return null;
+    }],
     ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
     ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
     ["GET", /^\/changelog$/, () => CHANGELOG],

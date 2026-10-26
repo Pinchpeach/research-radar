@@ -63,7 +63,9 @@ async function fileId(bytes) {
  * Open the reader.
  *   paper     the paper it belongs to (id, title, open_access_url), if any
  *   url       an http(s) PDF to fetch, or
- *   file      a File the person picked
+ *   file      a File the person picked (kept, so it opens again without picking), or
+ *   pdfBytes  a PDF already fetched (the library's sign-in screen on Android)
+ *   docId     a document opened again from the reading list
  *   api       app.js's api(method, path, body)
  *   saveFile  app.js's saveFile(name, content, mime)
  *   onOpened(paper), onFinished(paper)   reading-record hooks
@@ -77,8 +79,8 @@ export async function openReader(options) {
 }
 
 class Reader {
-  constructor({ paper = null, url = null, file = null, docId = null, libraryOnly = false, api, saveFile, onOpened, onFinished, onAttachNote, onClose }) {
-    Object.assign(this, { paper, url, file, libraryOnly, api, saveFile, onOpened, onFinished, onAttachNote, onClose });
+  constructor({ paper = null, url = null, file = null, pdfBytes = null, docId = null, libraryOnly = false, api, saveFile, onOpened, onFinished, onAttachNote, onClose }) {
+    Object.assign(this, { paper, url, file, pdfBytes, libraryOnly, api, saveFile, onOpened, onFinished, onAttachNote, onClose });
     this.givenId = docId; // a notes-only document opened again
     this.tool = "pen";
     this.colours = { pen: PEN_COLOURS[0], highlighter: HIGHLIGHT_COLOURS[0], text: PEN_COLOURS[0] };
@@ -96,8 +98,12 @@ class Reader {
     this.build();
     document.body.classList.add("reader-open");
     let error = null;
+    const known = this.paper ? shortId(this.paper.id) : this.givenId; // a document that may have its PDF kept
+    const filed = Boolean(this.givenId && !this.givenId.startsWith("notes-")); // a file's document opened again from the reading list
     try {
-      if (this.file) this.bytes = new Uint8Array(await this.file.arrayBuffer());
+      if (this.pdfBytes) this.bytes = this.pdfBytes;
+      else if (this.file) this.bytes = new Uint8Array(await this.file.arrayBuffer());
+      else if (known && (this.bytes = await this.keptPdf(known))) this.kept = true;
       else if (this.url || (this.paper && !this.givenId)) this.bytes = await this.findPdf();
     } catch (e) { error = e; }
     if (this.bytes) this.docId = this.paper ? shortId(this.paper.id) : await fileId(this.bytes);
@@ -107,9 +113,11 @@ class Reader {
     if (this.bytes) {
       try { await this.loadPdf(); } catch (e) { error = e; this.bytes = null; }
     }
-    if (!this.bytes && (this.url || this.file || (this.paper && !this.givenId) || error)) this.showUnavailable(error);
+    if (this.bytes && this.file) this.keep();
+    const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
+    if (!this.bytes && (wanted || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
-    const notesOnly = !this.bytes && !this.url && !this.file && !error && !(this.paper && !this.givenId);
+    const notesOnly = !this.bytes && !wanted && !error;
     if (this.doc.notes.length || notesOnly) this.toggleNotes(true);
     this.renderNotes();
     if (this.onOpened && this.paper) this.onOpened(this.paper);
@@ -146,12 +154,36 @@ class Reader {
     return null;
   }
 
-  /** The PDF through the library: the desktop server (backend/library.py) or, on Android, core/library.js. */
+  /** The PDF the person picked for this document before (backend/annotations.py), or null. */
+  async keptPdf(id) {
+    const path = `/annotations/${encodeURIComponent(id)}/pdf`;
+    try {
+      if (window.radarLocalApi) return await window.radarLocalApi("GET", path);
+      const response = await fetch(path);
+      return response.ok ? new Uint8Array(await response.arrayBuffer()) : null;
+    } catch { return null; }
+  }
+
+  /** Keep the PDF the person picked, with its document, so it opens again without picking. */
+  async keep() {
+    const path = `/annotations/${encodeURIComponent(this.docId)}/pdf`;
+    try {
+      if (window.radarLocalApi) await window.radarLocalApi("PUT", path, this.bytes);
+      else {
+        const response = await fetch(path, { method: "PUT", headers: { "Content-Type": "application/pdf" }, body: this.bytes });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      }
+      await this.flush(); // listed under Reading, where it opens again (and can be removed)
+    } catch { /* still open now; picked again next time */ }
+  }
+
+  /** The PDF through the library: the desktop server (backend/library.py) or, on Android, mobile.js. */
   async libraryPdf(doi) {
     const path = `/library/pdf?doi=${encodeURIComponent(doi)}`;
     let status, detail = null;
     if (window.radarLocalApi) {
-      try { return await window.radarLocalApi("GET", path); } catch (e) { status = e.status || 502; detail = e.detail || e.message; }
+      try { return await (window.radarLibraryPdf ? window.radarLibraryPdf(doi) : window.radarLocalApi("GET", path)); }
+      catch (e) { status = e.status || 502; detail = e.detail || e.message; }
     } else {
       const response = await fetch(path);
       if (response.ok) {
@@ -164,6 +196,8 @@ class Reader {
     }
     if (status === 422) return null; // no library set up: nothing to say
     if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url, first: detail && detail.library_login };
+    // Android: the library's web view can still try (mobile.js), where the app's own request failed
+    else if (window.radarLibraryPdf) this.libraryLogin = { doi, url: detail && (detail.page_url || detail.login_url) };
     if (status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
     const key = { 401: "rd.library401", 404: "rd.library404" }[status] || "rd.libraryFailed";
     throw new Error(t(key, { error: (detail && (detail.message || detail)) || `HTTP ${status}` }));
@@ -245,6 +279,7 @@ class Reader {
       button.textContent = t("rd.loggingIn");
       let ok = false;
       try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url, this.paper); } catch { /* the window failed to open */ }
+      if (ok instanceof Uint8Array) return this.reopen({ pdfBytes: ok }); // Android: got in the sign-in screen
       if (ok === true) return this.reopen({ libraryOnly: true });
       button.disabled = false;
       button.textContent = label;
@@ -1045,7 +1080,7 @@ class Reader {
 
 /**
  * How this app signs in to the library: desktop/main.py's window, or mobile.js's in-app web view.
- * Resolves to true once the PDF came through.
+ * Resolves to true once the PDF came through (desktop), or to the PDF's bytes (Android).
  */
 function signIn() {
   if (window.radarLibraryLogin) return window.radarLibraryLogin;

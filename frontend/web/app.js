@@ -584,10 +584,9 @@ async function renderDocs() {
     open.addEventListener("click", async () => {
       const paper = d.paper_id ? (bookmarkOf({ id: d.paper_id }) || {}).paper || { id: `https://openalex.org/${d.paper_id}`, title: d.title } : null;
       if (d.id.startsWith("notes-")) return openReader({ paper, docId: d.id });
-      if (d.source && webUrl(d.source)) return openReader({ paper, url: d.source });
-      alert(t("read.pickAgain", { title: d.title }));
-      const file = await pickPdf();
-      if (file) openReader({ paper, file });
+      // a kept PDF opens as it is (reader.js keptPdf); else the paper is looked for again, or the file asked for
+      if (paper) return openReader({ paper, url: webUrl(d.source) || null });
+      openReader({ docId: d.id });
     });
     const remove = el("button", { type: "button", class: "danger small-button", text: t("bm.delete") });
     remove.addEventListener("click", async () => {

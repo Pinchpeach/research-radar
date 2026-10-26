@@ -10,6 +10,7 @@ import android.view.Gravity;
 import android.view.ViewGroup;
 import android.webkit.CookieManager;
 import android.webkit.SslErrorHandler;
+import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -25,15 +26,35 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.net.CookieHandler;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 /**
  * The library sign-in screen (LibraryWebPlugin): a bar with a close button and the address, over
  * a WebView left to navigate as a browser does (redirects, form posts and sign-in pages included),
- * in the app's own cookie store.
+ * in the app's own cookie store. A PDF it is sent to (it can't show one) is downloaded with the
+ * view's cookies and browser name, to a file in the app's cache, and handed to the page.
  */
 public class LibraryWebActivity extends AppCompatActivity {
 
     static final String URL = "url", CLOSE = "close";
+    private static final int MAX_PDF = 100 * 1024 * 1024;
+    // the page's PDF: Google Scholar's citation_pdf_url tag, else a PDF shown in a frame (IEEE)
+    private static final String FIND_PDF = "(function(){"
+        + "var m=document.querySelector('meta[name=\"citation_pdf_url\" i]');"
+        + "if(m&&m.content){try{return new URL(m.content,location.href).href}catch(e){}}"
+        + "var f=document.querySelectorAll('iframe[src],embed[src]');"
+        + "for(var i=0;i<f.length;i++){if(/pdf/i.test(f[i].getAttribute('src')))return f[i].src}"
+        + "return null})()";
     static LibraryWebActivity current;
 
     private WebView web;
@@ -77,6 +98,7 @@ public class LibraryWebActivity extends AppCompatActivity {
         cookies.setAcceptCookie(true);
         cookies.setAcceptThirdPartyCookies(web, true);
         web.setWebChromeClient(new WebChromeClient());
+        web.setDownloadListener((url, userAgent, disposition, mimeType, length) -> download(url, userAgent));
         web.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageStarted(WebView view, String url, Bitmap favicon) {
@@ -152,6 +174,82 @@ public class LibraryWebActivity extends AppCompatActivity {
 
     void load(String url) {
         web.loadUrl(url);
+    }
+
+    /** The page's PDF link, or null (FIND_PDF; the result comes JSON-encoded). */
+    void findPdf(ValueCallback<String> done) {
+        web.evaluateJavascript(FIND_PDF, done);
+    }
+
+    private void download(String url, String userAgent) {
+        address.setText("⬇ " + url);
+        String referer = web.getUrl();
+        new Thread(() -> {
+            File file = new File(getCacheDir(), "library-paper.pdf");
+            String error = null;
+            try {
+                fetch(url, userAgent, referer, file);
+            } catch (Exception e) {
+                error = e.getMessage() != null ? e.getMessage() : e.toString();
+            }
+            String failed = error;
+            runOnUiThread(() -> {
+                if (failed != null) address.setText("⚠ " + failed + " — " + url);
+                if (LibraryWebPlugin.current != null) LibraryWebPlugin.current.downloaded(failed == null ? file.getAbsolutePath() : null, url, failed);
+            });
+        }).start();
+    }
+
+    /** Download url as the view would: its cookies (kept up to date on redirects) and browser name. */
+    private static void fetch(String url, String userAgent, String referer, File file) throws IOException {
+        CookieManager cookies = CookieManager.getInstance();
+        // Capacitor's cookie handler already carries the view's cookies on these requests both ways
+        boolean handled = CookieHandler.getDefault() != null;
+        for (int hop = 0; hop < 8; hop++) {
+            if (!url.startsWith("https://") && !url.startsWith("http://")) throw new IOException("not a web address");
+            HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+            try {
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(20000);
+                connection.setReadTimeout(60000);
+                if (userAgent != null) connection.setRequestProperty("User-Agent", userAgent);
+                if (referer != null) connection.setRequestProperty("Referer", referer);
+                connection.setRequestProperty("Accept", "application/pdf,*/*");
+                String cookie = handled ? null : cookies.getCookie(url);
+                if (cookie != null) connection.setRequestProperty("Cookie", cookie);
+                int status = connection.getResponseCode();
+                for (Map.Entry<String, List<String>> header : connection.getHeaderFields().entrySet()) {
+                    if (!handled && header.getKey() != null && header.getKey().equalsIgnoreCase("Set-Cookie")) {
+                        for (String value : header.getValue()) cookies.setCookie(url, value);
+                    }
+                }
+                String location = connection.getHeaderField("Location");
+                if (status >= 300 && status < 400 && location != null) {
+                    referer = url;
+                    url = new URL(new URL(url), location).toString();
+                    continue;
+                }
+                if (status != 200) throw new IOException("HTTP " + status);
+                try (InputStream in = connection.getInputStream(); OutputStream out = new FileOutputStream(file)) {
+                    byte[] buffer = new byte[65536];
+                    StringBuilder head = new StringBuilder();
+                    long total = 0;
+                    for (int n; (n = in.read(buffer)) > 0; ) {
+                        if (head.length() < 1024) head.append(new String(buffer, 0, Math.min(n, 1024), StandardCharsets.ISO_8859_1));
+                        total += n;
+                        if (total > MAX_PDF) throw new IOException("PDF too large");
+                        out.write(buffer, 0, n);
+                    }
+                    // a sign-in or bot-check page instead of the paper
+                    if (!head.toString().trim().startsWith("%PDF")) throw new IOException("not a PDF");
+                }
+                cookies.flush();
+                return;
+            } finally {
+                connection.disconnect();
+            }
+        }
+        throw new IOException("too many redirects");
     }
 
     @Override

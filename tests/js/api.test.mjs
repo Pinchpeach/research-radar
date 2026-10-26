@@ -31,7 +31,7 @@ const WORKS = [
   work("W4", "Gravitational waves from binary mergers", { year: 2025, cites: 9, refs: ["W3", "W1"], abstract: "gravitational wave binary merger neutron star" }),
 ];
 
-function setup({ handler } = {}) {
+function setup({ handler, pdfFiles } = {}) {
   const calls = [];
   const fetch = async (url, init = {}) => {
     calls.push(url);
@@ -43,7 +43,7 @@ function setup({ handler } = {}) {
     return reply(200, { results: WORKS }, { "x-ratelimit-remaining-usd": "0.5", "x-ratelimit-limit-usd": "1" });
   };
   const api = createApi({ fetch, storage: memoryStorage(), version: "0.5.0", releasesRepo: "o/r", posterTemplate: async () => template,
-    today: () => new Date("2026-06-01T00:00:00Z") });
+    today: () => new Date("2026-06-01T00:00:00Z"), pdfFiles });
   return { api, calls };
 }
 
@@ -270,6 +270,20 @@ test("handwriting: saved, listed, size-capped, ids kept to safe names, like back
   await assert.rejects(api("PUT", "/annotations/W2", { notes: {} }), { status: 422 });
   await api("DELETE", "/annotations/W1");
   await assert.rejects(api("GET", "/annotations/W1"), { status: 404 });
+});
+
+test("a picked PDF is kept with its handwriting and goes with it, like backend/annotations.py", async () => {
+  const files = new Map();
+  const { api } = setup({ pdfFiles: { read: async (id) => files.get(id) || null, write: async (id, b) => files.set(id, b), remove: async (id) => files.delete(id) } });
+  const pdf = new TextEncoder().encode("%PDF-1.7\nx");
+  await assert.rejects(api("GET", "/annotations/file-ab12/pdf"), { status: 404 });
+  await api("PUT", "/annotations/file-ab12/pdf", pdf);
+  assert.deepEqual(await api("GET", "/annotations/file-ab12/pdf"), pdf);
+  await assert.rejects(api("PUT", "/annotations/file-ab12/pdf", new TextEncoder().encode("<html>")), { status: 422 });
+  await assert.rejects(api("PUT", "/annotations/..x/pdf", pdf), { status: 422 });
+  await api("DELETE", "/annotations/file-ab12"); // only the PDF: still found, and gone
+  await assert.rejects(api("GET", "/annotations/file-ab12/pdf"), { status: 404 });
+  await assert.rejects(setup().api("PUT", "/annotations/W1/pdf", pdf), { status: 501 }); // nowhere to keep it
 });
 
 test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, like backend/library.py", async () => {

@@ -2,7 +2,8 @@
 
 A document is a paper (its OpenAlex id, e.g. W2116341502) or a PDF opened from a file
 ("file-" and the start of its SHA-256). Items are drawn by the reader (frontend/web/reader),
-which only ever sets them as SVG attributes and text, never as HTML.
+which only ever sets them as SVG attributes and text, never as HTML. A PDF the person picked
+themselves is kept next to its handwriting (<id>.pdf), so it opens again without being picked.
 """
 
 import json
@@ -16,6 +17,7 @@ from backend import settings
 
 DOC_ID = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
 MAX_BYTES = 8 * 1024 * 1024  # one document's handwriting
+MAX_PDF = 100 * 1024 * 1024  # one kept PDF
 
 
 def folder() -> Path:
@@ -54,10 +56,39 @@ def save(doc_id: str, doc: dict) -> dict:
 
 def delete(doc_id: str) -> bool:
     path = _path(doc_id)
-    if not path.exists():
-        return False
-    path.unlink()
-    return True
+    pdf = _pdf_path(doc_id)
+    found = path.exists() or pdf.exists()
+    path.unlink(missing_ok=True)
+    pdf.unlink(missing_ok=True)  # the PDF goes with its handwriting
+    return found
+
+
+def _pdf_path(doc_id: str) -> Path:
+    path = _path(doc_id)
+    return path.with_name(doc_id + ".pdf")
+
+
+def load_pdf(doc_id: str) -> bytes | None:
+    try:
+        return _pdf_path(doc_id).read_bytes()
+    except FileNotFoundError:
+        return None
+
+
+def save_pdf(doc_id: str, data: bytes) -> None:
+    if len(data) > MAX_PDF:
+        raise OverflowError("PDF too large")
+    if not data[:1024].lstrip().startswith(b"%PDF"):
+        raise ValueError("not a PDF")
+    path = _pdf_path(doc_id)
+    fd, tmp = tempfile.mkstemp(dir=path.parent, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        os.replace(tmp, path)
+    except BaseException:
+        Path(tmp).unlink(missing_ok=True)
+        raise
 
 
 def summary(doc: dict) -> dict:
@@ -80,7 +111,7 @@ def all_summaries() -> list[dict]:
     docs = []
     for path in folder().glob("*.json"):
         try:
-            docs.append(summary(json.loads(path.read_text(encoding="utf-8"))))
+            docs.append({**summary(json.loads(path.read_text(encoding="utf-8"))), "has_pdf": path.with_suffix(".pdf").exists()})
         except (ValueError, KeyError):
             continue
     return sorted(docs, key=lambda d: d.get("updated_at") or "", reverse=True)
