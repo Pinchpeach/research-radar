@@ -1,5 +1,21 @@
 [
   {
+    "version": "0.12.0",
+    "date": "2026-10-26",
+    "ko": [
+      "리더에서 연 PDF(무료본·도서관에서 받은 논문 포함)를 보관해서, 다시 열 때 로그인이나 다운로드 없이 바로 열려요.",
+      "PC 앱도 출판사가 앱의 요청을 막으면 도서관 창이 저절로 열리고, 그 창 안에서 PDF를 받아 와요(이미 로그인했으면 바로 논문으로).",
+      "검색 관련도가 좋아졌어요: 복수형을 같은 말로 보고(networks = network), 논문들이 쓰는 약어를 풀어서 비교하고(GNN ↔ graph neural network), OpenAlex 키워드도 함께 보고, 가장 잘 맞는 논문과 닮은 논문도 올려 줘요. 여전히 AI 서비스 없이 기기 안에서 계산해요.",
+      "학교 메일로 자동 설정되는 도서관에 한양대, 이화여대, 인하대, 충남대, 울산대, 가톨릭대를 더했어요."
+    ],
+    "en": [
+      "A PDF the reader opens (free copies and papers through the library included) is kept, so it opens again with no sign-in or download.",
+      "On the PC too, when a publisher turns the app's request away, the library window opens by itself and gets the PDF in the page (straight on the paper when already signed in).",
+      "Better search relevance: plurals count as the same word (networks = network), acronyms are spelled out as the papers define them (GNN ↔ graph neural network), OpenAlex keywords count, and papers like the best matches are lifted. Still computed on the device, with no AI service.",
+      "Library set-up from a school e-mail now also covers Hanyang, Ewha, Inha, Chungnam, Ulsan and the Catholic University of Korea."
+    ]
+  },
+  {
     "version": "0.11.12",
     "date": "2026-10-25",
     "ko": [
