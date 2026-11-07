@@ -100,6 +100,8 @@ def test_render_html_is_self_contained_and_interactive(flow_data):
     assert page.count('class="dot"') == len(flow_data["nodes"])
     assert page.count('class="hit rail-hit"') == len(data["lanes"])
     assert page.count('class="hit bundle-hit"') == len(data["bundles"])
+    # the app's icon as a faint watermark behind the map, which lets it show through
+    assert "#wrap::before" in page and "data:image/svg+xml," in page and "#viewport>rect:first-child{fill:transparent}" in page
 
 
 def test_render_html_escapes_script_breakout():
