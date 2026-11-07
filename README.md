@@ -6,19 +6,19 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.12.0**:
+최신 버전 **v0.12.1**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.12.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-windows.zip) | [ResearchRadar-0.12.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-macos.zip) | [ResearchRadar-0.12.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-linux.tar.gz) | [ResearchRadar-0.12.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/ResearchRadar-0.12.0-android.apk) |
+| [ResearchRadar-0.12.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.1/ResearchRadar-0.12.1-windows.zip) | [ResearchRadar-0.12.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.1/ResearchRadar-0.12.1-macos.zip) | [ResearchRadar-0.12.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.1/ResearchRadar-0.12.1-linux.tar.gz) | [ResearchRadar-0.12.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.1/ResearchRadar-0.12.1-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
 ## 주요 기능
 
-앱은 **홈** 화면에서 시작합니다. 인사말 아래 검색창에 주제를 넣으면 바로 연구 탐색으로 넘어가고, 최근 찾아본 주제를 눌러 다시 검색할 수 있습니다. 최근 주제에는 마지막으로 검색한 뒤 새로 나온 논문 수가 표시됩니다. 논문 카드의 **무료로 읽기**는 오픈 액세스 원문(PDF가 있으면 PDF)을 열고, **이 논문에서 시작**은 그 논문을 시드로 다시 검색합니다. 왼쪽 위 **☰** 메뉴로 아래 화면들을 오갑니다.
+앱은 **홈** 화면에서 시작합니다. 인사말 아래 검색창에 주제를 넣으면 바로 연구 탐색으로 넘어가고, 최근 검색기록을 눌러 다시 검색할 수 있습니다. 최근 검색기록에는 마지막으로 검색한 뒤 새로 나온 논문 수가 표시됩니다. 논문 카드의 **무료로 읽기**는 오픈 액세스 원문(PDF가 있으면 PDF)을 열고, **이 논문에서 시작**은 그 논문을 시드로 다시 검색합니다. 왼쪽 위 **☰** 메뉴로 아래 화면들을 오갑니다.
 
 | 화면 | 하는 일 |
 |---|---|
