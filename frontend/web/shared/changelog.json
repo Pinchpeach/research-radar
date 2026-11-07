@@ -1,5 +1,11 @@
 [
   {
+    "version": "0.12.2",
+    "date": "2026-11-07",
+    "ko": ["연구 흐름 지도 뒤에 앱 아이콘을 크고 은은하게 깔았어요. 지도를 움직여도 제자리에 있고, 가장자리는 배경에 스며들어요."],
+    "en": ["The research flow map now has the app's icon large and faint behind it, staying put as the map moves and fading into the background at its edges."]
+  },
+  {
     "version": "0.12.1",
     "date": "2026-11-07",
     "ko": ["홈 검색창의 안내 문구를 '검색'으로, '최근 찾아본 주제'를 '최근 검색기록'으로 바꿨어요."],
