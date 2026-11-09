@@ -30,6 +30,13 @@
                 <data android:scheme="content" android:mimeType="application/pdf" />
             </intent-filter>
 
+            <!-- "Share → Research Radar" for a DOI or a paper's link (SharedTextPlugin, mobile.js) -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+
         </activity>
 
         <!-- signing in to the university library (LibraryWebPlugin) -->

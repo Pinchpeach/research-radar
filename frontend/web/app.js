@@ -1,13 +1,14 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "authors", "citations",
+const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "venue_id", "authors", "author_ids", "citations",
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
 const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
+const PERSONAL_CHIP = 0.7;  // closeness to the person's bookmarks from which a paper says so
 
 const state = { run: null, bookmarks: [], flow: null, flowRun: null, poster: null, posterTitle: "", evalMode: false, judgments: {},
-  version: null, changelog: null };
+  version: null, changelog: null, follows: [] };
 
 // ───────────── helpers ─────────────
 
@@ -189,6 +190,44 @@ function startFrom(paper, query) {
   $("search-form").requestSubmit();
 }
 
+/**
+ * The paper a piece of text points at, as OpenAlex takes it: a DOI (bare, doi.org, or inside a
+ * publisher's or a shared link), an arXiv page (arXiv's own DOI), or an OpenAlex work. Null if none.
+ */
+function paperIdentifier(text) {
+  let value = String(text || "").trim();
+  try { value = decodeURIComponent(value); } catch { /* not encoded */ }
+  const openalex = /(?:openalex\.org\/(?:works\/)?|^)(W\d{3,})(?![\w])/i.exec(value);
+  if (openalex) return openalex[1].toUpperCase();
+  const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})(?:v\d+)?/i.exec(value);
+  if (arxiv) return `10.48550/arXiv.${arxiv[1]}`;
+  const doi = /\b(10\.\d{4,9}\/[^\s"'<>]+)/i.exec(value);
+  if (!doi) return null;
+  let found = doi[1].replace(/[.,;:]+$/, "");
+  while (found.endsWith(")") && (found.match(/\(/g) || []).length < (found.match(/\)/g) || []).length) found = found.slice(0, -1);
+  return found.replace(/\/(?:full|abstract|pdf|epdf)$/i, "");
+}
+
+/**
+ * Open the paper a DOI or link points at: look it up, then search from it (what it cites, what
+ * cites it, what is close to it). Resolves to whether the text held such a link.
+ */
+async function openLink(text) {
+  const id = paperIdentifier(text);
+  if (!id) return false;
+  showTab("discover");
+  setStatus("search-status", t("link.finding", { id }));
+  try {
+    startFrom(await api("GET", `/works/lookup?id=${encodeURIComponent(id)}`));
+  } catch (e) {
+    setStatus("search-status", t("link.notFound", { id, error: e.message }), true);
+  }
+  return true;
+}
+// Android: a DOI or link shared to the app from another app (mobile.js), or other shared text
+window.radarOpenLink = openLink;
+window.radarSearchFor = (query) => searchFor(query);
+
 /** Open Discover and search for `query` there. */
 function searchFor(query) {
   $("query").value = query;
@@ -201,7 +240,7 @@ $("home-form").addEventListener("submit", (event) => {
   const query = $("home-query").value.trim();
   if (query.length < 2) return;
   $("home-query").value = "";
-  searchFor(query);
+  if (paperIdentifier(query)) openLink(query); else searchFor(query);
 });
 
 // ───────────── paper cards ─────────────
@@ -231,7 +270,12 @@ function paperCard(paper, { rank, query, extra } = {}) {
     chips.append(el("span", { class: "chip", text: t("chip.coreRef"), title: t("chip.coreRefTitle") }));
   }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: t("chip.seed") }));
+  if (paper.scores && paper.scores.personal >= PERSONAL_CHIP) {
+    chips.append(el("span", { class: "chip personal", text: t("chip.personal"), title: t("chip.personalTitle", { score: paper.scores.personal.toFixed(2) }) }));
+  }
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
+
+  followMenu(node.querySelector(".follow"), paper);
 
   const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);
   if (freeUrl) { free.href = freeUrl; free.hidden = false; }
@@ -282,6 +326,72 @@ function paperCard(paper, { rank, query, extra } = {}) {
   return node;
 }
 
+// ───────────── following authors and journals (backend/follows.py) ─────────────
+
+const isFollowed = (kind, id) => state.follows.some((f) => f.kind === kind && f.id === id);
+
+async function loadFollows() {
+  try { state.follows = await api("GET", "/follows"); } catch { state.follows = []; }
+}
+
+/** The paper card's 팔로우 menu: its authors (up to 5) and its journal, each followed with a tap. */
+function followMenu(details, paper) {
+  const ids = paper.author_ids || [];
+  const options = (paper.authors || []).slice(0, 5).map((name, i) => ({ kind: "author", id: ids[i], name }))
+    .concat(paper.venue_id && paper.venue ? [{ kind: "source", id: paper.venue_id, name: paper.venue }] : [])
+    .filter((o) => o.id);
+  if (!options.length) return details.remove();
+  details.hidden = false;
+  const menu = details.querySelector(".follow-menu");
+  const paint = () => menu.replaceChildren(...options.map((o) => {
+    const on = isFollowed(o.kind, o.id);
+    const button = el("button", { type: "button", class: on ? "on" : "", text: `${on ? "✓ " : "+ "}${o.name}`,
+      title: t(o.kind === "author" ? "follow.author" : "follow.source") });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        if (isFollowed(o.kind, o.id)) await api("DELETE", `/follows/${o.kind}/${o.id}`);
+        else await api("PUT", "/follows", { kind: o.kind, id: o.id, name: o.name });
+        await loadFollows();
+        updateNewsBadge();
+      } catch (e) { alert(t("follow.failed", { error: e.message })); }
+      paint();
+    });
+    return button;
+  }));
+  details.addEventListener("toggle", () => details.open && paint());
+}
+
+/** News: what the followed authors and journals published since the person last looked. */
+async function renderFollowNews() {
+  let items = [];
+  try { items = await api("GET", "/follows/new"); } catch { /* offline: shown as empty */ }
+  $("follow-empty").hidden = items.length > 0;
+  $("follow-news").replaceChildren(...items.map((item) => {
+    const seen = el("button", { type: "button", class: "small-button", text: t("follow.seen") });
+    seen.addEventListener("click", async () => { await api("POST", `/follows/${item.kind}/${item.id}/seen`); renderFollowNews(); updateNewsBadge(); });
+    const stop = el("button", { type: "button", class: "link-button small", text: t("follow.stop") });
+    stop.addEventListener("click", async () => { await api("DELETE", `/follows/${item.kind}/${item.id}`); await loadFollows(); renderFollowNews(); updateNewsBadge(); });
+    const count = item.count == null ? t("follow.offline") : item.count ? t("follow.count", { n: item.count, since: item.since }) : t("follow.none", { since: item.since });
+    return el("div", { class: "follow-item" },
+      el("h3", {}, el("span", { class: "chip", text: t(item.kind === "author" ? "follow.authorChip" : "follow.sourceChip") }), ` ${item.name} `,
+        el("small", { text: count }), item.count ? seen : null, stop),
+      item.papers.length ? el("ol", { class: "papers" }, ...item.papers.map((p) => paperCard(p))) : null);
+  }));
+}
+
+/** The menu's News badge: a new version, or new papers from followed authors and journals. */
+async function updateNewsBadge() {
+  let papers = 0;
+  if (state.follows.length) {
+    try { papers = (await api("GET", "/follows/new")).reduce((n, f) => n + (f.count || 0), 0); } catch { /* offline */ }
+  }
+  const update = newRelease(state.version);
+  $("menu-dot").hidden = !update && !papers;
+  $("news-badge").hidden = !update && !papers;
+  $("news-badge").textContent = update ? t("news.new") : String(papers > 99 ? "99+" : papers);
+}
+
 // ───────────── discover ─────────────
 
 document.querySelectorAll("[data-weight]").forEach((range) => {
@@ -300,6 +410,7 @@ $("search-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const query = $("query").value.trim();
   if (query.length < 2) return;
+  if (paperIdentifier(query)) return openLink(query); // a DOI or a paper's link: start from that paper
   let seeds = $("seeds").value.split("\n").map((s) => s.trim()).filter(Boolean);
   if ($("bookmark-seeds").checked) seeds = [...seeds, ...state.bookmarks.map((b) => b.id).filter((id) => !seeds.includes(id))];
   const weights = Object.fromEntries([...document.querySelectorAll("[data-weight]")].map((r) => [r.dataset.weight, Number(r.value)]));
@@ -657,6 +768,35 @@ $("goal-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("export-ris").addEventListener("click", async () => {
+  const tag = $("tag-filter").value;
+  try {
+    const ris = await api("GET", `/bookmarks/export.ris${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`);
+    if (!ris.trim()) return alert(t("bm.nothing"));
+    alert(await saveFile("research-radar.ris", ris, "application/x-research-info-systems"));
+  } catch (e) { alert(t("bm.exportFailed", { error: e.message })); }
+});
+
+// A Zotero (or Mendeley, EndNote, Papers) export: each reference found on OpenAlex and bookmarked
+$("import-refs").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  const { parseCitations } = await import(new URL("core/citations.js", document.querySelector("link[rel=stylesheet]").href).href);
+  const entries = parseCitations(await file.text());
+  if (!entries.length) return setStatus("bm-status", t("bm.importNone", { name: file.name }), true);
+  setStatus("bm-status", t("bm.importing", { n: entries.length }));
+  try {
+    const done = await api("POST", "/bookmarks/import", { entries });
+    await loadBookmarks();
+    renderBookmarks();
+    const missing = done.not_found.length ? t("bm.importMissing", { n: done.not_found.length, titles: done.not_found.slice(0, 3).join("; ") }) : "";
+    setStatus("bm-status", t("bm.imported", { imported: done.imported, existing: done.existing }) + missing);
+  } catch (e) {
+    setStatus("bm-status", t("bm.importFailed", { error: e.message }), true);
+  }
+});
+
 $("export-bib").addEventListener("click", async () => {
   const tag = $("tag-filter").value;
   try {
@@ -931,9 +1071,7 @@ async function checkVersion() {
   state.version = info;
   $("app-version").textContent = `v${info.version}`;
   const update = newRelease(info);
-  $("menu-dot").hidden = !update;
-  $("news-badge").hidden = !update;
-  $("news-badge").textContent = t("news.new");
+  updateNewsBadge();
   if (update) {
     $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: t("set.newVersion", { version: info.latest.version }) }));
   } else {
@@ -945,6 +1083,7 @@ async function checkVersion() {
 // ───────────── news ─────────────
 
 async function renderNews() {
+  renderFollowNews();
   const info = state.version;
   const card = $("update-card");
   card.hidden = !newRelease(info);
@@ -969,5 +1108,6 @@ showTab("home");
 
 loadSettings({ applyLanguage: true });
 loadBookmarks();
+loadFollows().then(updateNewsBadge);
 checkVersion();
 loadEvaluations();

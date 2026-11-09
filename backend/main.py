@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import annotations, history, judgments, library, pdf_proxy, security, settings, updates
+from backend import annotations, follows, history, judgments, library, pdf_proxy, security, settings, updates
 from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
@@ -21,18 +21,21 @@ from backend.models import (
     BookmarkUpdate,
     EvaluationRun,
     FlowRequest,
+    FollowIn,
+    ImportRequest,
     KeyTest,
+    PaperData,
     PosterRequest,
     SearchRequest,
     SearchResponse,
     SettingsUpdate,
 )
-from backend.services import openalex, unpaywall
+from backend.services import freecopies, openalex, unpaywall
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import rank_papers, recent_since, select_results
 from backend.services.techtree import render_html as render_poster
-from backend.storage import BookmarkStore, to_bibtex
+from backend.storage import BookmarkStore, to_bibtex, to_ris
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -148,8 +151,25 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
     return papers
 
 
+@app.get("/works/lookup", response_model=PaperData)
+def lookup_work(id: str):
+    """One paper by DOI or OpenAlex ID: a paper opened from a link (a DOI pasted or shared)."""
+    try:
+        work = openalex.get_work(id)
+    except openalex.RateLimited as exc:
+        raise HTTPException(status_code=429, detail=rate_limit_detail(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
+    if not work:
+        raise HTTPException(status_code=404, detail="OpenAlex doesn't know this paper")
+    return work
+
+
+PROFILE_SIZE = 100  # bookmarks that count toward the personal score
+
+
 @app.post("/search", response_model=SearchResponse)
-def search(request: SearchRequest):
+def search(request: SearchRequest, store: BookmarkStore = Depends(get_store)):
     try:
         seeds, unresolved = [], []
         for identifier in request.seed_ids:
@@ -170,6 +190,8 @@ def search(request: SearchRequest):
         seeds,
         request.weights.model_dump(),
         recent_years=request.recent_years,
+        # the person's bookmarks, newest first: what they keep says what they're after
+        profile=[bookmark["paper"] for bookmark in store.all()[:PROFILE_SIZE]],
     )
     since = recent_since(date.today().year, request.recent_years)
     papers = select_results(ranked, request.limit, request.recent_share, since)
@@ -198,6 +220,49 @@ def list_bookmarks(tag: str | None = None, store: BookmarkStore = Depends(get_st
 @app.put("/bookmarks", response_model=Bookmark)
 def save_bookmark(item: BookmarkIn, store: BookmarkStore = Depends(get_store)):
     return store.save(item.paper.model_dump(), item.note, item.tags, item.query)
+
+
+MAX_TITLE_LOOKUPS = 50  # entries without a DOI cost one OpenAlex request each
+
+
+@app.post("/bookmarks/import")
+def import_bookmarks(request: ImportRequest, store: BookmarkStore = Depends(get_store)):
+    """Bookmark the papers of a Zotero (or other) export: found on OpenAlex by DOI (50 a request), or,
+    without one, by exact title (at most MAX_TITLE_LOOKUPS). Papers already bookmarked stay as
+    they are; tags and notes come along. Reports what was added and what couldn't be found."""
+    entries = request.entries
+    dois = list(dict.fromkeys(e.doi.lower() for e in entries if e.doi and library.DOI.match(e.doi)))
+    have, imported, existing, missing, lookups = store.ids(), 0, 0, [], 0
+    try:
+        by_doi = openalex.by_dois(dois)
+        for entry in entries:
+            paper = by_doi.get((entry.doi or "").lower())
+            if not paper and entry.title and lookups < MAX_TITLE_LOOKUPS:
+                lookups += 1
+                try:
+                    paper = openalex.by_title(entry.title, entry.year)
+                except openalex.RateLimited:  # out of budget: the rest without a DOI aren't looked up
+                    lookups = MAX_TITLE_LOOKUPS
+                except RequestException:  # this one couldn't be looked up: counted as not found
+                    pass
+            if not paper:
+                missing.append(entry.title or entry.doi)
+            elif openalex.short_id(paper["id"]) in have:
+                existing += 1
+            else:
+                store.save(paper, entry.note, entry.tags)
+                have.add(openalex.short_id(paper["id"]))
+                imported += 1
+    except openalex.RateLimited as exc:
+        raise HTTPException(status_code=429, detail=rate_limit_detail(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
+    return {"total": len(entries), "imported": imported, "existing": existing, "not_found": missing}
+
+
+@app.get("/bookmarks/export.ris", response_class=PlainTextResponse)
+def export_ris(tag: str | None = None, store: BookmarkStore = Depends(get_store)):
+    return to_ris(store.all(tag))
 
 
 @app.get("/bookmarks/export.bib", response_class=PlainTextResponse)
@@ -327,6 +392,14 @@ def free_copies(doi: str):
         raise HTTPException(status_code=502, detail="Unpaywall did not answer") from exc
 
 
+@app.get("/free-pdfs")
+def all_free_copies(doi: str):
+    """Free PDF addresses for a DOI from every source the app knows (backend/services/freecopies.py)."""
+    if not library.DOI.match(doi):
+        raise HTTPException(status_code=422, detail="not a DOI")
+    return {"pdf_urls": freecopies.pdf_links(doi, settings.get("openalex_email"))}
+
+
 @app.get("/library/pdf")
 def library_pdf(doi: str):
     """A paper's PDF through the person's library proxy, with the session they signed in to."""
@@ -449,6 +522,61 @@ def new_papers(limit: int = 3):
                 except RequestException:  # includes rate limits: the home screen just shows no count
                     count = None
         out.append({**entry, "since": since.isoformat(), "new_papers": count})
+    return out
+
+
+# ---------- followed authors and journals ----------
+
+
+@app.get("/follows")
+def list_follows():
+    return follows.load()
+
+
+@app.put("/follows")
+def add_follow(item: FollowIn):
+    try:
+        return follows.add(item.kind, item.id, item.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/follows/{kind}/{follow_id}", status_code=204)
+def remove_follow(kind: str, follow_id: str):
+    if not follows.remove(kind, follow_id):
+        raise HTTPException(status_code=404, detail="Not followed")
+
+
+@app.post("/follows/{kind}/{follow_id}/seen")
+def follow_seen(kind: str, follow_id: str):
+    item = follows.seen(kind, follow_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Not followed")
+    _new_papers_cache.pop(("follow", kind, follow_id), None)
+    return item
+
+
+@app.get("/follows/new")
+def followed_new_papers():
+    """For each followed author or journal: papers published since the person last looked
+    (`count` None when OpenAlex could not be asked). Cached like /history/new."""
+    today, out = date.today().isoformat(), []
+    for item in follows.load():
+        count, papers = 0, []
+        if item["since"] <= today:
+            key = ("follow", item["kind"], item["id"])
+            cached = _new_papers_cache.get(key)
+            if cached and time.monotonic() - cached[0] < NEW_PAPERS_TTL and cached[1][0] == item["since"]:
+                count, papers = cached[1][1]
+            else:
+                try:
+                    count, papers = openalex.published_by(item["kind"], item["id"], item["since"])
+                    _new_papers_cache[key] = (time.monotonic(), (item["since"], (count, papers)))
+                except RequestException:
+                    count = None
+        out.append({**item, "count": count, "papers": papers})
     return out
 
 

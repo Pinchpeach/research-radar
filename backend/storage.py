@@ -149,6 +149,25 @@ class BookmarkStore:
         return cursor.rowcount > 0
 
 
+def _ris_value(value) -> str:
+    return " ".join(str(value).split())  # one line each: RIS has no line breaks within a field
+
+
+def to_ris(bookmarks: list[dict]) -> str:
+    """RIS, which Zotero, Mendeley, EndNote and Papers all import (one entry per bookmark)."""
+    entries = []
+    for bookmark in bookmarks:
+        paper = bookmark["paper"]
+        lines = [("TY", "JOUR"), ("TI", paper.get("title")), *(("AU", name) for name in paper.get("authors") or []),
+                 ("PY", paper.get("year")), ("JO", paper.get("venue")),
+                 ("DO", (paper.get("doi") or "").replace("https://doi.org/", "") or None), ("UR", paper.get("url")),
+                 ("AB", paper.get("abstract")), *(("KW", tag) for tag in bookmark.get("tags") or []),
+                 ("N1", bookmark.get("note")), ("ID", bookmark["id"])]
+        body = [f"{tag}  - {_ris_value(value)}" for tag, value in lines if value not in (None, "")]
+        entries.append("\n".join([*body, "ER  - "]))
+    return "\n\n".join(entries) + ("\n" if entries else "")
+
+
 def to_bibtex(bookmarks: list[dict]) -> str:
     entries = []
     for bookmark in bookmarks:

@@ -36,7 +36,8 @@ export function webUrl(value) {
 }
 
 export function normalizeWork(work) {
-  const authors = (work.authorships || []).map((a) => a.author && a.author.display_name).filter(Boolean);
+  const named = (work.authorships || []).map((a) => a.author || {}).filter((a) => a.display_name);
+  const authors = named.map((a) => a.display_name);
   const location = work.primary_location || {};
   const source = location.source || {};
   return {
@@ -49,13 +50,17 @@ export function normalizeWork(work) {
     // a free full text (PDF when OpenAlex knows one), for papers that are open access
     open_access_url: webUrl((work.best_oa_location || {}).pdf_url) || webUrl((work.open_access || {}).oa_url),
     venue: source.display_name ?? null,
+    venue_id: source.id ? shortId(source.id) : null, // to follow the journal
     authors,
+    author_ids: named.map((a) => (a.id ? shortId(a.id) : "")), // in step with authors
     citations: work.cited_by_count || 0,
     referenced_works: (work.referenced_works || []).map(shortId),
     keywords: (work.keywords || []).filter((k) => k.display_name).map((k) => k.display_name),
     topic: (work.primary_topic || {}).display_name ?? null,
   };
 }
+
+export const FOLLOW_FILTERS = { author: "authorships.author.id", source: "primary_location.source.id" };
 
 export function yearFilter(yearFrom, yearTo) {
   const filters = [];
@@ -122,6 +127,35 @@ export class OpenAlex {
     if (filters.length) params.filter = filters.join(",");
     const data = await this.get(OPENALEX_URL, params);
     return (data.results || []).map(normalizeWork);
+  }
+
+  /** Works for many DOIs (50 per request): Map of lower-case DOI → paper. */
+  async byDois(dois) {
+    const found = new Map();
+    for (let start = 0; start < dois.length; start += 50) {
+      const chunk = dois.slice(start, start + 50);
+      for (const paper of await this.list([`doi:${chunk.join("|")}`], chunk.length)) {
+        const doi = (paper.doi || "").replace("https://doi.org/", "").toLowerCase();
+        if (doi) found.set(doi, paper);
+      }
+    }
+    return found;
+  }
+
+  /** The work with this title (ignoring case, spaces and punctuation), nearest in year; null if none. */
+  async byTitle(title, year = null) {
+    const key = (t) => [...String(t || "").toLowerCase()].filter((ch) => /[\p{L}\p{N}]/u.test(ch)).join("");
+    const papers = await this.list([`title.search:${title.replaceAll(",", " ")}`], 5);
+    const matches = papers.filter((p) => key(p.title) === key(title));
+    if (year) matches.sort((a, b) => Math.abs((a.year || year) - year) - Math.abs((b.year || year) - year));
+    return matches[0] || null;
+  }
+
+  /** Works by an author, or in a journal, published on or after `since`: [how many, the newest few]. */
+  async publishedBy(kind, id, since, limit = 10) {
+    const data = await this.get(OPENALEX_URL, { "per-page": Math.min(limit, MAX_PER_PAGE), sort: "publication_date:desc",
+      filter: `${FOLLOW_FILTERS[kind]}:${id},from_publication_date:${since}` });
+    return [Number((data.meta || {}).count) || 0, (data.results || []).map(normalizeWork)];
   }
 
   /** How many works match `query` and were published on or after `since` (YYYY-MM-DD). */

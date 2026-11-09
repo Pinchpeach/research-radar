@@ -9,6 +9,7 @@ class Weights(BaseModel):
     seed: float = Field(default=0.2, ge=0)
     recency: float = Field(default=0.05, ge=0)
     impact: float = Field(default=0.15, ge=0)
+    personal: float = Field(default=0.15, ge=0)  # closeness to the person's bookmarks
 
 
 class SearchRequest(BaseModel):
@@ -37,6 +38,7 @@ class Scores(BaseModel):
     seed: float
     recency: float
     impact: float
+    personal: float = 0.0
 
 
 class PaperData(BaseModel):
@@ -50,7 +52,9 @@ class PaperData(BaseModel):
     url: Optional[str] = None
     open_access_url: Optional[str] = None
     venue: Optional[str] = None
+    venue_id: Optional[str] = None  # OpenAlex source, to follow the journal
     authors: list[str] = Field(default_factory=list)
+    author_ids: list[str] = Field(default_factory=list)  # OpenAlex authors, in step with authors
     citations: int = 0
     referenced_works: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
@@ -109,6 +113,31 @@ class Bookmark(BaseModel):
     updated_at: str
     status: ReadingStatus = "to_read"
     read_at: Optional[str] = None  # when it was marked read
+
+
+class ImportEntry(BaseModel):
+    """One reference from a Zotero (RIS/BibTeX) export, as frontend/web/core/citations.js reads it."""
+
+    doi: Optional[str] = Field(default=None, max_length=300)
+    title: str = Field(default="", max_length=1000)
+    year: Optional[int] = None
+    authors: list[str] = Field(default_factory=list)
+    venue: Optional[str] = Field(default=None, max_length=500)
+    tags: list[str] = Field(default_factory=list, max_length=50)
+    note: str = Field(default="", max_length=5000)
+    url: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ImportRequest(BaseModel):
+    entries: list[ImportEntry] = Field(max_length=300)
+
+
+class FollowIn(BaseModel):
+    """An author (OpenAlex A...) or journal (source, S...) to follow (backend/follows.py)."""
+
+    kind: Literal["author", "source"]
+    id: str = Field(max_length=20)
+    name: str = Field(default="", max_length=200)
 
 
 class FlowRequest(BaseModel):

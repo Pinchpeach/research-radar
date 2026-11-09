@@ -36,11 +36,8 @@ def web_url(value) -> str | None:
 
 
 def normalize_work(work: dict) -> dict:
-    authors = [
-        authorship.get("author", {}).get("display_name")
-        for authorship in work.get("authorships", [])
-        if authorship.get("author", {}).get("display_name")
-    ]
+    named = [a.get("author") or {} for a in work.get("authorships") or [] if (a.get("author") or {}).get("display_name")]
+    authors = [author["display_name"] for author in named]
     location = work.get("primary_location") or {}
     source = location.get("source") or {}
 
@@ -55,7 +52,9 @@ def normalize_work(work: dict) -> dict:
         "open_access_url": web_url((work.get("best_oa_location") or {}).get("pdf_url"))
         or web_url((work.get("open_access") or {}).get("oa_url")),
         "venue": source.get("display_name"),
+        "venue_id": short_id(source["id"]) if source.get("id") else None,  # to follow the journal
         "authors": authors,
+        "author_ids": [short_id(author["id"]) if author.get("id") else "" for author in named],  # in step with authors
         "citations": work.get("cited_by_count", 0) or 0,
         "referenced_works": [short_id(ref) for ref in work.get("referenced_works") or []],
         # OpenAlex's own phrases for what the paper is about; used to name research topics
@@ -144,6 +143,42 @@ def count_since(query: str, since: str) -> int:
     """How many works match `query` and were published on or after `since` (YYYY-MM-DD)."""
     params = _params(**{"per-page": 1, "select": "id"}, search=query, filter=f"from_publication_date:{since}")
     return int((_get(OPENALEX_URL, params).get("meta") or {}).get("count") or 0)
+
+
+def by_dois(dois: list[str]) -> dict[str, dict]:
+    """Works for many DOIs (50 per request): {doi in lower case: paper}."""
+    found = {}
+    for start in range(0, len(dois), 50):
+        chunk = dois[start : start + 50]
+        for paper in _list([f"doi:{'|'.join(chunk)}"], len(chunk)):
+            doi = (paper.get("doi") or "").replace("https://doi.org/", "").lower()
+            if doi:
+                found[doi] = paper
+    return found
+
+
+def _title_key(title: str) -> str:
+    return "".join(ch for ch in (title or "").casefold() if ch.isalnum())
+
+
+def by_title(title: str, year: int | None = None) -> dict | None:
+    """The work with this title (ignoring case, spaces and punctuation), nearest in year; None if none."""
+    papers = _list([f"title.search:{title.replace(',', ' ')}"], 5)
+    matches = [p for p in papers if _title_key(p["title"]) == _title_key(title)]
+    if year:
+        matches.sort(key=lambda p: abs((p.get("year") or year) - year))
+    return matches[0] if matches else None
+
+
+FOLLOW_FILTERS = {"author": "authorships.author.id", "source": "primary_location.source.id"}
+
+
+def published_by(kind: str, follow_id: str, since: str, limit: int = 10) -> tuple[int, list[dict]]:
+    """Works by an author, or in a journal, published on or after `since`: (how many, the newest few)."""
+    params = _params(**{"per-page": min(limit, MAX_PER_PAGE)}, sort="publication_date:desc",
+                     filter=f"{FOLLOW_FILTERS[kind]}:{follow_id},from_publication_date:{since}")
+    data = _get(OPENALEX_URL, params)
+    return int((data.get("meta") or {}).get("count") or 0), [normalize_work(w) for w in data.get("results", [])]
 
 
 def search_papers(

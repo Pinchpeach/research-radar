@@ -135,6 +135,13 @@ Android 앱은 로그인을 앱 안의 로그인 화면(`LibraryWebActivity`, �
 
 리더에서 연 PDF(직접 고른 파일, “Research Radar로 열기”, 무료본·도서관에서 받은 논문)는 다음에 고르거나 다시 받지 않고 열리도록 그 문서의 필기 옆에 둡니다. PC는 데이터 폴더의 `annotations/<id>.pdf`, Android는 앱 저장소의 `pdfs/<id>.pdf`입니다(`backend/annotations.py`, `mobile.js`). id는 필기와 같은 규칙(영문·숫자·`_.-`, 80자, `.`로 시작 못 함)이라 폴더 밖으로 나가지 못하고, `%PDF`로 시작하는 100MB 이하 파일만 받습니다. 읽기 목록에서 문서를 지우면 PDF도 지워집니다. 테스트: `tests/test_reader_backend.py`, `tests/js/api.test.mjs`.
 
+### 15. 공유받은 링크, 가져온 참고문헌, 팔로우
+
+- **공유받은 텍스트(Android):** 다른 앱이 공유한 텍스트(`SEND text/plain`, 2000자까지)는 DOI·arXiv·OpenAlex 주소만 골라내 OpenAlex에서 논문을 찾는 데만 쓰고, 그 밖의 텍스트는 검색어로만 씁니다. 실행하거나 주소로 여는 일은 없습니다(`SharedTextPlugin.java`, `app.js` paperIdentifier).
+- **가져오는 RIS/BibTeX 파일:** 페이지 안에서 텍스트로만 읽습니다(`core/citations.js`). 300편까지이고, 각 항목은 OpenAlex에서 찾은 논문으로만 북마크합니다. 파일의 제목·메모·태그는 화면에 `textContent`로만 들어가고, 제목 조회는 50번까지입니다.
+- **팔로우:** 저자(`A…`)와 저널(`S…`)의 OpenAlex ID 형식만 받고 30개까지입니다(`backend/follows.py`). 새 논문 확인은 팔로우마다 OpenAlex 요청 한 번이고 한 시간 동안 다시 묻지 않습니다.
+- **무료 원문 출처:** Europe PMC와 arXiv는 키 없이 HTTPS로 묻고, 받은 PDF 주소는 다른 무료 원문처럼 PC에서는 공인 주소 검사(11번)를 거쳐 받습니다.
+
 ## 그대로 안전한 부분
 
 - 화면의 논문 정보는 모두 `textContent`로 넣습니다(`app.js`의 `el()`). 포스터 SVG의 텍스트는 두 백엔드가 이스케이프하고, 스크립트 안의 JSON은 `</`를 끊어 둡니다.

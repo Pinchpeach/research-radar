@@ -125,8 +125,9 @@ class Reader {
   }
 
   /**
-   * A paper's PDF, from the first place that has it: the free copy OpenAlex links to, the ones
-   * Unpaywall knows, then the person's university library (backend/library.py). Null if none.
+   * A paper's PDF, from the first place that has it: the free copy OpenAlex links to, every other
+   * free copy the app can find (Unpaywall, OpenAlex, Europe PMC, arXiv), then the person's
+   * university library (backend/library.py). Null if none.
    */
   async findPdf() {
     const doi = bareDoi(this.paper && this.paper.doi);
@@ -141,7 +142,8 @@ class Reader {
         if (bytes) return bytes;
       }
       let links = [];
-      if (doi) try { links = (await this.api("GET", `/unpaywall?doi=${encodeURIComponent(doi)}`)).pdf_urls || []; } catch { /* no e-mail set, or offline */ }
+      // Unpaywall, OpenAlex's other locations, Europe PMC, arXiv (backend/services/freecopies.py)
+      if (doi) try { links = (await this.api("GET", `/free-pdfs?doi=${encodeURIComponent(doi)}`)).pdf_urls || []; } catch { /* offline */ }
       for (const link of links.filter((l) => l !== this.url)) {
         const bytes = await attempt(t("rd.findingFree"), () => this.fetchPdf(link));
         if (bytes) { this.url = link; return bytes; }

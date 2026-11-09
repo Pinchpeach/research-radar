@@ -4,7 +4,7 @@
 import { GAIN, ndcgAt, precisionAt } from "./evaluation.js";
 
 const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments", history: "radar.history",
-  annotations: "radar.annotations" };
+  annotations: "radar.annotations", follows: "radar.follows" };
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 const now = () => new Date().toISOString();
 
@@ -122,6 +122,20 @@ export class Bookmarks {
   }
 }
 
+const risValue = (value) => String(value).split(/\s+/).filter(Boolean).join(" ");
+
+/** RIS, which Zotero, Mendeley, EndNote and Papers all import (like storage.to_ris). */
+export function toRis(bookmarks) {
+  const entries = bookmarks.map((bookmark) => {
+    const paper = bookmark.paper;
+    const lines = [["TY", "JOUR"], ["TI", paper.title], ...(paper.authors || []).map((name) => ["AU", name]),
+      ["PY", paper.year], ["JO", paper.venue], ["DO", (paper.doi || "").replace("https://doi.org/", "") || null], ["UR", paper.url],
+      ["AB", paper.abstract], ...(bookmark.tags || []).map((tag) => ["KW", tag]), ["N1", bookmark.note], ["ID", bookmark.id]];
+    return [...lines.filter(([, v]) => v != null && v !== "").map(([tag, v]) => `${tag}  - ${risValue(v)}`), "ER  - "].join("\n");
+  });
+  return entries.join("\n\n") + (entries.length ? "\n" : "");
+}
+
 export function toBibtex(bookmarks) {
   const entries = bookmarks.map((bookmark) => {
     const paper = bookmark.paper;
@@ -199,6 +213,44 @@ export class History {
     write(this.storage, KEYS.history, [entry, ...others].slice(0, MAX_HISTORY));
   }
   clear() { this.storage.removeItem(KEYS.history); }
+}
+
+// ---------- followed authors and journals (backend/follows.py) ----------
+
+const FOLLOW_KINDS = { author: /^A\d{1,15}$/, source: /^S\d{1,15}$/ };
+export const MAX_FOLLOWS = 30;
+export const validFollow = (kind, id) => Object.hasOwn(FOLLOW_KINDS, kind) && FOLLOW_KINDS[kind].test(id || "");
+const dayAfter = (iso) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+
+export class Follows {
+  constructor(storage) { this.storage = storage; }
+  load() {
+    const data = read(this.storage, KEYS.follows, []);
+    return Array.isArray(data) ? data.filter((f) => f && validFollow(f.kind, f.id)) : [];
+  }
+  /** Follow from `today` (YYYY-MM-DD) on; following again changes nothing. */
+  add(kind, id, name, today) {
+    if (!validFollow(kind, id)) throw new Error("not an OpenAlex author or source id");
+    const items = this.load(), existing = items.find((f) => f.kind === kind && f.id === id);
+    if (existing) return existing;
+    if (items.length >= MAX_FOLLOWS) throw new RangeError(`follow at most ${MAX_FOLLOWS}`);
+    const item = { kind, id, name: String(name || id).trim().slice(0, 200), since: today, added_at: now().replace(/\.\d+Z$/, "+00:00") };
+    write(this.storage, KEYS.follows, [item, ...items]);
+    return item;
+  }
+  remove(kind, id) {
+    const items = this.load(), kept = items.filter((f) => !(f.kind === kind && f.id === id));
+    write(this.storage, KEYS.follows, kept);
+    return kept.length !== items.length;
+  }
+  /** The person has looked: only papers from the day after `today` count as new. */
+  seen(kind, id, today) {
+    const items = this.load(), item = items.find((f) => f.kind === kind && f.id === id);
+    if (!item) return null;
+    item.since = dayAfter(today);
+    write(this.storage, KEYS.follows, items);
+    return item;
+  }
 }
 
 // ---------- handwriting (backend/annotations.py) ----------

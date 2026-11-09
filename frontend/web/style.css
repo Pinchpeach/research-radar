@@ -115,6 +115,8 @@ main:has(#tab-map:not([hidden])) { max-width: none; }
 .status.error { color: var(--danger); }
 .empty { color: var(--text-3); }
 button { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+label.button-like { display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+label.button-like:focus-within { outline: 2px solid var(--accent); }
 button:hover:not(:disabled) { border-color: var(--text-3); }
 button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }
@@ -252,6 +254,7 @@ small { color: var(--text-3); font-weight: 400; }
 .chips:empty { display: none; }
 .chip { font-size: 11.5px; border: 1px solid var(--border); border-radius: 999px; padding: 1px 8px; color: var(--text-2); }
 .chip.seed { border-color: var(--accent); color: var(--accent); }
+.chip.personal { border-color: #c99a06; color: #9a7400; }
 .chip.key { border-color: var(--star); color: var(--star); font-weight: 600; }
 .abstract { margin-top: 6px; }
 .abstract summary { cursor: pointer; color: var(--text-3); font-size: 12.5px; }
@@ -352,3 +355,18 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; font-
   .thermo { --h: 170px; }
   .reading-summary .count b { font-size: 34px; }
 }
+
+/* following authors and journals */
+.paper-actions .follow { position: relative; }
+.paper-actions .follow summary { list-style: none; cursor: pointer; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; }
+.paper-actions .follow summary::-webkit-details-marker { display: none; }
+.paper-actions .follow[open] summary { border-color: var(--accent); color: var(--accent); }
+.follow-menu { position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; display: flex; flex-direction: column; gap: 4px; min-width: 200px;
+  max-width: min(320px, 80vw); padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+.follow-menu button { text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.follow-menu button:hover { background: var(--surface-2); }
+.follow-menu button.on { color: var(--accent); font-weight: 600; }
+.followed { margin-bottom: 24px; }
+.followed h2 { font-size: 16px; }
+.follow-item h3 { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 15px; margin: 16px 0 8px; }
+.follow-item h3 small { color: var(--text-3); font-weight: 400; }

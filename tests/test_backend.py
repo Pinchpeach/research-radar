@@ -137,6 +137,23 @@ def test_keywords_count_as_text_and_feedback_lifts_like_papers():
     assert ranked["W8"]["scores"]["relevance"] > ranked["W9"]["scores"]["relevance"] == 0
 
 
+def test_bookmarks_lift_papers_like_them_and_need_two_to_count():
+    papers = [
+        paper("W1", "Neutron star cooling", "thermal emission from isolated neutron stars", 2020, 10),
+        paper("W2", "Exoplanet atmospheres", "transmission spectra of hot jupiters", 2020, 10),
+        paper("W3", "Magnetar outbursts", "x-ray outbursts of magnetars and neutron stars", 2020, 10),
+    ]
+    mine = [paper("W8", "Cooling of young neutron stars", "neutron star thermal evolution", 2010, 5),
+            paper("W9", "Magnetars", "magnetar x-ray emission", 2012, 5)]
+    plain = rank_papers("stars", papers, current_year=2026)
+    personal = rank_papers("stars", papers, weights={"personal": 1.0}, current_year=2026, profile=mine)
+    by_id = {p["id"].rsplit("/", 1)[-1]: p["scores"]["personal"] for p in personal}
+    assert by_id["W2"] < by_id["W1"] and by_id["W2"] < by_id["W3"]
+    assert all(p["scores"]["personal"] == 0 for p in plain)
+    assert all(p["scores"]["personal"] == 0 for p in rank_papers("stars", papers, current_year=2026, profile=mine[:1]))
+    assert ranking.personal_scores(mine, mine).max() == 0  # never against itself (these two share no words)
+
+
 def test_citation_context_lifts_papers_that_share_references():
     refs = [f"R{i}" for i in range(6)]
     papers = [

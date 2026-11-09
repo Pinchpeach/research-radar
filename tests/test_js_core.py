@@ -171,10 +171,14 @@ def test_ranking_matches_with_seeds_and_citation_context(real_flow):
          "current_year": 2024},
         {"query": "graph neural networks", "papers": [{**p, "referenced_works": []} for p in papers], "seeds": [],
          "weights": {}, "current_year": 2026},
+        # with the person's bookmarks: some among the candidates (they don't count for themselves), some not
+        {"query": "graph neural networks", "papers": papers, "seeds": [], "weights": {"personal": 0.4},
+         "current_year": 2026, "profile": papers[5:8] + [{"id": "W1", "title": "Molecular property prediction", "keywords": ["chemistry"]}]},
     ]
     js = run_js({"rank": cases})["rank"]
     for case, js_ranked in zip(cases, js):
-        py = ranking.rank_papers(case["query"], case["papers"], case["seeds"], case["weights"], case["current_year"])
+        py = ranking.rank_papers(case["query"], case["papers"], case["seeds"], case["weights"], case["current_year"],
+                                 profile=case.get("profile"))
         for p in py:
             p.setdefault("group", None)
             p.setdefault("core_reference", None)

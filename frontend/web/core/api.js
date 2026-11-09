@@ -3,11 +3,12 @@
 
 import { dedupe } from "./dedupe.js";
 import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
-import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
+import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError, shortId } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
+import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex, toRis } from "./store.js";
 import { renderHtml } from "./techtree.js";
+import { freePdfLinks } from "./freecopies.js";
 import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
@@ -35,7 +36,8 @@ export function paperData(raw) {
   if (!raw || typeof raw.id !== "string") throw invalid("paper.id is required");
   return {
     id: raw.id, title: raw.title || "", abstract: raw.abstract || "", year: raw.year ?? null, doi: raw.doi ?? null,
-    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, authors: raw.authors || [], citations: raw.citations || 0,
+    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, venue_id: raw.venue_id ?? null,
+    authors: raw.authors || [], author_ids: raw.author_ids || [], citations: raw.citations || 0,
     referenced_works: raw.referenced_works || [], keywords: raw.keywords || [], topic: raw.topic ?? null,
   };
 }
@@ -72,7 +74,7 @@ const isPdfBytes = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).tri
 export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date(),
   clearCookies = async () => {}, pdfFiles = null }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
-  const history = new History(storage), annotations = new Annotations(storage);
+  const history = new History(storage), annotations = new Annotations(storage), follows = new Follows(storage);
   /** Like the AnnotationDoc model: the fields kept, with their limits. */
   const annotationDoc = (body) => {
     const doc = {
@@ -165,7 +167,9 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       throw error;
     }
     const currentYear = today().getFullYear();
-    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years });
+    // the person's bookmarks, newest first (PROFILE_SIZE, as backend/main.py)
+    const profile = bookmarks.all().slice(0, 100).map((b) => b.paper);
+    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years, profile });
     const papers = selectResults(ranked, request.limit, request.recent_share, recentSince(currentYear, request.recent_years));
     history.record(request.query);
     return {
@@ -263,6 +267,65 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return out;
   }
 
+  /** Bookmark the papers of a Zotero (or other) export, like main.py import_bookmarks. */
+  async function importBookmarks(body) {
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    if (entries.length > 300) throw invalid("at most 300 entries");
+    const doisOf = (e) => (typeof e.doi === "string" && DOI.test(e.doi) ? e.doi.toLowerCase() : null);
+    const dois = [...new Set(entries.map(doisOf).filter(Boolean))];
+    const have = bookmarks.ids(), missing = [];
+    let imported = 0, existing = 0, lookups = 0;
+    try {
+      const byDoi = await openalex.byDois(dois);
+      for (const entry of entries) {
+        let paper = byDoi.get(doisOf(entry)) || null;
+        if (!paper && entry.title && lookups < 50) {
+          lookups += 1;
+          try {
+            paper = await openalex.byTitle(String(entry.title).slice(0, 1000), entry.year ?? null);
+          } catch (error) {
+            if (error instanceof RateLimited) lookups = 50; // out of budget: the rest without a DOI aren't looked up
+            else if (!(error instanceof RequestError)) throw error; // otherwise: counted as not found
+          }
+        }
+        if (!paper) missing.push(entry.title || entry.doi);
+        else if (have.has(shortId(paper.id))) existing += 1;
+        else {
+          bookmarks.save(paper, String(entry.note || "").slice(0, 5000), (entry.tags || []).map(String));
+          have.add(shortId(paper.id));
+          imported += 1;
+        }
+      }
+    } catch (error) {
+      if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
+      if (error instanceof RequestError) throw new ApiError(502, "OpenAlex request failed");
+      throw error;
+    }
+    return { total: entries.length, imported, existing, not_found: missing };
+  }
+
+  /** For each followed author or journal: papers published since the person last looked (main.py). */
+  async function followedNew() {
+    const todayIso = isoDay(today()), out = [];
+    for (const item of follows.load()) {
+      let count = 0, papers = [];
+      if (item.since <= todayIso) {
+        const key = `follow\u0000${item.kind}\u0000${item.id}`, cached = newPapersCache.get(key);
+        if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS && cached.since === item.since) [count, papers] = cached.result;
+        else {
+          try {
+            [count, papers] = await openalex.publishedBy(item.kind, item.id, item.since);
+            newPapersCache.set(key, { at: Date.now(), since: item.since, result: [count, papers] });
+          } catch {
+            count = null;
+          }
+        }
+      }
+      out.push({ ...item, count, papers });
+    }
+    return out;
+  }
+
   /** Like backend/settings.public_view; signed in = the last library fetch with this proxy worked. */
   const settingsView = () => {
     const view = settings.publicView(dataDir), proxy = settings.get("library_proxy");
@@ -277,6 +340,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     ["GET", /^\/bookmarks$/, (_, __, q) => bookmarks.all(q.get("tag"))],
     ["PUT", /^\/bookmarks$/, (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null)],
     ["GET", /^\/bookmarks\/export\.bib$/, (_, __, q) => toBibtex(bookmarks.all(q.get("tag")))],
+    ["POST", /^\/bookmarks\/import$/, (_, body) => importBookmarks(body)],
+    ["GET", /^\/bookmarks\/export\.ris$/, (_, __, q) => toRis(bookmarks.all(q.get("tag")))],
     ["PATCH", /^\/bookmarks\/([^/]+)$/, ([id], body) => {
       if (body.status != null && !READING_STATUSES.includes(body.status)) throw invalid("status must be to_read, reading or read");
       const updated = bookmarks.update(decodeURIComponent(id), body.note ?? null, body.tags ?? null, body.status ?? null);
@@ -300,6 +365,20 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (!DOI.test(doi)) throw invalid("not a DOI");
       if (!email) throw new ApiError(409, "Add your e-mail in Settings to look for free copies");
       try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
+    }],
+    ["GET", /^\/works\/lookup$/, async (_, __, q) => {
+      let work;
+      try { work = await openalex.getWork(q.get("id") || ""); } catch (error) {
+        if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
+        throw new ApiError(502, "OpenAlex request failed");
+      }
+      if (!work) throw new ApiError(404, "OpenAlex doesn't know this paper");
+      return work;
+    }],
+    ["GET", /^\/free-pdfs$/, async (_, __, q) => {
+      const doi = q.get("doi") || "";
+      if (!DOI.test(doi)) throw invalid("not a DOI");
+      return { pdf_urls: await freePdfLinks({ fetch, openalex, doi, email: settings.get("openalex_email") }) };
     }],
     ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
     ["GET", /^\/library\/pdf$/, async (_, __, q) => {
@@ -364,6 +443,25 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     }],
     ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
     ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
+    // followed authors and journals (backend/follows.py)
+    ["GET", /^\/follows$/, () => follows.load()],
+    ["PUT", /^\/follows$/, (_, body) => {
+      if (!["author", "source"].includes(body.kind)) throw invalid("kind must be author or source");
+      try { return follows.add(body.kind, String(body.id || ""), String(body.name || "").slice(0, 200), isoDay(today())); } catch (error) {
+        throw new ApiError(error instanceof RangeError ? 409 : 422, error.message);
+      }
+    }],
+    ["DELETE", /^\/follows\/([^/]+)\/([^/]+)$/, ([kind, id]) => {
+      if (!follows.remove(kind, id)) throw new ApiError(404, "Not followed");
+      return null;
+    }],
+    ["POST", /^\/follows\/([^/]+)\/([^/]+)\/seen$/, ([kind, id]) => {
+      const item = follows.seen(kind, id, isoDay(today()));
+      if (!item) throw new ApiError(404, "Not followed");
+      newPapersCache.delete(`follow\u0000${kind}\u0000${id}`);
+      return item;
+    }],
+    ["GET", /^\/follows\/new$/, () => followedNew()],
     ["GET", /^\/changelog$/, () => CHANGELOG],
     ["GET", /^\/version$/, async () => {
       const latest = await latestRelease(), current = parseVersion(version);

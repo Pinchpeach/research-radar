@@ -10,7 +10,8 @@ from sklearn.metrics.pairwise import cosine_similarity
 from backend.services.context import citation_context
 
 RECENCY_HALF_LIFE_YEARS = 5
-DEFAULT_WEIGHTS = {"relevance": 0.35, "influence": 0.45, "seed": 0.2, "recency": 0.05, "impact": 0.15}
+DEFAULT_WEIGHTS = {"relevance": 0.35, "influence": 0.45, "seed": 0.2, "recency": 0.05, "impact": 0.15, "personal": 0.15}
+PROFILE_MIN = 2  # bookmarks needed before they say anything about the person's interests
 
 
 def paper_text(paper: dict) -> str:
@@ -231,6 +232,27 @@ def select_results(ranked: list[dict], limit: int, recent_share: float, since: i
     return [{**p, "group": "core"} for p in core] + [{**p, "group": "recent"} for p in recent_pool[:needed]]
 
 
+def personal_scores(papers: list[dict], profile: list[dict]) -> np.ndarray:
+    """How close each paper is to the person's own bookmarks: TF-IDF cosine to the closest one
+    (not an average, so several interests each count), scaled so the closest paper is 1. A
+    bookmark doesn't count for itself. Fitted apart from the query, so relevance stays as it is."""
+    if len(profile) < PROFILE_MIN or not papers:
+        return np.zeros(len(papers))
+    try:
+        vectors = TfidfVectorizer(analyzer=analyze, sublinear_tf=True).fit_transform(
+            [*(match_text(p) for p in papers), *(match_text(p) for p in profile)]
+        )
+    except ValueError:  # no words at all
+        return np.zeros(len(papers))
+    similarity = cosine_similarity(vectors[: len(papers)], vectors[len(papers) :])
+    own = [_short(p["id"]) for p in profile]
+    for i, paper in enumerate(papers):
+        for j, pid in enumerate(own):
+            if pid == _short(paper["id"]):
+                similarity[i, j] = 0.0
+    return scale_to_max(similarity.max(axis=1))
+
+
 def rank_papers(
     query: str,
     papers: list[dict],
@@ -238,6 +260,7 @@ def rank_papers(
     weights: dict | None = None,
     current_year: int | None = None,
     recent_years: int = 5,
+    profile: list[dict] | None = None,
 ) -> list[dict]:
     """Score and sort candidates.
 
@@ -252,6 +275,8 @@ def rank_papers(
       over their citations), damped for papers whose topic is unrelated; scaled to the best
     - recency: halves every RECENCY_HALF_LIFE_YEARS
     - impact: log citations per year, scaled to the best candidate
+    - personal: closeness to the person's bookmarks (`profile`; see personal_scores), when there
+      are at least PROFILE_MIN of them
     The final score is the weighted mean × 100. It ranks candidates; it is not a probability.
     """
     if not papers:
@@ -261,6 +286,9 @@ def rank_papers(
     weights = {**DEFAULT_WEIGHTS, **(weights or {})}
     if not seeds:
         weights["seed"] = 0
+    profile = profile or []
+    if len(profile) < PROFILE_MIN:
+        weights["personal"] = 0
     current_year = current_year or date.today().year
 
     texts = [match_text(paper) for paper in papers]
@@ -299,6 +327,7 @@ def rank_papers(
                 links[index] = True
                 seed_scores[index] = 1.0
 
+    personal = personal_scores(papers, profile)
     recency = np.array([recency_score(paper.get("year"), current_year) for paper in papers])
     impact = scale_to_max(impact_values(papers, current_year))
     # sqrt spreads PageRank's long tail; the relevance gate keeps generic method papers
@@ -317,6 +346,7 @@ def rank_papers(
         + weights["influence"] * influence
         + weights["recency"] * recency
         + weights["impact"] * impact
+        + weights["personal"] * personal
     ) / total_weight
 
     ranked = []
@@ -334,6 +364,7 @@ def rank_papers(
                 "seed": round(float(seed_scores[index]), 3),
                 "recency": round(float(recency[index]), 3),
                 "impact": round(float(impact[index]), 3),
+                "personal": round(float(personal[index]), 3),
                 "frontier": round(float(frontier[index]), 3),
             },
         )
