@@ -767,6 +767,35 @@ $("goal-form").addEventListener("submit", async (event) => {
   }
 });
 
+$("export-ris").addEventListener("click", async () => {
+  const tag = $("tag-filter").value;
+  try {
+    const ris = await api("GET", `/bookmarks/export.ris${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`);
+    if (!ris.trim()) return alert(t("bm.nothing"));
+    alert(await saveFile("research-radar.ris", ris, "application/x-research-info-systems"));
+  } catch (e) { alert(t("bm.exportFailed", { error: e.message })); }
+});
+
+// A Zotero (or Mendeley, EndNote, Papers) export: each reference found on OpenAlex and bookmarked
+$("import-refs").addEventListener("change", async (event) => {
+  const file = event.target.files[0];
+  event.target.value = "";
+  if (!file) return;
+  const { parseCitations } = await import(new URL("core/citations.js", document.querySelector("link[rel=stylesheet]").href).href);
+  const entries = parseCitations(await file.text());
+  if (!entries.length) return setStatus("bm-status", t("bm.importNone", { name: file.name }), true);
+  setStatus("bm-status", t("bm.importing", { n: entries.length }));
+  try {
+    const done = await api("POST", "/bookmarks/import", { entries });
+    await loadBookmarks();
+    renderBookmarks();
+    const missing = done.not_found.length ? t("bm.importMissing", { n: done.not_found.length, titles: done.not_found.slice(0, 3).join("; ") }) : "";
+    setStatus("bm-status", t("bm.imported", { imported: done.imported, existing: done.existing }) + missing);
+  } catch (e) {
+    setStatus("bm-status", t("bm.importFailed", { error: e.message }), true);
+  }
+});
+
 $("export-bib").addEventListener("click", async () => {
   const tag = $("tag-filter").value;
   try {

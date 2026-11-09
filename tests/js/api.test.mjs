@@ -335,6 +335,32 @@ test("following authors and journals and their new papers, like tests/test_follo
   await assert.rejects(api("DELETE", "/follows/author/A123"), { status: 404 });
 });
 
+test("Zotero round trip: RIS out, a RIS/BibTeX export in by DOI then title, like tests/test_zotero.py", async () => {
+  const titles = [];
+  const { api } = setup({ handler: (url) => {
+    const filter = new URL(url).searchParams.get("filter") || "";
+    if (filter.startsWith("doi:")) {
+      assert.equal(filter, "doi:10.1000/x");
+      return reply(200, { results: [{ id: "https://openalex.org/W1", title: "Paper one", doi: "https://doi.org/10.1000/X" }] });
+    }
+    titles.push(filter);
+    return reply(200, { results: filter === "title.search:Paper two" ? [{ id: "https://openalex.org/W2", title: "Paper two!" }] : [] });
+  } });
+  const entries = [{ doi: "10.1000/X", title: "Paper one", tags: ["GNN"], note: "from zotero" },
+    { title: "Paper two", year: 2019 }, { title: "Unknown paper" }, { doi: "not a doi", title: "" }];
+  assert.deepEqual(await api("POST", "/bookmarks/import", { entries }), { total: 4, imported: 2, existing: 0, not_found: ["Unknown paper", "not a doi"] });
+  assert.deepEqual(titles, ["title.search:Paper two", "title.search:Unknown paper"]);
+  const saved = Object.fromEntries((await api("GET", "/bookmarks")).map((b) => [b.id, b]));
+  assert.deepEqual([saved.W1.tags, saved.W1.note], [["gnn"], "from zotero"]);
+  const again = await api("POST", "/bookmarks/import", { entries: entries.slice(0, 1) });
+  assert.deepEqual([again.imported, again.existing], [0, 1]);
+  const ris = await api("GET", "/bookmarks/export.ris");
+  assert.match(ris, /^TY {2}- JOUR$/m);
+  assert.match(ris, /^KW {2}- gnn$/m);
+  assert.equal(ris.match(/^ER {2}- $/gm).length, 2);
+  await assert.rejects(api("POST", "/bookmarks/import", { entries: Array(301).fill({ title: "x" }) }), { status: 422 });
+});
+
 test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, like backend/library.py", async () => {
   const asked = [];
   const { api } = setup({ handler: (url) => {

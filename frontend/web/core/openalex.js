@@ -129,6 +129,28 @@ export class OpenAlex {
     return (data.results || []).map(normalizeWork);
   }
 
+  /** Works for many DOIs (50 per request): Map of lower-case DOI → paper. */
+  async byDois(dois) {
+    const found = new Map();
+    for (let start = 0; start < dois.length; start += 50) {
+      const chunk = dois.slice(start, start + 50);
+      for (const paper of await this.list([`doi:${chunk.join("|")}`], chunk.length)) {
+        const doi = (paper.doi || "").replace("https://doi.org/", "").toLowerCase();
+        if (doi) found.set(doi, paper);
+      }
+    }
+    return found;
+  }
+
+  /** The work with this title (ignoring case, spaces and punctuation), nearest in year; null if none. */
+  async byTitle(title, year = null) {
+    const key = (t) => [...String(t || "").toLowerCase()].filter((ch) => /[\p{L}\p{N}]/u.test(ch)).join("");
+    const papers = await this.list([`title.search:${title.replaceAll(",", " ")}`], 5);
+    const matches = papers.filter((p) => key(p.title) === key(title));
+    if (year) matches.sort((a, b) => Math.abs((a.year || year) - year) - Math.abs((b.year || year) - year));
+    return matches[0] || null;
+  }
+
   /** Works by an author, or in a journal, published on or after `since`: [how many, the newest few]. */
   async publishedBy(kind, id, since, limit = 10) {
     const data = await this.get(OPENALEX_URL, { "per-page": Math.min(limit, MAX_PER_PAGE), sort: "publication_date:desc",

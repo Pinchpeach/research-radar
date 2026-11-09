@@ -115,6 +115,8 @@ main:has(#tab-map:not([hidden])) { max-width: none; }
 .status.error { color: var(--danger); }
 .empty { color: var(--text-3); }
 button { border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+label.button-like { display: inline-flex; align-items: center; border: 1px solid var(--border); background: var(--surface); border-radius: 8px; padding: 7px 12px; cursor: pointer; }
+label.button-like:focus-within { outline: 2px solid var(--accent); }
 button:hover:not(:disabled) { border-color: var(--text-3); }
 button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; }

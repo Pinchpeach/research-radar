@@ -3,10 +3,10 @@
 
 import { dedupe } from "./dedupe.js";
 import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
-import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
+import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError, shortId } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
+import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex, toRis } from "./store.js";
 import { renderHtml } from "./techtree.js";
 import { freePdfLinks } from "./freecopies.js";
 import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
@@ -267,6 +267,38 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return out;
   }
 
+  /** Bookmark the papers of a Zotero (or other) export, like main.py import_bookmarks. */
+  async function importBookmarks(body) {
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    if (entries.length > 300) throw invalid("at most 300 entries");
+    const doisOf = (e) => (typeof e.doi === "string" && DOI.test(e.doi) ? e.doi.toLowerCase() : null);
+    const dois = [...new Set(entries.map(doisOf).filter(Boolean))];
+    const have = bookmarks.ids(), missing = [];
+    let imported = 0, existing = 0, lookups = 0;
+    try {
+      const byDoi = await openalex.byDois(dois);
+      for (const entry of entries) {
+        let paper = byDoi.get(doisOf(entry)) || null;
+        if (!paper && entry.title && lookups < 50) {
+          lookups += 1;
+          paper = await openalex.byTitle(String(entry.title).slice(0, 1000), entry.year ?? null);
+        }
+        if (!paper) missing.push(entry.title || entry.doi);
+        else if (have.has(shortId(paper.id))) existing += 1;
+        else {
+          bookmarks.save(paper, String(entry.note || "").slice(0, 5000), (entry.tags || []).map(String));
+          have.add(shortId(paper.id));
+          imported += 1;
+        }
+      }
+    } catch (error) {
+      if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
+      if (error instanceof RequestError) throw new ApiError(502, "OpenAlex request failed");
+      throw error;
+    }
+    return { total: entries.length, imported, existing, not_found: missing };
+  }
+
   /** For each followed author or journal: papers published since the person last looked (main.py). */
   async function followedNew() {
     const todayIso = isoDay(today()), out = [];
@@ -303,6 +335,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     ["GET", /^\/bookmarks$/, (_, __, q) => bookmarks.all(q.get("tag"))],
     ["PUT", /^\/bookmarks$/, (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null)],
     ["GET", /^\/bookmarks\/export\.bib$/, (_, __, q) => toBibtex(bookmarks.all(q.get("tag")))],
+    ["POST", /^\/bookmarks\/import$/, (_, body) => importBookmarks(body)],
+    ["GET", /^\/bookmarks\/export\.ris$/, (_, __, q) => toRis(bookmarks.all(q.get("tag")))],
     ["PATCH", /^\/bookmarks\/([^/]+)$/, ([id], body) => {
       if (body.status != null && !READING_STATUSES.includes(body.status)) throw invalid("status must be to_read, reading or read");
       const updated = bookmarks.update(decodeURIComponent(id), body.note ?? null, body.tags ?? null, body.status ?? null);

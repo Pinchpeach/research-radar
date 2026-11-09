@@ -115,6 +115,23 @@ class Bookmark(BaseModel):
     read_at: Optional[str] = None  # when it was marked read
 
 
+class ImportEntry(BaseModel):
+    """One reference from a Zotero (RIS/BibTeX) export, as frontend/web/core/citations.js reads it."""
+
+    doi: Optional[str] = Field(default=None, max_length=300)
+    title: str = Field(default="", max_length=1000)
+    year: Optional[int] = None
+    authors: list[str] = Field(default_factory=list)
+    venue: Optional[str] = Field(default=None, max_length=500)
+    tags: list[str] = Field(default_factory=list, max_length=50)
+    note: str = Field(default="", max_length=5000)
+    url: Optional[str] = Field(default=None, max_length=2000)
+
+
+class ImportRequest(BaseModel):
+    entries: list[ImportEntry] = Field(max_length=300)
+
+
 class FollowIn(BaseModel):
     """An author (OpenAlex A...) or journal (source, S...) to follow (backend/follows.py)."""
 

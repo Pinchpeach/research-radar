@@ -22,6 +22,7 @@ from backend.models import (
     EvaluationRun,
     FlowRequest,
     FollowIn,
+    ImportRequest,
     KeyTest,
     PaperData,
     PosterRequest,
@@ -34,7 +35,7 @@ from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import rank_papers, recent_since, select_results
 from backend.services.techtree import render_html as render_poster
-from backend.storage import BookmarkStore, to_bibtex
+from backend.storage import BookmarkStore, to_bibtex, to_ris
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
@@ -219,6 +220,44 @@ def list_bookmarks(tag: str | None = None, store: BookmarkStore = Depends(get_st
 @app.put("/bookmarks", response_model=Bookmark)
 def save_bookmark(item: BookmarkIn, store: BookmarkStore = Depends(get_store)):
     return store.save(item.paper.model_dump(), item.note, item.tags, item.query)
+
+
+MAX_TITLE_LOOKUPS = 50  # entries without a DOI cost one OpenAlex request each
+
+
+@app.post("/bookmarks/import")
+def import_bookmarks(request: ImportRequest, store: BookmarkStore = Depends(get_store)):
+    """Bookmark the papers of a Zotero (or other) export: found on OpenAlex by DOI (50 a request), or,
+    without one, by exact title (at most MAX_TITLE_LOOKUPS). Papers already bookmarked stay as
+    they are; tags and notes come along. Reports what was added and what couldn't be found."""
+    entries = request.entries
+    dois = list(dict.fromkeys(e.doi.lower() for e in entries if e.doi and library.DOI.match(e.doi)))
+    have, imported, existing, missing, lookups = store.ids(), 0, 0, [], 0
+    try:
+        by_doi = openalex.by_dois(dois)
+        for entry in entries:
+            paper = by_doi.get((entry.doi or "").lower())
+            if not paper and entry.title and lookups < MAX_TITLE_LOOKUPS:
+                lookups += 1
+                paper = openalex.by_title(entry.title, entry.year)
+            if not paper:
+                missing.append(entry.title or entry.doi)
+            elif openalex.short_id(paper["id"]) in have:
+                existing += 1
+            else:
+                store.save(paper, entry.note, entry.tags)
+                have.add(openalex.short_id(paper["id"]))
+                imported += 1
+    except openalex.RateLimited as exc:
+        raise HTTPException(status_code=429, detail=rate_limit_detail(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
+    return {"total": len(entries), "imported": imported, "existing": existing, "not_found": missing}
+
+
+@app.get("/bookmarks/export.ris", response_class=PlainTextResponse)
+def export_ris(tag: str | None = None, store: BookmarkStore = Depends(get_store)):
+    return to_ris(store.all(tag))
 
 
 @app.get("/bookmarks/export.bib", response_class=PlainTextResponse)

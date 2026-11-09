@@ -122,6 +122,20 @@ export class Bookmarks {
   }
 }
 
+const risValue = (value) => String(value).split(/\s+/).filter(Boolean).join(" ");
+
+/** RIS, which Zotero, Mendeley, EndNote and Papers all import (like storage.to_ris). */
+export function toRis(bookmarks) {
+  const entries = bookmarks.map((bookmark) => {
+    const paper = bookmark.paper;
+    const lines = [["TY", "JOUR"], ["TI", paper.title], ...(paper.authors || []).map((name) => ["AU", name]),
+      ["PY", paper.year], ["JO", paper.venue], ["DO", (paper.doi || "").replace("https://doi.org/", "") || null], ["UR", paper.url],
+      ["AB", paper.abstract], ...(bookmark.tags || []).map((tag) => ["KW", tag]), ["N1", bookmark.note], ["ID", bookmark.id]];
+    return [...lines.filter(([, v]) => v != null && v !== "").map(([tag, v]) => `${tag}  - ${risValue(v)}`), "ER  - "].join("\n");
+  });
+  return entries.join("\n\n") + (entries.length ? "\n" : "");
+}
+
 export function toBibtex(bookmarks) {
   const entries = bookmarks.map((bookmark) => {
     const paper = bookmark.paper;

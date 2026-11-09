@@ -114,8 +114,12 @@
         <label><span data-i18n="bm.status">상태</span> <select id="status-filter"><option value="" data-i18n="bm.all">전체</option>
           <option value="to_read" data-i18n="status.to_read">읽을 것</option><option value="reading" data-i18n="status.reading">읽는 중</option><option value="read" data-i18n="status.read">읽음</option></select></label>
         <span class="spacer"></span>
+        <label class="button-like" data-i18n-title="bm.importTitle"><span data-i18n="bm.import">가져오기</span>
+          <input id="import-refs" type="file" accept=".bib,.ris,.txt,application/x-bibtex,application/x-research-info-systems" hidden></label>
+        <button id="export-ris" data-i18n="bm.exportRis" data-i18n-title="bm.exportRisTitle">RIS 저장</button>
         <button id="export-bib" data-i18n="bm.export">BibTeX 저장</button>
       </div>
+      <p id="bm-status" class="status" role="status"></p>
       <p id="bm-empty" class="empty" data-i18n="bm.empty">아직 북마크가 없습니다.</p>
       <ol id="bookmarks" class="papers"></ol>
     </section>

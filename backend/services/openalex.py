@@ -145,6 +145,31 @@ def count_since(query: str, since: str) -> int:
     return int((_get(OPENALEX_URL, params).get("meta") or {}).get("count") or 0)
 
 
+def by_dois(dois: list[str]) -> dict[str, dict]:
+    """Works for many DOIs (50 per request): {doi in lower case: paper}."""
+    found = {}
+    for start in range(0, len(dois), 50):
+        chunk = dois[start : start + 50]
+        for paper in _list([f"doi:{'|'.join(chunk)}"], len(chunk)):
+            doi = (paper.get("doi") or "").replace("https://doi.org/", "").lower()
+            if doi:
+                found[doi] = paper
+    return found
+
+
+def _title_key(title: str) -> str:
+    return "".join(ch for ch in (title or "").casefold() if ch.isalnum())
+
+
+def by_title(title: str, year: int | None = None) -> dict | None:
+    """The work with this title (ignoring case, spaces and punctuation), nearest in year; None if none."""
+    papers = _list([f"title.search:{title.replace(',', ' ')}"], 5)
+    matches = [p for p in papers if _title_key(p["title"]) == _title_key(title)]
+    if year:
+        matches.sort(key=lambda p: abs((p.get("year") or year) - year))
+    return matches[0] if matches else None
+
+
 FOLLOW_FILTERS = {"author": "authorships.author.id", "source": "primary_location.source.id"}
 
 
