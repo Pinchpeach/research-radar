@@ -114,9 +114,16 @@ export class OpenAlex {
     const response = await this.request(path, params);
     if (response.status === 429) {
       let message = "";
-      try { message = (await response.json()).message || ""; } catch { /* not JSON */ }
+      try {
+        message = (await response.json()).message || "";
+      } catch {
+        /* not JSON */
+      }
       const retry = response.headers.get("retry-after");
-      throw new RateLimited(message || "OpenAlex rate limit reached.", retry && /^\d+$/.test(retry) ? Number(retry) : null);
+      throw new RateLimited(
+        message || "OpenAlex rate limit reached.",
+        retry && /^\d+$/.test(retry) ? Number(retry) : null,
+      );
     }
     if (!response.ok) throw new RequestError(`OpenAlex answered ${response.status}`, response.status);
     return response.json();
@@ -153,14 +160,22 @@ export class OpenAlex {
 
   /** Works by an author, or in a journal, published on or after `since`: [how many, the newest few]. */
   async publishedBy(kind, id, since, limit = 10) {
-    const data = await this.get(OPENALEX_URL, { "per-page": Math.min(limit, MAX_PER_PAGE), sort: "publication_date:desc",
-      filter: `${FOLLOW_FILTERS[kind]}:${id},from_publication_date:${since}` });
+    const data = await this.get(OPENALEX_URL, {
+      "per-page": Math.min(limit, MAX_PER_PAGE),
+      sort: "publication_date:desc",
+      filter: `${FOLLOW_FILTERS[kind]}:${id},from_publication_date:${since}`,
+    });
     return [Number((data.meta || {}).count) || 0, (data.results || []).map(normalizeWork)];
   }
 
   /** How many works match `query` and were published on or after `since` (YYYY-MM-DD). */
   async countSince(query, since) {
-    const data = await this.get(OPENALEX_URL, { "per-page": 1, select: "id", search: query, filter: `from_publication_date:${since}` });
+    const data = await this.get(OPENALEX_URL, {
+      "per-page": 1,
+      select: "id",
+      search: query,
+      filter: `from_publication_date:${since}`,
+    });
     return Number((data.meta || {}).count) || 0;
   }
 
@@ -169,15 +184,20 @@ export class OpenAlex {
   }
 
   citing(workId, limit = 25, yearFrom = null, yearTo = null) {
-    return this.list([`cites:${shortId(workId)}`, ...yearFilter(yearFrom, yearTo)], limit, { sort: "cited_by_count:desc" });
+    return this.list([`cites:${shortId(workId)}`, ...yearFilter(yearFrom, yearTo)], limit, {
+      sort: "cited_by_count:desc",
+    });
   }
 
   async byIds(workIds, yearFrom = null, yearTo = null) {
-    const ids = workIds.map(shortId), papers = [];
+    const ids = workIds.map(shortId),
+      papers = [];
     // OpenAlex accepts up to 100 OR-ed values per filter.
     for (let start = 0; start < ids.length; start += 50) {
       const chunk = ids.slice(start, start + 50);
-      papers.push(...await this.list([`ids.openalex:${chunk.join("|")}`, ...yearFilter(yearFrom, yearTo)], chunk.length));
+      papers.push(
+        ...(await this.list([`ids.openalex:${chunk.join("|")}`, ...yearFilter(yearFrom, yearTo)], chunk.length)),
+      );
     }
     return papers;
   }
@@ -206,8 +226,16 @@ export class OpenAlex {
     const limit = response.headers.get("x-ratelimit-limit-usd");
     const budget = { remaining_usd: remaining ? Number(remaining) : null, limit_usd: limit ? Number(limit) : null };
     if (response.status === 200) return { ok: true, code: "ok", message: "The key works.", ...budget };
-    if (response.status === 401 || response.status === 403) return { ok: false, code: "rejected", message: "OpenAlex rejected this key.", ...budget };
-    if (response.status === 429) return { ok: false, code: "exhausted", message: "Today's budget is used up.", ...budget };
-    return { ok: false, code: "status", status: response.status, message: `OpenAlex answered ${response.status}`, ...budget };
+    if (response.status === 401 || response.status === 403)
+      return { ok: false, code: "rejected", message: "OpenAlex rejected this key.", ...budget };
+    if (response.status === 429)
+      return { ok: false, code: "exhausted", message: "Today's budget is used up.", ...budget };
+    return {
+      ok: false,
+      code: "status",
+      status: response.status,
+      message: `OpenAlex answered ${response.status}`,
+      ...budget,
+    };
   }
 }

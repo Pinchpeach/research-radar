@@ -6,14 +6,30 @@ import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError, shortId } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex, toRis } from "./store.js";
+import {
+  Annotations,
+  Bookmarks,
+  Follows,
+  History,
+  Judgments,
+  READING_STATUSES,
+  Settings,
+  toBibtex,
+  toRis,
+} from "./store.js";
 import { renderHtml } from "./techtree.js";
 import { freePdfLinks } from "./freecopies.js";
 import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
-const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
-const FRESH_YEARS = 2, CORE_MIN_SHARE = 0.05, REFERENCES_PER_SEED = 50, UPDATE_CACHE_MS = 6 * 3600 * 1000;
+const CITING_PER_SEED = 25,
+  CORE_REFERENCES = 25,
+  CORE_MIN_CITERS = 3,
+  RECENT_FETCH_MIN = 20;
+const FRESH_YEARS = 2,
+  CORE_MIN_SHARE = 0.05,
+  REFERENCES_PER_SEED = 50,
+  UPDATE_CACHE_MS = 6 * 3600 * 1000;
 
 export class ApiError extends Error {
   constructor(status, detail) {
@@ -27,7 +43,8 @@ const invalid = (message) => new ApiError(422, message);
 const number = (value, name, { min = -Infinity, max = Infinity, integer = false, fallback } = {}) => {
   if (value == null) return fallback;
   const n = Number(value);
-  if (!Number.isFinite(n) || n < min || n > max || (integer && !Number.isInteger(n))) throw invalid(`${name} is out of range`);
+  if (!Number.isFinite(n) || n < min || n > max || (integer && !Number.isInteger(n)))
+    throw invalid(`${name} is out of range`);
   return n;
 };
 
@@ -35,10 +52,21 @@ const number = (value, name, { min = -Infinity, max = Infinity, integer = false,
 export function paperData(raw) {
   if (!raw || typeof raw.id !== "string") throw invalid("paper.id is required");
   return {
-    id: raw.id, title: raw.title || "", abstract: raw.abstract || "", year: raw.year ?? null, doi: raw.doi ?? null,
-    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, venue_id: raw.venue_id ?? null,
-    authors: raw.authors || [], author_ids: raw.author_ids || [], citations: raw.citations || 0,
-    referenced_works: raw.referenced_works || [], keywords: raw.keywords || [], topic: raw.topic ?? null,
+    id: raw.id,
+    title: raw.title || "",
+    abstract: raw.abstract || "",
+    year: raw.year ?? null,
+    doi: raw.doi ?? null,
+    url: raw.url ?? null,
+    open_access_url: raw.open_access_url ?? null,
+    venue: raw.venue ?? null,
+    venue_id: raw.venue_id ?? null,
+    authors: raw.authors || [],
+    author_ids: raw.author_ids || [],
+    citations: raw.citations || 0,
+    referenced_works: raw.referenced_works || [],
+    keywords: raw.keywords || [],
+    topic: raw.topic ?? null,
   };
 }
 
@@ -60,7 +88,8 @@ export function searchRequest(body) {
   for (const [name, value] of Object.entries(body.weights || {})) {
     if (name in request.weights) request.weights[name] = number(value, `weights.${name}`, { min: 0 });
   }
-  if (request.year_from && request.year_to && request.year_from > request.year_to) throw invalid("year_from must not be after year_to");
+  if (request.year_from && request.year_to && request.year_from > request.year_to)
+    throw invalid("year_from must not be after year_to");
   return request;
 }
 
@@ -71,23 +100,47 @@ export function searchRequest(body) {
 const MAX_PDF = 100 * 1024 * 1024; // like backend/annotations.py
 const isPdfBytes = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF");
 
-export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date(),
-  clearCookies = async () => {}, pdfFiles = null }) {
-  const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
-  const history = new History(storage), annotations = new Annotations(storage), follows = new Follows(storage);
+export function createApi({
+  fetch,
+  storage,
+  version,
+  releasesRepo,
+  posterTemplate,
+  dataDir = "this device",
+  today = () => new Date(),
+  clearCookies = async () => {},
+  pdfFiles = null,
+}) {
+  const settings = new Settings(storage),
+    bookmarks = new Bookmarks(storage),
+    judgments = new Judgments(storage);
+  const history = new History(storage),
+    annotations = new Annotations(storage),
+    follows = new Follows(storage);
   /** Like the AnnotationDoc model: the fields kept, with their limits. */
   const annotationDoc = (body) => {
     const doc = {
-      title: String(body.title ?? "").slice(0, 500), paper_id: body.paper_id ?? null, source: body.source ?? null,
+      title: String(body.title ?? "").slice(0, 500),
+      paper_id: body.paper_id ?? null,
+      source: body.source ?? null,
       page_count: number(body.page_count ?? 0, "page_count", { min: 0, max: 10000 }),
       last_page: number(body.last_page ?? 1, "last_page", { min: 1, max: 10000 }),
-      pages: body.pages || {}, notes: body.notes || [],
+      pages: body.pages || {},
+      notes: body.notes || [],
     };
-    if (typeof doc.pages !== "object" || Array.isArray(doc.pages) || !Array.isArray(doc.notes) || doc.notes.length > 500) throw invalid("pages and notes");
+    if (
+      typeof doc.pages !== "object" ||
+      Array.isArray(doc.pages) ||
+      !Array.isArray(doc.notes) ||
+      doc.notes.length > 500
+    )
+      throw invalid("pages and notes");
     return doc;
   };
   const annotationCall = (fn) => {
-    try { return fn(); } catch (error) {
+    try {
+      return fn();
+    } catch (error) {
       if (error instanceof RangeError) throw new ApiError(413, error.message);
       if (error instanceof ApiError) throw error;
       throw new ApiError(422, error.message);
@@ -114,18 +167,27 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     if (!wanted.length) return [];
     let fetched;
     try {
-      fetched = await openalex.byIds(wanted.map(([ref]) => ref), years.year_from, years.year_to);
+      fetched = await openalex.byIds(
+        wanted.map(([ref]) => ref),
+        years.year_from,
+        years.year_to,
+      );
     } catch (error) {
       if (!(error instanceof RequestError)) throw error;
       return []; // like the desktop app: search on without them
     }
     const known = new Set(candidates.map((p) => p.id));
-    return credibleFoundations(candidates, fetched, minCount).filter((p) => !known.has(p.id)).map((p) => ({ ...p, core_reference: true }));
+    return credibleFoundations(candidates, fetched, minCount)
+      .filter((p) => !known.has(p.id))
+      .map((p) => ({ ...p, core_reference: true }));
   }
 
   async function recentCandidates(request) {
     if (!request.recent_share) return [];
-    const since = Math.max(request.year_from || 0, recentSince(today().getFullYear(), Math.min(request.recent_years, FRESH_YEARS)));
+    const since = Math.max(
+      request.year_from || 0,
+      recentSince(today().getFullYear(), Math.min(request.recent_years, FRESH_YEARS)),
+    );
     if (request.year_to && request.year_to < since) return [];
     const size = Math.max(RECENT_FETCH_MIN, Math.ceil(request.limit * request.recent_share * 3));
     return openalex.search(request.query, Math.min(size, MAX_PER_PAGE), since, request.year_to);
@@ -133,12 +195,17 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
 
   async function gatherCandidates(request, seeds) {
     const years = { year_from: request.year_from, year_to: request.year_to };
-    const candidates = await openalex.search(request.query, Math.min(MAX_PER_PAGE, Math.max(50, request.limit * 3)), years.year_from, years.year_to);
+    const candidates = await openalex.search(
+      request.query,
+      Math.min(MAX_PER_PAGE, Math.max(50, request.limit * 3)),
+      years.year_from,
+      years.year_to,
+    );
     for (const seed of seeds) {
       try {
-        candidates.push(...await openalex.citing(seed.id, CITING_PER_SEED, years.year_from, years.year_to));
+        candidates.push(...(await openalex.citing(seed.id, CITING_PER_SEED, years.year_from, years.year_to)));
         const refs = (seed.referenced_works || []).slice(0, REFERENCES_PER_SEED);
-        if (refs.length) candidates.push(...await openalex.byIds(refs, years.year_from, years.year_to));
+        if (refs.length) candidates.push(...(await openalex.byIds(refs, years.year_from, years.year_to)));
       } catch (error) {
         if (!(error instanceof RequestError)) throw error; // otherwise skip this seed
       }
@@ -146,19 +213,22 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     const seedIds = new Set(seeds.map((s) => s.id));
     let papers = mergeCandidates(candidates, seedIds);
     // core references come from the main search alone, so recent work doesn't change what counts as core
-    papers = [...papers, ...await coreReferences(papers, years)];
-    papers = mergeCandidates([...papers, ...await recentCandidates(request)], seedIds);
+    papers = [...papers, ...(await coreReferences(papers, years))];
+    papers = mergeCandidates([...papers, ...(await recentCandidates(request))], seedIds);
     if (request.require_abstract) papers = papers.filter((p) => p.abstract);
     return papers;
   }
 
   async function search(body) {
     const request = searchRequest(body);
-    let seeds = [], unresolved = [], candidates;
+    let seeds = [],
+      unresolved = [],
+      candidates;
     try {
       for (const identifier of request.seed_ids) {
         const seed = await openalex.getWork(identifier);
-        if (seed) seeds.push(seed); else unresolved.push(identifier);
+        if (seed) seeds.push(seed);
+        else unresolved.push(identifier);
       }
       candidates = await gatherCandidates(request, seeds);
     } catch (error) {
@@ -168,9 +238,23 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     }
     const currentYear = today().getFullYear();
     // the person's bookmarks, newest first (PROFILE_SIZE, as backend/main.py)
-    const profile = bookmarks.all().slice(0, 100).map((b) => b.paper);
-    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years, profile });
-    const papers = selectResults(ranked, request.limit, request.recent_share, recentSince(currentYear, request.recent_years));
+    const profile = bookmarks
+      .all()
+      .slice(0, 100)
+      .map((b) => b.paper);
+    const ranked = rankPapers(request.query, candidates, {
+      seeds,
+      weights: request.weights,
+      currentYear,
+      recentYears: request.recent_years,
+      profile,
+    });
+    const papers = selectResults(
+      ranked,
+      request.limit,
+      request.recent_share,
+      recentSince(currentYear, request.recent_years),
+    );
     history.record(request.query);
     return {
       query: request.query,
@@ -195,7 +279,9 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
         try {
           // drops works "cited" by papers older than themselves (bad citation data)
           foundations = credibleFoundations(papers, await openalex.byIds(wanted.map(([ref]) => ref)));
-        } catch { /* the map works without them */ }
+        } catch {
+          /* the map works without them */
+        }
       }
     }
     return buildFlow(papers, { bookmarked: bookmarks.ids(), foundations, query: body.query ?? null });
@@ -205,18 +291,32 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     if (Date.now() - updateCache.at < UPDATE_CACHE_MS) return updateCache.latest;
     let latest = null;
     try {
-      const response = await fetch(`https://api.github.com/repos/${releasesRepo}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } });
+      const response = await fetch(`https://api.github.com/repos/${releasesRepo}/releases/latest`, {
+        headers: { Accept: "application/vnd.github+json" },
+      });
       if (response.status === 200) {
         const data = await response.json();
-        latest = { version: String(data.tag_name || "").replace(/^v/, ""), url: data.html_url, published_at: data.published_at };
+        latest = {
+          version: String(data.tag_name || "").replace(/^v/, ""),
+          url: data.html_url,
+          published_at: data.published_at,
+        };
       }
-    } catch { /* offline: no update notice */ }
+    } catch {
+      /* offline: no update notice */
+    }
     Object.assign(updateCache, { at: Date.now(), latest });
     return latest;
   }
 
-  const parseVersion = (text) => { const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(text || "").trim()); return m ? m.slice(1).map(Number) : null; };
-  const newer = (a, b) => { for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i]; return false; };
+  const parseVersion = (text) => {
+    const m = /^v?(\d+)\.(\d+)\.(\d+)$/.exec(String(text || "").trim());
+    return m ? m.slice(1).map(Number) : null;
+  };
+  const newer = (a, b) => {
+    for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+    return false;
+  };
 
   const settingsUpdate = (body) => {
     const limits = { openalex_api_key: 200, openalex_email: 200 };
@@ -225,7 +325,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (name === "language") {
         if (value != null && !["ko", "en", ""].includes(value)) throw invalid("language must be ko or en");
       } else if (name === "library_proxy") {
-        if (value != null && (String(value).length > 300 || (value !== "" && !PROXY.test(String(value))))) throw invalid("library_proxy must be an http(s) address");
+        if (value != null && (String(value).length > 300 || (value !== "" && !PROXY.test(String(value)))))
+          throw invalid("library_proxy must be an http(s) address");
         update[name] = value ? normalizeProxy(value) : value; // e.g. a pasted example address
         continue;
       } else if (name === "reading_goal") {
@@ -241,17 +342,20 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
   };
 
   // like backend/main.py new_papers: papers published since the day after each recent search
-  const NEW_PAPERS_TTL_MS = 3600 * 1000, newPapersCache = new Map();
+  const NEW_PAPERS_TTL_MS = 3600 * 1000,
+    newPapersCache = new Map();
   const isoDay = (d) => d.toISOString().slice(0, 10);
   async function newPapers(limit) {
-    const todayIso = isoDay(today()), out = [];
+    const todayIso = isoDay(today()),
+      out = [];
     for (const entry of history.load().slice(0, limit)) {
       const next = new Date(`${entry.searched_at.slice(0, 10)}T00:00:00Z`);
       next.setUTCDate(next.getUTCDate() + 1);
       const since = isoDay(next);
       let count = 0;
       if (since <= todayIso) {
-        const key = `${entry.query}\u0000${since}`, cached = newPapersCache.get(key);
+        const key = `${entry.query}\u0000${since}`,
+          cached = newPapersCache.get(key);
         if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS) count = cached.count;
         else {
           try {
@@ -273,8 +377,11 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     if (entries.length > 300) throw invalid("at most 300 entries");
     const doisOf = (e) => (typeof e.doi === "string" && DOI.test(e.doi) ? e.doi.toLowerCase() : null);
     const dois = [...new Set(entries.map(doisOf).filter(Boolean))];
-    const have = bookmarks.ids(), missing = [];
-    let imported = 0, existing = 0, lookups = 0;
+    const have = bookmarks.ids(),
+      missing = [];
+    let imported = 0,
+      existing = 0,
+      lookups = 0;
     try {
       const byDoi = await openalex.byDois(dois);
       for (const entry of entries) {
@@ -284,7 +391,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
           try {
             paper = await openalex.byTitle(String(entry.title).slice(0, 1000), entry.year ?? null);
           } catch (error) {
-            if (error instanceof RateLimited) lookups = 50; // out of budget: the rest without a DOI aren't looked up
+            if (error instanceof RateLimited)
+              lookups = 50; // out of budget: the rest without a DOI aren't looked up
             else if (!(error instanceof RequestError)) throw error; // otherwise: counted as not found
           }
         }
@@ -306,12 +414,16 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
 
   /** For each followed author or journal: papers published since the person last looked (main.py). */
   async function followedNew() {
-    const todayIso = isoDay(today()), out = [];
+    const todayIso = isoDay(today()),
+      out = [];
     for (const item of follows.load()) {
-      let count = 0, papers = [];
+      let count = 0,
+        papers = [];
       if (item.since <= todayIso) {
-        const key = `follow\u0000${item.kind}\u0000${item.id}`, cached = newPapersCache.get(key);
-        if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS && cached.since === item.since) [count, papers] = cached.result;
+        const key = `follow\u0000${item.kind}\u0000${item.id}`,
+          cached = newPapersCache.get(key);
+        if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS && cached.since === item.since)
+          [count, papers] = cached.result;
         else {
           try {
             [count, papers] = await openalex.publishedBy(item.kind, item.id, item.since);
@@ -328,7 +440,8 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
 
   /** Like backend/settings.public_view; signed in = the last library fetch with this proxy worked. */
   const settingsView = () => {
-    const view = settings.publicView(dataDir), proxy = settings.get("library_proxy");
+    const view = settings.publicView(dataDir),
+      proxy = settings.get("library_proxy");
     view.library_signed_in = Boolean(proxy) && storage.getItem(LIBRARY_SESSION) === proxy;
     view.library_sign_in_url = proxy ? signInUrl(normalizeProxy(proxy)) : null;
     return view;
@@ -338,129 +451,246 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     ["GET", /^\/health$/, () => ({ status: "ok", version })],
     ["POST", /^\/search$/, (_, body) => search(body)],
     ["GET", /^\/bookmarks$/, (_, __, q) => bookmarks.all(q.get("tag"))],
-    ["PUT", /^\/bookmarks$/, (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null)],
+    [
+      "PUT",
+      /^\/bookmarks$/,
+      (_, body) => bookmarks.save(paperData(body.paper), body.note || "", body.tags ?? null, body.query ?? null),
+    ],
     ["GET", /^\/bookmarks\/export\.bib$/, (_, __, q) => toBibtex(bookmarks.all(q.get("tag")))],
     ["POST", /^\/bookmarks\/import$/, (_, body) => importBookmarks(body)],
     ["GET", /^\/bookmarks\/export\.ris$/, (_, __, q) => toRis(bookmarks.all(q.get("tag")))],
-    ["PATCH", /^\/bookmarks\/([^/]+)$/, ([id], body) => {
-      if (body.status != null && !READING_STATUSES.includes(body.status)) throw invalid("status must be to_read, reading or read");
-      const updated = bookmarks.update(decodeURIComponent(id), body.note ?? null, body.tags ?? null, body.status ?? null);
-      if (!updated) throw new ApiError(404, "Bookmark not found");
-      return updated;
-    }],
-    ["DELETE", /^\/bookmarks\/([^/]+)$/, ([id]) => {
-      if (!bookmarks.delete(decodeURIComponent(id))) throw new ApiError(404, "Bookmark not found");
-      return null;
-    }],
+    [
+      "PATCH",
+      /^\/bookmarks\/([^/]+)$/,
+      ([id], body) => {
+        if (body.status != null && !READING_STATUSES.includes(body.status))
+          throw invalid("status must be to_read, reading or read");
+        const updated = bookmarks.update(
+          decodeURIComponent(id),
+          body.note ?? null,
+          body.tags ?? null,
+          body.status ?? null,
+        );
+        if (!updated) throw new ApiError(404, "Bookmark not found");
+        return updated;
+      },
+    ],
+    [
+      "DELETE",
+      /^\/bookmarks\/([^/]+)$/,
+      ([id]) => {
+        if (!bookmarks.delete(decodeURIComponent(id))) throw new ApiError(404, "Bookmark not found");
+        return null;
+      },
+    ],
     ["POST", /^\/flow$/, (_, body) => flow(body)],
-    ["POST", /^\/poster$/, async (_, body) => {
-      const lang = body.lang ?? "ko";
-      if (!["ko", "en"].includes(lang)) throw invalid("lang must be ko or en");
-      return renderHtml(body.flow, String(body.title ?? "My Research").slice(0, 300), lang, await posterTemplate());
-    }],
+    [
+      "POST",
+      /^\/poster$/,
+      async (_, body) => {
+        const lang = body.lang ?? "ko";
+        if (!["ko", "en"].includes(lang)) throw invalid("lang must be ko or en");
+        return renderHtml(body.flow, String(body.title ?? "My Research").slice(0, 300), lang, await posterTemplate());
+      },
+    ],
     ["GET", /^\/settings$/, () => settingsView()],
-    ["PUT", /^\/settings$/, (_, body) => { settings.save(settingsUpdate(body)); return settingsView(); }],
-    ["GET", /^\/works\/lookup$/, async (_, __, q) => {
-      let work;
-      try { work = await openalex.getWork(q.get("id") || ""); } catch (error) {
-        if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
-        throw new ApiError(502, "OpenAlex request failed");
-      }
-      if (!work) throw new ApiError(404, "OpenAlex doesn't know this paper");
-      return work;
-    }],
-    ["GET", /^\/free-pdfs$/, async (_, __, q) => {
-      const doi = q.get("doi") || "";
-      if (!DOI.test(doi)) throw invalid("not a DOI");
-      return { pdf_urls: await freePdfLinks({ fetch, openalex, doi, email: settings.get("openalex_email") }) };
-    }],
-    ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
-    ["GET", /^\/library\/pdf$/, async (_, __, q) => {
-      const doi = q.get("doi") || "", prefix = settings.get("library_proxy");
-      if (!prefix || !PROXY.test(prefix)) throw invalid("set your library's proxy address in Settings first");
-      if (!DOI.test(doi)) throw invalid("not a DOI");
-      try {
-        const bytes = await libraryPdf(fetch, prefix, doi);
-        storage.setItem(LIBRARY_SESSION, prefix);
-        return bytes;
-      } catch (error) {
-        if (error instanceof NeedsLogin) {
-          storage.removeItem(LIBRARY_SESSION);
-          throw new ApiError(401, { message: "Sign in to your library", login_url: error.loginUrl, library_login: error.loginPage });
+    [
+      "PUT",
+      /^\/settings$/,
+      (_, body) => {
+        settings.save(settingsUpdate(body));
+        return settingsView();
+      },
+    ],
+    [
+      "GET",
+      /^\/works\/lookup$/,
+      async (_, __, q) => {
+        let work;
+        try {
+          work = await openalex.getWork(q.get("id") || "");
+        } catch (error) {
+          if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
+          throw new ApiError(502, "OpenAlex request failed");
         }
-        if (error instanceof NoPdf) throw new ApiError(404, { message: "No PDF link on the paper's page", page_url: error.pageUrl });
-        throw new ApiError(502, `Could not reach the library (${error.message || error})`);
-      }
-    }],
-    ["DELETE", /^\/library\/session$/, async () => { storage.removeItem(LIBRARY_SESSION); await clearCookies(); return null; }],
+        if (!work) throw new ApiError(404, "OpenAlex doesn't know this paper");
+        return work;
+      },
+    ],
+    [
+      "GET",
+      /^\/free-pdfs$/,
+      async (_, __, q) => {
+        const doi = q.get("doi") || "";
+        if (!DOI.test(doi)) throw invalid("not a DOI");
+        return { pdf_urls: await freePdfLinks({ fetch, openalex, doi, email: settings.get("openalex_email") }) };
+      },
+    ],
+    ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
+    [
+      "GET",
+      /^\/library\/pdf$/,
+      async (_, __, q) => {
+        const doi = q.get("doi") || "",
+          prefix = settings.get("library_proxy");
+        if (!prefix || !PROXY.test(prefix)) throw invalid("set your library's proxy address in Settings first");
+        if (!DOI.test(doi)) throw invalid("not a DOI");
+        try {
+          const bytes = await libraryPdf(fetch, prefix, doi);
+          storage.setItem(LIBRARY_SESSION, prefix);
+          return bytes;
+        } catch (error) {
+          if (error instanceof NeedsLogin) {
+            storage.removeItem(LIBRARY_SESSION);
+            throw new ApiError(401, {
+              message: "Sign in to your library",
+              login_url: error.loginUrl,
+              library_login: error.loginPage,
+            });
+          }
+          if (error instanceof NoPdf)
+            throw new ApiError(404, { message: "No PDF link on the paper's page", page_url: error.pageUrl });
+          throw new ApiError(502, `Could not reach the library (${error.message || error})`);
+        }
+      },
+    ],
+    [
+      "DELETE",
+      /^\/library\/session$/,
+      async () => {
+        storage.removeItem(LIBRARY_SESSION);
+        await clearCookies();
+        return null;
+      },
+    ],
     ["POST", /^\/settings\/test-openalex$/, (_, body) => openalex.checkKey((body && body.api_key) || null)],
-    ["POST", /^\/evaluations$/, (_, body) => {
-      if (!body.judgments || !Object.values(body.judgments).some(Boolean)) throw new ApiError(400, "No judgments to save.");
-      return { written: judgments.saveRun(body, body.judgments) };
-    }],
+    [
+      "POST",
+      /^\/evaluations$/,
+      (_, body) => {
+        if (!body.judgments || !Object.values(body.judgments).some(Boolean))
+          throw new ApiError(400, "No judgments to save.");
+        return { written: judgments.saveRun(body, body.judgments) };
+      },
+    ],
     ["GET", /^\/evaluations$/, () => judgments.summarize()],
-    ["DELETE", /^\/evaluations\/([^/]+)$/, ([id]) => {
-      if (!judgments.deleteRun(decodeURIComponent(id))) throw new ApiError(404, "Evaluation run not found");
-      return null;
-    }],
+    [
+      "DELETE",
+      /^\/evaluations\/([^/]+)$/,
+      ([id]) => {
+        if (!judgments.deleteRun(decodeURIComponent(id))) throw new ApiError(404, "Evaluation run not found");
+        return null;
+      },
+    ],
     ["GET", /^\/history$/, (_, __, q) => history.load().slice(0, Math.max(0, Number(q.get("limit") ?? 5) || 0))],
     ["GET", /^\/annotations$/, () => annotations.all()],
-    ["GET", /^\/annotations\/([^/]+)$/, ([id]) => annotationCall(() => {
-      const doc = annotations.load(decodeURIComponent(id));
-      if (!doc) throw new ApiError(404, "No handwriting for this document");
-      return doc;
-    })],
-    ["PUT", /^\/annotations\/([^/]+)$/, ([id], body) => annotationCall(() => annotations.save(decodeURIComponent(id), annotationDoc(body)))],
-    ["DELETE", /^\/annotations\/([^/]+)$/, async ([id]) => {
-      const doc = decodeURIComponent(id);
-      const found = annotationCall(() => annotations.delete(doc));
-      const pdf = pdfFiles ? await pdfFiles.remove(doc) : false; // the PDF goes with its handwriting
-      if (!found && !pdf) throw new ApiError(404, "No handwriting for this document");
-      return null;
-    }],
+    [
+      "GET",
+      /^\/annotations\/([^/]+)$/,
+      ([id]) =>
+        annotationCall(() => {
+          const doc = annotations.load(decodeURIComponent(id));
+          if (!doc) throw new ApiError(404, "No handwriting for this document");
+          return doc;
+        }),
+    ],
+    [
+      "PUT",
+      /^\/annotations\/([^/]+)$/,
+      ([id], body) => annotationCall(() => annotations.save(decodeURIComponent(id), annotationDoc(body))),
+    ],
+    [
+      "DELETE",
+      /^\/annotations\/([^/]+)$/,
+      async ([id]) => {
+        const doc = decodeURIComponent(id);
+        const found = annotationCall(() => annotations.delete(doc));
+        const pdf = pdfFiles ? await pdfFiles.remove(doc) : false; // the PDF goes with its handwriting
+        if (!found && !pdf) throw new ApiError(404, "No handwriting for this document");
+        return null;
+      },
+    ],
     // a PDF the person picked, kept so it opens again without picking (pdfFiles: mobile.js's app storage)
-    ["GET", /^\/annotations\/([^/]+)\/pdf$/, async ([id]) => {
-      const doc = decodeURIComponent(id);
-      annotationCall(() => annotations.key(doc));
-      const bytes = pdfFiles ? await pdfFiles.read(doc) : null;
-      if (!bytes) throw new ApiError(404, "No PDF kept for this document");
-      return bytes;
-    }],
-    ["PUT", /^\/annotations\/([^/]+)\/pdf$/, async ([id], bytes) => {
-      const doc = decodeURIComponent(id);
-      annotationCall(() => annotations.key(doc));
-      if (!(bytes instanceof Uint8Array) || !isPdfBytes(bytes)) throw new ApiError(422, "not a PDF");
-      if (bytes.length > MAX_PDF) throw new ApiError(413, "PDF too large");
-      if (!pdfFiles) throw new ApiError(501, "PDFs are not kept here");
-      await pdfFiles.write(doc, bytes);
-      return null;
-    }],
+    [
+      "GET",
+      /^\/annotations\/([^/]+)\/pdf$/,
+      async ([id]) => {
+        const doc = decodeURIComponent(id);
+        annotationCall(() => annotations.key(doc));
+        const bytes = pdfFiles ? await pdfFiles.read(doc) : null;
+        if (!bytes) throw new ApiError(404, "No PDF kept for this document");
+        return bytes;
+      },
+    ],
+    [
+      "PUT",
+      /^\/annotations\/([^/]+)\/pdf$/,
+      async ([id], bytes) => {
+        const doc = decodeURIComponent(id);
+        annotationCall(() => annotations.key(doc));
+        if (!(bytes instanceof Uint8Array) || !isPdfBytes(bytes)) throw new ApiError(422, "not a PDF");
+        if (bytes.length > MAX_PDF) throw new ApiError(413, "PDF too large");
+        if (!pdfFiles) throw new ApiError(501, "PDFs are not kept here");
+        await pdfFiles.write(doc, bytes);
+        return null;
+      },
+    ],
     ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
-    ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
+    [
+      "DELETE",
+      /^\/history$/,
+      () => {
+        history.clear();
+        return null;
+      },
+    ],
     // followed authors and journals (backend/follows.py)
     ["GET", /^\/follows$/, () => follows.load()],
-    ["PUT", /^\/follows$/, (_, body) => {
-      if (!["author", "source"].includes(body.kind)) throw invalid("kind must be author or source");
-      try { return follows.add(body.kind, String(body.id || ""), String(body.name || "").slice(0, 200), isoDay(today())); } catch (error) {
-        throw new ApiError(error instanceof RangeError ? 409 : 422, error.message);
-      }
-    }],
-    ["DELETE", /^\/follows\/([^/]+)\/([^/]+)$/, ([kind, id]) => {
-      if (!follows.remove(kind, id)) throw new ApiError(404, "Not followed");
-      return null;
-    }],
-    ["POST", /^\/follows\/([^/]+)\/([^/]+)\/seen$/, ([kind, id]) => {
-      const item = follows.seen(kind, id, isoDay(today()));
-      if (!item) throw new ApiError(404, "Not followed");
-      newPapersCache.delete(`follow\u0000${kind}\u0000${id}`);
-      return item;
-    }],
+    [
+      "PUT",
+      /^\/follows$/,
+      (_, body) => {
+        if (!["author", "source"].includes(body.kind)) throw invalid("kind must be author or source");
+        try {
+          return follows.add(body.kind, String(body.id || ""), String(body.name || "").slice(0, 200), isoDay(today()));
+        } catch (error) {
+          throw new ApiError(error instanceof RangeError ? 409 : 422, error.message);
+        }
+      },
+    ],
+    [
+      "DELETE",
+      /^\/follows\/([^/]+)\/([^/]+)$/,
+      ([kind, id]) => {
+        if (!follows.remove(kind, id)) throw new ApiError(404, "Not followed");
+        return null;
+      },
+    ],
+    [
+      "POST",
+      /^\/follows\/([^/]+)\/([^/]+)\/seen$/,
+      ([kind, id]) => {
+        const item = follows.seen(kind, id, isoDay(today()));
+        if (!item) throw new ApiError(404, "Not followed");
+        newPapersCache.delete(`follow\u0000${kind}\u0000${id}`);
+        return item;
+      },
+    ],
     ["GET", /^\/follows\/new$/, () => followedNew()],
     ["GET", /^\/changelog$/, () => CHANGELOG],
-    ["GET", /^\/version$/, async () => {
-      const latest = await latestRelease(), current = parseVersion(version);
-      return { version, latest, update_available: Boolean(latest && current && newer(parseVersion(latest.version) || [0, 0, 0], current)) };
-    }],
+    [
+      "GET",
+      /^\/version$/,
+      async () => {
+        const latest = await latestRelease(),
+          current = parseVersion(version);
+        return {
+          version,
+          latest,
+          update_available: Boolean(latest && current && newer(parseVersion(latest.version) || [0, 0, 0], current)),
+        };
+      },
+    ],
   ];
 
   /** Answer one API call like the FastAPI backend: the response body, or throw ApiError. */

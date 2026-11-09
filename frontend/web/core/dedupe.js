@@ -5,7 +5,10 @@ const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 
 export function titleKey(title) {
   // NFKD, then keep ASCII only (drops accents), lowercase, collapse everything else to spaces
-  const ascii = String(title || "").normalize("NFKD").replace(/[^\x00-\x7f]/g, "").toLowerCase();
+  const ascii = String(title || "")
+    .normalize("NFKD")
+    .replace(/[^\x00-\x7f]/g, "")
+    .toLowerCase();
   return ascii.replace(/[^a-z0-9]+/g, " ").trim();
 }
 
@@ -15,7 +18,8 @@ function strength(p) {
 }
 
 function stronger(a, b) {
-  const x = strength(a), y = strength(b);
+  const x = strength(a),
+    y = strength(b);
   for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] > y[i];
   return false; // like Python's max: the first of equals wins
 }
@@ -24,10 +28,12 @@ const unique = (items) => [...new Set(items)];
 
 /** [unique papers in original order, {duplicate short id: kept short id}] */
 export function dedupe(papers) {
-  const groups = [], byKey = new Map();
+  const groups = [],
+    byKey = new Map();
   for (const paper of papers) {
     const key = titleKey(paper.title || "");
-    if (key.length < 12) { // too short to identify a paper ("Introduction", "Erratum")
+    if (key.length < 12) {
+      // too short to identify a paper ("Introduction", "Erratum")
       groups.push([paper]);
       continue;
     }

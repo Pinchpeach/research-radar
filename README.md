@@ -166,6 +166,8 @@ cd tests/e2e && npm ci && npx playwright install chromium && npx playwright test
 
 브라우저 테스트(`tests/e2e/`)는 휴대폰 화면과 PC 창 크기에서 앱을 직접 눌러 봅니다: 홈 → 검색, ☰ 메뉴, 북마크 저장과 재시작, 연구 흐름 그리기(제목 겹침 없음), 새소식, 언어 유지. OpenAlex와 GitHub는 녹화된 응답으로 대신하므로 네트워크나 API 키가 필요 없습니다.
 
+코드 모양은 파이썬은 [ruff](https://docs.astral.sh/ruff/)(`pyproject.toml`), JavaScript는 [Prettier](https://prettier.io)(`.prettierrc.json`)로 맞춥니다. CI가 확인하므로 커밋 전에 `ruff check . && ruff format .`과 `npx prettier --write "**/*.{js,mjs}"`를 실행하세요.
+
 `python -m pytest`에는 `tests/test_js_core.py`도 들어 있습니다. 실제 OpenAlex 검색을 녹화한 `tests/fixtures/`를 파이썬 백엔드와 JavaScript 백엔드에 똑같이 넣고, 결과(검색 순서와 점수, 인용 연결, 핵심 계보, 주제 이름, 포스터)가 같은지 비교합니다. Node.js가 없으면 이 테스트는 건너뜁니다. 녹화는 `python tests/fixtures/record_openalex.py "<검색어>"`로 다시 만들 수 있습니다.
 
 실제 OpenAlex 데이터로 전체 과정(검색 → 연구 흐름 → 포스터)을 점검하려면 다음을 실행합니다. 결과 포스터는 `data/live-map.html`에 저장됩니다.

@@ -9,7 +9,10 @@ const doiOf = (text) => {
   const match = DOI.exec(String(text || ""));
   return match ? match[1].replace(/[.,;]+$/, "") : null;
 };
-const clean = (text) => String(text || "").replace(/\s+/g, " ").trim();
+const clean = (text) =>
+  String(text || "")
+    .replace(/\s+/g, " ")
+    .trim();
 
 /** RIS: "TY  - JOUR" ... "ER  - ", one tag per line. */
 export function parseRis(text) {
@@ -18,13 +21,22 @@ export function parseRis(text) {
   for (const line of String(text).split(/\r?\n/)) {
     const match = /^([A-Z][A-Z0-9])  -( (.*))?$/.exec(line);
     if (!match) continue;
-    const [, tag, , raw = ""] = match, value = raw.trim();
-    if (tag === "TY") { entry = { doi: null, title: "", year: null, authors: [], venue: null, tags: [], note: "", url: null }; continue; }
+    const [, tag, , raw = ""] = match,
+      value = raw.trim();
+    if (tag === "TY") {
+      entry = { doi: null, title: "", year: null, authors: [], venue: null, tags: [], note: "", url: null };
+      continue;
+    }
     if (!entry) continue;
-    if (tag === "ER") { entries.push(entry); entry = null; continue; }
+    if (tag === "ER") {
+      entries.push(entry);
+      entry = null;
+      continue;
+    }
     if (["TI", "T1"].includes(tag) && !entry.title) entry.title = clean(value);
     else if (["AU", "A1"].includes(tag) && value) entry.authors.push(clean(value));
-    else if (["PY", "Y1", "DA"].includes(tag) && !entry.year) entry.year = Number((/\d{4}/.exec(value) || [])[0]) || null;
+    else if (["PY", "Y1", "DA"].includes(tag) && !entry.year)
+      entry.year = Number((/\d{4}/.exec(value) || [])[0]) || null;
     else if (["JO", "JF", "T2"].includes(tag) && !entry.venue) entry.venue = clean(value);
     else if (tag === "DO" && !entry.doi) entry.doi = doiOf(value);
     else if (["UR", "L2"].includes(tag) && !entry.url) entry.url = value;
@@ -38,7 +50,8 @@ export function parseRis(text) {
 /** The value of a BibTeX field starting at `i` ({...} with nesting, "...", or a bare word), and where it ends. */
 function bibValue(text, i) {
   if (text[i] === "{") {
-    let depth = 0, j = i;
+    let depth = 0,
+      j = i;
     for (; j < text.length; j++) {
       if (text[j] === "{") depth++;
       else if (text[j] === "}" && --depth === 0) break;
@@ -55,11 +68,18 @@ function bibValue(text, i) {
 }
 
 // TeX in titles and names: escaped symbols kept, accent commands dropped (Veli{\v{c}}kovi{\'c} → Velickovic), braces dropped
-const unbrace = (value) => clean(value.replace(/\\([&%$#_])/g, "$1").replace(/\\(["'`^~=.]|[a-zA-Z]+(?=[{\s]))\s*/g, "").replace(/[{}]/g, ""));
+const unbrace = (value) =>
+  clean(
+    value
+      .replace(/\\([&%$#_])/g, "$1")
+      .replace(/\\(["'`^~=.]|[a-zA-Z]+(?=[{\s]))\s*/g, "")
+      .replace(/[{}]/g, ""),
+  );
 
 /** BibTeX: @article{key, field = {value}, ...}. */
 export function parseBibtex(text) {
-  const source = String(text), entries = [];
+  const source = String(text),
+    entries = [];
   const start = /@(\w+)\s*\{\s*([^,\s]*)\s*,/g;
   let match;
   while ((match = start.exec(source))) {
@@ -81,9 +101,17 @@ export function parseBibtex(text) {
       doi: doiOf(fields.doi) || doiOf(fields.url),
       title: unbrace(fields.title || ""),
       year: Number((/\d{4}/.exec(fields.year || fields.date || "") || [])[0]) || null,
-      authors: fields.author ? fields.author.split(/\s+and\s+/i).map(unbrace).filter(Boolean) : [],
+      authors: fields.author
+        ? fields.author
+            .split(/\s+and\s+/i)
+            .map(unbrace)
+            .filter(Boolean)
+        : [],
       venue: unbrace(fields.journal || fields.journaltitle || fields.booktitle || "") || null,
-      tags: unbrace(fields.keywords || "").split(/[,;]/).map((t) => t.trim()).filter(Boolean),
+      tags: unbrace(fields.keywords || "")
+        .split(/[,;]/)
+        .map((t) => t.trim())
+        .filter(Boolean),
       note: unbrace(fields.note || fields.annote || ""),
       url: fields.url || null,
     });

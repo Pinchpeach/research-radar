@@ -13,7 +13,12 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0, // a flaky test is a bug to fix, not to retry
   reporter: process.env.CI ? [["list"], ["html", { open: "never" }]] : "list",
-  use: { baseURL: `http://127.0.0.1:${PORT}/`, locale: "ko-KR", trace: "retain-on-failure", screenshot: "only-on-failure" },
+  use: {
+    baseURL: `http://127.0.0.1:${PORT}/`,
+    locale: "ko-KR",
+    trace: "retain-on-failure",
+    screenshot: "only-on-failure",
+  },
   projects: [
     { name: "phone", use: { ...devices["Pixel 7"], viewport: { width: 390, height: 844 } } },
     { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1280, height: 820 } } },

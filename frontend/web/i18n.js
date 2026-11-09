@@ -14,7 +14,8 @@ const STRINGS = {
     "paper.readPdf": "열기",
     "rd.keptNote": "이 PDF를 노트로 저장했어요. 다음에는 받지 않고 바로 열려요.",
     "rd.openedKept": "저장된 노트를 열었어요.",
-    "paper.readPdfTitle": "앱에서 열어 필기합니다: 저장된 노트가 있으면 그것을, 없으면 무료 원문이나 학교 도서관에서 받아 노트로 저장합니다(어디에도 없으면 PDF 파일을 고릅니다)",
+    "paper.readPdfTitle":
+      "앱에서 열어 필기합니다: 저장된 노트가 있으면 그것을, 없으면 무료 원문이나 학교 도서관에서 받아 노트로 저장합니다(어디에도 없으면 PDF 파일을 고릅니다)",
     "read.openPdf": "PDF 파일 열기",
     "read.newNotes": "빈 노트에 필기",
     "read.docs": "필기한 문서",
@@ -70,15 +71,18 @@ const STRINGS = {
     "rd.zoomOut": "축소",
     "rd.cantOpen": "이 PDF는 앱에서 바로 열 수 없어요",
     "rd.noPdf": "PDF가 없어요",
-    "rd.cantOpenHint": "사이트가 다른 앱의 내려받기를 막았을 수 있어요. 브라우저에서 PDF를 내려받은 뒤 파일로 열면 필기할 수 있습니다. 옆의 노트에는 지금도 필기할 수 있어요.",
+    "rd.cantOpenHint":
+      "사이트가 다른 앱의 내려받기를 막았을 수 있어요. 브라우저에서 PDF를 내려받은 뒤 파일로 열면 필기할 수 있습니다. 옆의 노트에는 지금도 필기할 수 있어요.",
     "rd.openInBrowser": "브라우저에서 열기 ↗",
     "rd.pickFile": "PDF 파일 고르기",
     "rd.notPdf": "PDF가 아닌 페이지가 왔어요",
     "rd.findingFree": "무료 원문을 찾는 중…",
     "rd.findingLibrary": "학교 도서관에서 받는 중…",
     "rd.noFree": "무료로 받을 수 있는 PDF를 찾지 못했어요",
-    "rd.libraryHint": "설정 › 도서관에 학교 메일과 도서관 주소를 넣으면, 학교가 구독하는 논문도 바로 받아 열어요. 가지고 있는 PDF 파일을 열어도 돼요.",
-    "rd.loginHint": "학교 도서관에 로그인하면 바로 받아서 열어요. 설정 › 도서관에서 미리 로그인해 두면 다음부터는 이 화면 없이 열려요.",
+    "rd.libraryHint":
+      "설정 › 도서관에 학교 메일과 도서관 주소를 넣으면, 학교가 구독하는 논문도 바로 받아 열어요. 가지고 있는 PDF 파일을 열어도 돼요.",
+    "rd.loginHint":
+      "학교 도서관에 로그인하면 바로 받아서 열어요. 설정 › 도서관에서 미리 로그인해 두면 다음부터는 이 화면 없이 열려요.",
     "rd.login": "학교 계정으로 로그인",
     "rd.loggingIn": "새 창에서 로그인하세요…",
     "rd.loginClosed": "로그인 창이 닫혔어요. 그 창에서 직접 내려받았다면 파일로 열어 주세요.",
@@ -252,7 +256,7 @@ const STRINGS = {
     "bm.save": "저장",
     "bm.delete": "삭제",
     "bm.saveFailed": "저장 실패: {error}",
-    "bm.deleteConfirm": "\"{title}\" 북마크를 삭제할까요?",
+    "bm.deleteConfirm": '"{title}" 북마크를 삭제할까요?',
     "bm.foundVia": " · “{query}”에서 찾음",
     "bm.nothing": "내보낼 북마크가 없습니다.",
     "bm.exportFailed": "내보내기 실패: {error}",
@@ -269,8 +273,10 @@ const STRINGS = {
     "flow.noBookmarks": "북마크가 없습니다.",
     "flow.needPapers": "검색하거나 논문을 북마크한 뒤 연구 흐름을 그릴 수 있습니다.",
     "flow.running": "연구 흐름을 분석하는 중…",
-    "flow.done": "{nodes}편 · 인용 연결 {edges}개 · 주제 {topics}개 — 점·레일·곡선에 마우스를 올리거나 클릭해 보세요. 스크롤로 이동, Ctrl+스크롤로 확대합니다.",
-    "flow.doneTouch": "{nodes}편 · 인용 연결 {edges}개 · 주제 {topics}개 — 점·레일·곡선을 눌러 보세요. 드래그로 이동, 두 손가락으로 확대합니다.",
+    "flow.done":
+      "{nodes}편 · 인용 연결 {edges}개 · 주제 {topics}개 — 점·레일·곡선에 마우스를 올리거나 클릭해 보세요. 스크롤로 이동, Ctrl+스크롤로 확대합니다.",
+    "flow.doneTouch":
+      "{nodes}편 · 인용 연결 {edges}개 · 주제 {topics}개 — 점·레일·곡선을 눌러 보세요. 드래그로 이동, 두 손가락으로 확대합니다.",
     "flow.failed": "연구 흐름을 그릴 수 없습니다: {error}",
     "flow.myBookmarks": "내 북마크",
     "story.papers": "논문",
@@ -285,11 +291,14 @@ const STRINGS = {
     "set.navAbout": "정보",
     "set.navLibrary": "도서관",
     "set.library": "학교 도서관",
-    "set.libraryHint": "학교 메일을 넣으면 학교를 알아보고 도서관의 교외 접속 주소를 채워요. 무료본이 없는 논문은 이 주소로 받아요. 처음 한 번은 학교 계정으로 로그인하는 창이 떠요.",
+    "set.libraryHint":
+      "학교 메일을 넣으면 학교를 알아보고 도서관의 교외 접속 주소를 채워요. 무료본이 없는 논문은 이 주소로 받아요. 처음 한 번은 학교 계정으로 로그인하는 창이 떠요.",
     "set.school": "{name} 도서관 주소를 채웠어요.",
-    "set.schoolUnknown": "이 메일의 학교 주소는 아직 몰라요. 도서관 홈페이지의 '교외 접속' 안내에서 주소 앞부분을 찾아 넣어 주세요.",
+    "set.schoolUnknown":
+      "이 메일의 학교 주소는 아직 몰라요. 도서관 홈페이지의 '교외 접속' 안내에서 주소 앞부분을 찾아 넣어 주세요.",
     "set.proxy": "도서관 교외 접속 주소",
-    "set.proxyHint": "논문 주소 앞에 붙는 부분이에요. 예: https://libproxy.학교.ac.kr/_Lib_Proxy_Url/ 또는 https://ezproxy.학교.edu/login?url=",
+    "set.proxyHint":
+      "논문 주소 앞에 붙는 부분이에요. 예: https://libproxy.학교.ac.kr/_Lib_Proxy_Url/ 또는 https://ezproxy.학교.edu/login?url=",
     "set.librarySignedIn": "학교 도서관에 로그인되어 있어요.",
     "set.libraryNotSignedIn": "아직 로그인하지 않았어요. 논문을 열 때 로그인 창이 떠요.",
     "set.librarySignOut": "로그인 정보 지우기",
@@ -299,7 +308,8 @@ const STRINGS = {
     "set.librarySignInClosed": "로그인 창이 닫혔어요.",
     "set.librarySignedOut": "로그인 정보를 지웠어요.",
     "set.libraryMobile": "앱을 완전히 닫았다 열면 다시 로그인해야 할 수 있어요.",
-    "set.openalexHint": "논문 검색에 쓰는 무료 학술 데이터베이스입니다. 개인 API 키가 있으면 자신만의 하루 한도를 씁니다.",
+    "set.openalexHint":
+      "논문 검색에 쓰는 무료 학술 데이터베이스입니다. 개인 API 키가 있으면 자신만의 하루 한도를 씁니다.",
     "set.getKey": "무료 키 발급 ↗",
     "set.apiKey": "API 키",
     "set.keyPlaceholder": "새 키를 붙여 넣으세요",
@@ -357,7 +367,8 @@ const STRINGS = {
     "paper.readPdf": "Open",
     "rd.keptNote": "Saved this PDF as a note. Next time it opens straight away.",
     "rd.openedKept": "Opened the saved note.",
-    "paper.readPdfTitle": "Open it in the app to write on: the saved note if there is one, else the free copy or your library's, saved as a note (or pick a PDF file when there's none)",
+    "paper.readPdfTitle":
+      "Open it in the app to write on: the saved note if there is one, else the free copy or your library's, saved as a note (or pick a PDF file when there's none)",
     "read.openPdf": "Open a PDF file",
     "read.newNotes": "Write on a blank page",
     "read.docs": "Annotated documents",
@@ -413,15 +424,18 @@ const STRINGS = {
     "rd.zoomOut": "Zoom out",
     "rd.cantOpen": "This PDF can't be opened in the app",
     "rd.noPdf": "No PDF",
-    "rd.cantOpenHint": "The site may not let other apps download it. Download the PDF in a browser and open the file to write on it. You can already write on the note pages.",
+    "rd.cantOpenHint":
+      "The site may not let other apps download it. Download the PDF in a browser and open the file to write on it. You can already write on the note pages.",
     "rd.openInBrowser": "Open in browser ↗",
     "rd.pickFile": "Pick a PDF file",
     "rd.notPdf": "The link didn't return a PDF",
     "rd.findingFree": "Looking for a free copy…",
     "rd.findingLibrary": "Getting it through your library…",
     "rd.noFree": "No free PDF found",
-    "rd.libraryHint": "Add your school e-mail and library address in Settings › Library, and papers your school subscribes to open as well. You can also open a PDF file you have.",
-    "rd.loginHint": "Sign in to your library and the paper opens right away. Sign in ahead in Settings › Library and papers open without this screen.",
+    "rd.libraryHint":
+      "Add your school e-mail and library address in Settings › Library, and papers your school subscribes to open as well. You can also open a PDF file you have.",
+    "rd.loginHint":
+      "Sign in to your library and the paper opens right away. Sign in ahead in Settings › Library and papers open without this screen.",
     "rd.login": "Sign in with my school account",
     "rd.loggingIn": "Sign in in the new window…",
     "rd.loginClosed": "The sign-in window was closed. If you downloaded the PDF there, open the file.",
@@ -502,7 +516,8 @@ const STRINGS = {
     "w.legend": "Ranking weights",
     "w.relevance": "Relevance",
     "w.influence": "Flow importance",
-    "w.influenceTitle": "Higher for papers the related work keeps building on, i.e. papers key to understanding the field",
+    "w.influenceTitle":
+      "Higher for papers the related work keeps building on, i.e. papers key to understanding the field",
     "w.impact": "Citation impact",
     "w.recency": "Recency",
     "w.seed": "Seed links",
@@ -534,7 +549,8 @@ const STRINGS = {
     "chip.keyGeneric": "the related work builds on it",
     "chip.recent": "🆕 Recent work",
     "chip.recentLinks": " · builds on {n} key papers",
-    "chip.recentTitle": "Recent-work score {score}: relevance, how much it builds on key papers, recency, citation growth",
+    "chip.recentTitle":
+      "Recent-work score {score}: relevance, how much it builds on key papers, recency, citation growth",
     "chip.coreRef": "📌 Key reference outside the query",
     "chip.coreRefTitle": "Its wording differs from the query so the search missed it, but several results cite it",
     "chip.seed": "🔗 Linked to a seed",
@@ -595,7 +611,7 @@ const STRINGS = {
     "bm.save": "Save",
     "bm.delete": "Delete",
     "bm.saveFailed": "Could not save: {error}",
-    "bm.deleteConfirm": "Delete the bookmark \"{title}\"?",
+    "bm.deleteConfirm": 'Delete the bookmark "{title}"?',
     "bm.foundVia": " · found via “{query}”",
     "bm.nothing": "No bookmarks to export.",
     "bm.exportFailed": "Export failed: {error}",
@@ -612,8 +628,10 @@ const STRINGS = {
     "flow.noBookmarks": "You have no bookmarks.",
     "flow.needPapers": "Search or bookmark papers to draw a research flow.",
     "flow.running": "Analyzing the research flow…",
-    "flow.done": "{nodes} papers · {edges} citation links · {topics} topics — hover or click dots, rails and curves. Scroll to move, Ctrl+scroll to zoom.",
-    "flow.doneTouch": "{nodes} papers · {edges} citation links · {topics} topics — tap dots, rails and curves. Drag to move, two fingers to zoom.",
+    "flow.done":
+      "{nodes} papers · {edges} citation links · {topics} topics — hover or click dots, rails and curves. Scroll to move, Ctrl+scroll to zoom.",
+    "flow.doneTouch":
+      "{nodes} papers · {edges} citation links · {topics} topics — tap dots, rails and curves. Drag to move, two fingers to zoom.",
     "flow.failed": "Could not draw the research flow: {error}",
     "flow.myBookmarks": "My Bookmarks",
     "story.papers": "Papers",
@@ -628,11 +646,14 @@ const STRINGS = {
     "set.navAbout": "About",
     "set.navLibrary": "Library",
     "set.library": "University library",
-    "set.libraryHint": "Enter your school e-mail and the app recognises your school and fills in its library's off-campus address. Papers with no free copy are fetched through it; the first time, a window opens for you to sign in with your school account.",
+    "set.libraryHint":
+      "Enter your school e-mail and the app recognises your school and fills in its library's off-campus address. Papers with no free copy are fetched through it; the first time, a window opens for you to sign in with your school account.",
     "set.school": "Filled in {name}'s library address.",
-    "set.schoolUnknown": "The app doesn't know this school's address yet. Find the start of the address in your library's off-campus access guide and paste it here.",
+    "set.schoolUnknown":
+      "The app doesn't know this school's address yet. Find the start of the address in your library's off-campus access guide and paste it here.",
     "set.proxy": "Library off-campus address",
-    "set.proxyHint": "The part that goes in front of a paper's address, e.g. https://libproxy.school.ac.kr/_Lib_Proxy_Url/ or https://ezproxy.school.edu/login?url=",
+    "set.proxyHint":
+      "The part that goes in front of a paper's address, e.g. https://libproxy.school.ac.kr/_Lib_Proxy_Url/ or https://ezproxy.school.edu/login?url=",
     "set.librarySignedIn": "Signed in to your library.",
     "set.libraryNotSignedIn": "Not signed in yet: a sign-in window opens when you open a paper.",
     "set.librarySignOut": "Forget the sign-in",
@@ -642,7 +663,8 @@ const STRINGS = {
     "set.librarySignInClosed": "The sign-in window was closed.",
     "set.librarySignedOut": "Forgot the sign-in.",
     "set.libraryMobile": "After closing the app completely you may need to sign in again.",
-    "set.openalexHint": "The free scholarly database used for search. With your own API key you get your own daily budget.",
+    "set.openalexHint":
+      "The free scholarly database used for search. With your own API key you get your own daily budget.",
     "set.getKey": "Get a free key ↗",
     "set.apiKey": "API key",
     "set.keyPlaceholder": "Paste a new key",
@@ -655,7 +677,8 @@ const STRINGS = {
     "set.emailHint": "tells OpenAlex and Unpaywall who is asking, and finds your library",
     "set.save": "Save",
     "set.dataDir": "Keys are stored only in this computer's data folder:",
-    "set.dataDirMobile": "Keys and bookmarks are stored only in this device's app storage. Uninstalling the app removes them.",
+    "set.dataDirMobile":
+      "Keys and bookmarks are stored only in this device's app storage. Uninstalling the app removes them.",
     "file.shared": "Sent {name} to the share sheet.",
     "set.saved": "Saved.",
     "set.saveFailed": "Could not save: {error}",
@@ -672,7 +695,8 @@ const STRINGS = {
     "key.exhausted": "Today's budget is used up. It resets at midnight UTC.",
     "key.status": "OpenAlex answered {status}",
     "set.language": "Language",
-    "set.languageHint": "Language of the app and the research-flow poster. Paper titles and topic names stay in their original language.",
+    "set.languageHint":
+      "Language of the app and the research-flow poster. Paper titles and topic names stay in their original language.",
     "set.languageSaved": "Language changed.",
     "set.version": "Version",
     "set.latest": "· up to date",
@@ -702,21 +726,31 @@ function t(key, vars = {}) {
 function applyStaticText(root = document) {
   document.documentElement.lang = LANG;
   root.querySelectorAll("[data-i18n]").forEach((node) => (node.textContent = t(node.dataset.i18n)));
-  root.querySelectorAll("[data-i18n-placeholder]").forEach((node) => (node.placeholder = t(node.dataset.i18nPlaceholder)));
+  root
+    .querySelectorAll("[data-i18n-placeholder]")
+    .forEach((node) => (node.placeholder = t(node.dataset.i18nPlaceholder)));
   root.querySelectorAll("[data-i18n-title]").forEach((node) => (node.title = t(node.dataset.i18nTitle)));
 }
 
 /** Pick the language before anything renders: last choice on this computer, else the system language. */
 function initialLanguage() {
   let saved = null;
-  try { saved = localStorage.getItem("radar-lang"); } catch { /* storage may be blocked */ }
+  try {
+    saved = localStorage.getItem("radar-lang");
+  } catch {
+    /* storage may be blocked */
+  }
   if (LANGUAGES.includes(saved)) return saved;
   return (navigator.language || "ko").toLowerCase().startsWith("ko") ? "ko" : "en";
 }
 
 function setLanguage(lang) {
   if (!LANGUAGES.includes(lang)) return false;
-  try { localStorage.setItem("radar-lang", lang); } catch { /* the server copy is the real one */ }
+  try {
+    localStorage.setItem("radar-lang", lang);
+  } catch {
+    /* the server copy is the real one */
+  }
   if (lang === LANG) return false;
   LANG = lang;
   applyStaticText();

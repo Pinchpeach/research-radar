@@ -3,15 +3,25 @@
 
 import { GAIN, ndcgAt, precisionAt } from "./evaluation.js";
 
-const KEYS = { settings: "radar.settings", bookmarks: "radar.bookmarks", judgments: "radar.judgments", history: "radar.history",
-  annotations: "radar.annotations", follows: "radar.follows" };
+const KEYS = {
+  settings: "radar.settings",
+  bookmarks: "radar.bookmarks",
+  judgments: "radar.judgments",
+  history: "radar.history",
+  annotations: "radar.annotations",
+  follows: "radar.follows",
+};
 const short = (id) => String(id).replace(/\/+$/, "").split("/").pop();
 const now = () => new Date().toISOString();
 
 /** A Storage-like object (getItem/setItem) backed by a Map. */
 export function memoryStorage() {
   const map = new Map();
-  return { getItem: (k) => (map.has(k) ? map.get(k) : null), setItem: (k, v) => map.set(k, String(v)), removeItem: (k) => map.delete(k) };
+  return {
+    getItem: (k) => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => map.set(k, String(v)),
+    removeItem: (k) => map.delete(k),
+  };
 }
 
 function read(storage, key, fallback) {
@@ -32,21 +42,29 @@ const SECRETS = new Set(["openalex_api_key"]);
 export const mask = (secret) => (secret.length > 8 ? "•".repeat(6) + secret.slice(-4) : "•".repeat(secret.length));
 
 export class Settings {
-  constructor(storage) { this.storage = storage; }
-  all() { return read(this.storage, KEYS.settings, {}); }
-  get(name) { return this.all()[name] || null; }
+  constructor(storage) {
+    this.storage = storage;
+  }
+  all() {
+    return read(this.storage, KEYS.settings, {});
+  }
+  get(name) {
+    return this.all()[name] || null;
+  }
   save(updates) {
     const current = this.all();
     for (const [name, value] of Object.entries(updates)) {
       if (!SETTING_FIELDS.includes(name)) throw new Error(`unknown setting ${name}`);
       const v = String(value ?? "").trim();
-      if (v) current[name] = v; else delete current[name];
+      if (v) current[name] = v;
+      else delete current[name];
     }
     write(this.storage, KEYS.settings, current);
   }
   /** What the UI may see: never a full key. */
   publicView(dataDir) {
-    const saved = this.all(), view = {};
+    const saved = this.all(),
+      view = {};
     for (const name of SETTING_FIELDS) {
       const value = saved[name] || "";
       const entry = { set: Boolean(value), source: value ? "settings" : null };
@@ -73,8 +91,12 @@ export function cleanTags(tags) {
 export const READING_STATUSES = ["to_read", "reading", "read"];
 
 export class Bookmarks {
-  constructor(storage) { this.storage = storage; }
-  store(items) { write(this.storage, KEYS.bookmarks, items); }
+  constructor(storage) {
+    this.storage = storage;
+  }
+  store(items) {
+    write(this.storage, KEYS.bookmarks, items);
+  }
   load() {
     // bookmarks saved before reading status existed are still to read
     return read(this.storage, KEYS.bookmarks, []).map((b) => ({ status: "to_read", read_at: null, ...b }));
@@ -83,11 +105,18 @@ export class Bookmarks {
     const items = this.load().sort((a, b) => (a.created_at < b.created_at ? 1 : a.created_at > b.created_at ? -1 : 0));
     return tag ? items.filter((b) => b.tags.includes(tag.toLowerCase())) : items;
   }
-  get(id) { return this.load().find((b) => b.id === short(id)) || null; }
-  ids() { return new Set(this.load().map((b) => b.id)); }
+  get(id) {
+    return this.load().find((b) => b.id === short(id)) || null;
+  }
+  ids() {
+    return new Set(this.load().map((b) => b.id));
+  }
   /** Insert or replace the stored paper; keeps note/tags/created_at unless new ones are given. */
   save(paper, note = "", tags = null, query = null) {
-    const id = short(paper.id), items = this.load(), existing = items.find((b) => b.id === id), stamp = now();
+    const id = short(paper.id),
+      items = this.load(),
+      existing = items.find((b) => b.id === id),
+      stamp = now();
     const item = {
       id,
       paper,
@@ -97,14 +126,15 @@ export class Bookmarks {
       created_at: existing ? existing.created_at : stamp,
       updated_at: stamp,
       status: existing ? existing.status || "to_read" : "to_read",
-      read_at: existing ? existing.read_at ?? null : null,
+      read_at: existing ? (existing.read_at ?? null) : null,
     };
     this.store([...items.filter((b) => b.id !== id), item]);
     return item;
   }
   /** Change note, tags or reading status (see backend/storage.py update). */
   update(id, note = null, tags = null, status = null) {
-    const items = this.load(), existing = items.find((b) => b.id === short(id));
+    const items = this.load(),
+      existing = items.find((b) => b.id === short(id));
     if (!existing) return null;
     const stamp = now();
     if (note != null) existing.note = note;
@@ -116,7 +146,8 @@ export class Bookmarks {
     return existing;
   }
   delete(id) {
-    const items = this.load(), kept = items.filter((b) => b.id !== short(id));
+    const items = this.load(),
+      kept = items.filter((b) => b.id !== short(id));
     this.store(kept);
     return kept.length < items.length;
   }
@@ -128,10 +159,23 @@ const risValue = (value) => String(value).split(/\s+/).filter(Boolean).join(" ")
 export function toRis(bookmarks) {
   const entries = bookmarks.map((bookmark) => {
     const paper = bookmark.paper;
-    const lines = [["TY", "JOUR"], ["TI", paper.title], ...(paper.authors || []).map((name) => ["AU", name]),
-      ["PY", paper.year], ["JO", paper.venue], ["DO", (paper.doi || "").replace("https://doi.org/", "") || null], ["UR", paper.url],
-      ["AB", paper.abstract], ...(bookmark.tags || []).map((tag) => ["KW", tag]), ["N1", bookmark.note], ["ID", bookmark.id]];
-    return [...lines.filter(([, v]) => v != null && v !== "").map(([tag, v]) => `${tag}  - ${risValue(v)}`), "ER  - "].join("\n");
+    const lines = [
+      ["TY", "JOUR"],
+      ["TI", paper.title],
+      ...(paper.authors || []).map((name) => ["AU", name]),
+      ["PY", paper.year],
+      ["JO", paper.venue],
+      ["DO", (paper.doi || "").replace("https://doi.org/", "") || null],
+      ["UR", paper.url],
+      ["AB", paper.abstract],
+      ...(bookmark.tags || []).map((tag) => ["KW", tag]),
+      ["N1", bookmark.note],
+      ["ID", bookmark.id],
+    ];
+    return [
+      ...lines.filter(([, v]) => v != null && v !== "").map(([tag, v]) => `${tag}  - ${risValue(v)}`),
+      "ER  - ",
+    ].join("\n");
   });
   return entries.join("\n\n") + (entries.length ? "\n" : "");
 }
@@ -140,7 +184,9 @@ export function toBibtex(bookmarks) {
   const entries = bookmarks.map((bookmark) => {
     const paper = bookmark.paper;
     const firstAuthor = ((paper.authors || [])[0] || "unknown").split(/\s+/).filter(Boolean).pop().toLowerCase();
-    const key = [...`${firstAuthor}${paper.year || ""}${bookmark.id}`].filter((ch) => /[\p{L}\p{N}]/u.test(ch)).join("");
+    const key = [...`${firstAuthor}${paper.year || ""}${bookmark.id}`]
+      .filter((ch) => /[\p{L}\p{N}]/u.test(ch))
+      .join("");
     const fields = {
       title: paper.title,
       author: (paper.authors || []).join(" and "),
@@ -151,7 +197,10 @@ export function toBibtex(bookmarks) {
       note: bookmark.note || null,
       keywords: (bookmark.tags || []).join(", ") || null,
     };
-    const body = Object.entries(fields).filter(([, v]) => v).map(([name, v]) => `  ${name} = {${v}}`).join(",\n");
+    const body = Object.entries(fields)
+      .filter(([, v]) => v)
+      .map(([name, v]) => `  ${name} = {${v}}`)
+      .join(",\n");
     return `@article{${key},\n${body}\n}`;
   });
   return entries.join("\n\n") + (entries.length ? "\n" : "");
@@ -160,26 +209,42 @@ export function toBibtex(bookmarks) {
 // ---------- ranking evaluation ----------
 
 export class Judgments {
-  constructor(storage) { this.storage = storage; }
-  rows() { return read(this.storage, KEYS.judgments, []); }
+  constructor(storage) {
+    this.storage = storage;
+  }
+  rows() {
+    return read(this.storage, KEYS.judgments, []);
+  }
   saveRun(run, judgments) {
     const savedAt = new Date().toISOString().replace(/\.\d+Z$/, "+00:00");
-    const rows = run.papers.map((paper, i) => [paper, i + 1]).filter(([paper]) => judgments[paper.id]).map(([paper, rank]) => ({
-      run_id: run.run_id, query: run.query, settings: run.settings || {}, saved_at: savedAt,
-      rank, paper_id: paper.id, title: paper.title, score: paper.score ?? null, judgment: judgments[paper.id],
-    }));
+    const rows = run.papers
+      .map((paper, i) => [paper, i + 1])
+      .filter(([paper]) => judgments[paper.id])
+      .map(([paper, rank]) => ({
+        run_id: run.run_id,
+        query: run.query,
+        settings: run.settings || {},
+        saved_at: savedAt,
+        rank,
+        paper_id: paper.id,
+        title: paper.title,
+        score: paper.score ?? null,
+        judgment: judgments[paper.id],
+      }));
     write(this.storage, KEYS.judgments, [...this.rows(), ...rows]);
     return rows.length;
   }
   deleteRun(runId) {
-    const rows = this.rows(), kept = rows.filter((r) => r.run_id !== runId);
+    const rows = this.rows(),
+      kept = rows.filter((r) => r.run_id !== runId);
     if (kept.length === rows.length) return false;
     write(this.storage, KEYS.judgments, kept);
     return true;
   }
   /** Metrics per run, newest first. */
   summarize() {
-    const runs = new Map(), meta = new Map();
+    const runs = new Map(),
+      meta = new Map();
     for (const row of this.rows()) {
       if (!runs.has(row.run_id)) runs.set(row.run_id, new Map());
       runs.get(row.run_id).set(row.rank, row.judgment);
@@ -187,10 +252,18 @@ export class Judgments {
     }
     const summary = [...runs].map(([runId, byRank]) => {
       const labels = Array.from({ length: Math.max(...byRank.keys()) }, (_, i) => byRank.get(i + 1) ?? null);
-      return { run_id: runId, ...meta.get(runId), judged: byRank.size,
-        "p@10": precisionAt(labels, 10), "p@20": precisionAt(labels, 20), "ndcg@20": ndcgAt(labels, 20) };
+      return {
+        run_id: runId,
+        ...meta.get(runId),
+        judged: byRank.size,
+        "p@10": precisionAt(labels, 10),
+        "p@20": precisionAt(labels, 20),
+        "ndcg@20": ndcgAt(labels, 20),
+      };
     });
-    return summary.sort((a, b) => ((a.saved_at || "") < (b.saved_at || "") ? 1 : (a.saved_at || "") > (b.saved_at || "") ? -1 : 0));
+    return summary.sort((a, b) =>
+      (a.saved_at || "") < (b.saved_at || "") ? 1 : (a.saved_at || "") > (b.saved_at || "") ? -1 : 0,
+    );
   }
 }
 
@@ -199,7 +272,9 @@ export class Judgments {
 export const MAX_HISTORY = 20;
 
 export class History {
-  constructor(storage) { this.storage = storage; }
+  constructor(storage) {
+    this.storage = storage;
+  }
   load() {
     const data = read(this.storage, KEYS.history, []);
     return Array.isArray(data) ? data.filter((e) => e && typeof e.query === "string") : [];
@@ -212,7 +287,9 @@ export class History {
     const others = this.load().filter((e) => e.query.toLowerCase() !== query.toLowerCase());
     write(this.storage, KEYS.history, [entry, ...others].slice(0, MAX_HISTORY));
   }
-  clear() { this.storage.removeItem(KEYS.history); }
+  clear() {
+    this.storage.removeItem(KEYS.history);
+  }
 }
 
 // ---------- followed authors and journals (backend/follows.py) ----------
@@ -220,10 +297,16 @@ export class History {
 const FOLLOW_KINDS = { author: /^A\d{1,15}$/, source: /^S\d{1,15}$/ };
 export const MAX_FOLLOWS = 30;
 export const validFollow = (kind, id) => Object.hasOwn(FOLLOW_KINDS, kind) && FOLLOW_KINDS[kind].test(id || "");
-const dayAfter = (iso) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1); return d.toISOString().slice(0, 10); };
+const dayAfter = (iso) => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+};
 
 export class Follows {
-  constructor(storage) { this.storage = storage; }
+  constructor(storage) {
+    this.storage = storage;
+  }
   load() {
     const data = read(this.storage, KEYS.follows, []);
     return Array.isArray(data) ? data.filter((f) => f && validFollow(f.kind, f.id)) : [];
@@ -231,21 +314,32 @@ export class Follows {
   /** Follow from `today` (YYYY-MM-DD) on; following again changes nothing. */
   add(kind, id, name, today) {
     if (!validFollow(kind, id)) throw new Error("not an OpenAlex author or source id");
-    const items = this.load(), existing = items.find((f) => f.kind === kind && f.id === id);
+    const items = this.load(),
+      existing = items.find((f) => f.kind === kind && f.id === id);
     if (existing) return existing;
     if (items.length >= MAX_FOLLOWS) throw new RangeError(`follow at most ${MAX_FOLLOWS}`);
-    const item = { kind, id, name: String(name || id).trim().slice(0, 200), since: today, added_at: now().replace(/\.\d+Z$/, "+00:00") };
+    const item = {
+      kind,
+      id,
+      name: String(name || id)
+        .trim()
+        .slice(0, 200),
+      since: today,
+      added_at: now().replace(/\.\d+Z$/, "+00:00"),
+    };
     write(this.storage, KEYS.follows, [item, ...items]);
     return item;
   }
   remove(kind, id) {
-    const items = this.load(), kept = items.filter((f) => !(f.kind === kind && f.id === id));
+    const items = this.load(),
+      kept = items.filter((f) => !(f.kind === kind && f.id === id));
     write(this.storage, KEYS.follows, kept);
     return kept.length !== items.length;
   }
   /** The person has looked: only papers from the day after `today` count as new. */
   seen(kind, id, today) {
-    const items = this.load(), item = items.find((f) => f.kind === kind && f.id === id);
+    const items = this.load(),
+      item = items.find((f) => f.kind === kind && f.id === id);
     if (!item) return null;
     item.since = dayAfter(today);
     write(this.storage, KEYS.follows, items);
@@ -259,23 +353,34 @@ export const DOC_ID = /^[A-Za-z0-9_.-]{1,80}$/;
 export const MAX_ANNOTATION_BYTES = 8 * 1024 * 1024;
 
 export function annotationSummary(doc) {
-  const pages = doc.pages || {}, notes = doc.notes || [];
+  const pages = doc.pages || {},
+    notes = doc.notes || [];
   return {
-    id: doc.id, title: doc.title || "", paper_id: doc.paper_id ?? null, source: doc.source ?? null,
-    page_count: doc.page_count || 0, last_page: doc.last_page || 1,
-    items: Object.values(pages).reduce((n, items) => n + items.length, 0) + notes.reduce((n, items) => n + items.length, 0),
-    note_pages: notes.length, updated_at: doc.updated_at ?? null,
+    id: doc.id,
+    title: doc.title || "",
+    paper_id: doc.paper_id ?? null,
+    source: doc.source ?? null,
+    page_count: doc.page_count || 0,
+    last_page: doc.last_page || 1,
+    items:
+      Object.values(pages).reduce((n, items) => n + items.length, 0) + notes.reduce((n, items) => n + items.length, 0),
+    note_pages: notes.length,
+    updated_at: doc.updated_at ?? null,
   };
 }
 
 /** One storage entry per document plus an index of summaries (Storage can't list its keys here). */
 export class Annotations {
-  constructor(storage) { this.storage = storage; }
+  constructor(storage) {
+    this.storage = storage;
+  }
   key(id) {
     if (!DOC_ID.test(id) || id.startsWith(".")) throw new Error("invalid document id");
     return `${KEYS.annotations}.${id}`;
   }
-  load(id) { return read(this.storage, this.key(id), null); }
+  load(id) {
+    return read(this.storage, this.key(id), null);
+  }
   save(id, doc) {
     const saved = { ...doc, id, updated_at: now().replace(/\.\d+Z$/, "+00:00") };
     const text = JSON.stringify(saved);
@@ -289,11 +394,17 @@ export class Annotations {
     const key = this.key(id);
     if (this.storage.getItem(key) == null) return false;
     this.storage.removeItem(key);
-    write(this.storage, KEYS.annotations, this.all().filter((d) => d.id !== id));
+    write(
+      this.storage,
+      KEYS.annotations,
+      this.all().filter((d) => d.id !== id),
+    );
     return true;
   }
   all() {
-    return read(this.storage, KEYS.annotations, []).sort((a, b) => ((a.updated_at || "") < (b.updated_at || "") ? 1 : -1));
+    return read(this.storage, KEYS.annotations, []).sort((a, b) =>
+      (a.updated_at || "") < (b.updated_at || "") ? 1 : -1,
+    );
   }
 }
 

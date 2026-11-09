@@ -4,15 +4,30 @@ import fs from "node:fs";
 import { expect, go, QUERY, search, test } from "./fixtures.mjs";
 import { samplePdf } from "./sample-pdf.mjs";
 
-const FIXTURE = JSON.parse(fs.readFileSync(new URL("../fixtures/openalex_graph_neural_networks.json", import.meta.url), "utf8"));
+const FIXTURE = JSON.parse(
+  fs.readFileSync(new URL("../fixtures/openalex_graph_neural_networks.json", import.meta.url), "utf8"),
+);
 const GNN_MODEL = "W2116341502"; // "The Graph Neural Network Model", first for the recorded search
 const PDF = "https://repository.example.org/gnn-model.pdf";
-const work = (id) => Object.values(FIXTURE.responses).flatMap((r) => r.body.results || []).find((w) => w.id.endsWith(`/${id}`));
+const work = (id) =>
+  Object.values(FIXTURE.responses)
+    .flatMap((r) => r.body.results || [])
+    .find((w) => w.id.endsWith(`/${id}`));
 const JSON_HEADERS = { "access-control-allow-origin": "*" };
 
 test.describe("free full text", () => {
-  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
-    (w.id.endsWith(`/${GNN_MODEL}`) ? { ...w, best_oa_location: { pdf_url: PDF }, open_access: { oa_url: "https://example.org/landing" } } : w)) }) } });
+  test.use({
+    tamper: {
+      edit: (url, body) => ({
+        ...body,
+        results: (body.results || []).map((w) =>
+          w.id.endsWith(`/${GNN_MODEL}`)
+            ? { ...w, best_oa_location: { pdf_url: PDF }, open_access: { oa_url: "https://example.org/landing" } }
+            : w,
+        ),
+      }),
+    },
+  });
 
   test("one Open button: the free PDF the first time, the saved note after that", async ({ page }) => {
     let fetched = 0;
@@ -23,12 +38,25 @@ test.describe("free full text", () => {
     await page.addInitScript(() => {
       if (window !== window.top) return; // a stand-in for the app's storage, where opened PDFs are kept
       const files = {};
-      window.Capacitor = { convertFileSrc: (uri) => files[uri.slice(7)], Plugins: { Filesystem: {
-        stat: async ({ path }) => { if (!files[path]) throw new Error("no file"); return {}; },
-        getUri: async ({ path }) => ({ uri: "kept://" + path }),
-        writeFile: async ({ path, data }) => { files[path] = URL.createObjectURL(new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))])); return {}; },
-        deleteFile: async ({ path }) => { delete files[path]; },
-      } } };
+      window.Capacitor = {
+        convertFileSrc: (uri) => files[uri.slice(7)],
+        Plugins: {
+          Filesystem: {
+            stat: async ({ path }) => {
+              if (!files[path]) throw new Error("no file");
+              return {};
+            },
+            getUri: async ({ path }) => ({ uri: "kept://" + path }),
+            writeFile: async ({ path, data }) => {
+              files[path] = URL.createObjectURL(new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))]));
+              return {};
+            },
+            deleteFile: async ({ path }) => {
+              delete files[path];
+            },
+          },
+        },
+      };
     });
     await search(page);
     const card = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first();
@@ -49,15 +77,19 @@ test.describe("free full text", () => {
 test("start a new search from a paper", async ({ page }) => {
   // the seed's own record, and nobody citing it in the recording
   await page.route(/api\.openalex\.org\/works\/W\d+/, (route) =>
-    route.fulfill({ headers: JSON_HEADERS, contentType: "application/json", body: JSON.stringify(work(GNN_MODEL)) }));
+    route.fulfill({ headers: JSON_HEADERS, contentType: "application/json", body: JSON.stringify(work(GNN_MODEL)) }),
+  );
   await page.route(/api\.openalex\.org\/works\?.*cites/, (route) =>
-    route.fulfill({ headers: JSON_HEADERS, contentType: "application/json", body: JSON.stringify({ results: [] }) }));
+    route.fulfill({ headers: JSON_HEADERS, contentType: "application/json", body: JSON.stringify({ results: [] }) }),
+  );
   await search(page);
   const card = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first();
   await card.locator(".from-here").click();
   await expect(page.locator("#seeds")).toHaveValue(GNN_MODEL);
   await expect(page.locator("#query")).toHaveValue(QUERY);
-  await expect(page.locator("#search-status")).toContainText("시드: The Graph Neural Network Model", { timeout: 60_000 });
+  await expect(page.locator("#search-status")).toContainText("시드: The Graph Neural Network Model", {
+    timeout: 60_000,
+  });
   await expect(page.locator("#results .paper").first()).toBeVisible();
 });
 
@@ -65,13 +97,20 @@ test("recent topics show papers published since they were last searched", async 
   await page.addInitScript(() => {
     if (window !== window.top) return; // not in the (sandboxed) map frame
     if (!localStorage.getItem("radar.history")) {
-      localStorage.setItem("radar.history", JSON.stringify([{ query: "graph neural networks", searched_at: "2026-10-01T09:00:00+00:00" }]));
+      localStorage.setItem(
+        "radar.history",
+        JSON.stringify([{ query: "graph neural networks", searched_at: "2026-10-01T09:00:00+00:00" }]),
+      );
     }
   });
   const asked = [];
   await page.route(/api\.openalex\.org\/works\?.*select=id/, (route) => {
     asked.push(new URL(route.request().url()).searchParams.get("filter"));
-    return route.fulfill({ headers: JSON_HEADERS, contentType: "application/json", body: JSON.stringify({ meta: { count: 12 }, results: [] }) });
+    return route.fulfill({
+      headers: JSON_HEADERS,
+      contentType: "application/json",
+      body: JSON.stringify({ meta: { count: 12 }, results: [] }),
+    });
   });
   await page.goto("./");
   await expect(page.locator("#recent-topics .topic .new")).toHaveText("새 논문 12편");
@@ -103,7 +142,10 @@ test("reading record: statuses, this month's thermometer and the goal", async ({
   await expect(page.locator("#reading-cheer")).toHaveText("이만큼 읽었어요!");
   await expect(page.locator("#read-list .read-row")).toHaveCount(2);
   await expect(page.locator("#reading-list .read-row")).toHaveCount(1);
-  const level = () => page.locator("#mercury").evaluate((m) => m.getBoundingClientRect().height / m.parentElement.getBoundingClientRect().height);
+  const level = () =>
+    page
+      .locator("#mercury")
+      .evaluate((m) => m.getBoundingClientRect().height / m.parentElement.getBoundingClientRect().height);
   await expect.poll(level).toBeGreaterThan(0.17); // 2 of the default goal of 10
   expect(await level()).toBeLessThan(0.23);
 

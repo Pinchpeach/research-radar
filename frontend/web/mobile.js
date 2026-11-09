@@ -23,10 +23,19 @@ const pdfFiles = Filesystem && {
     try {
       await Filesystem.stat(keptPath(id));
       return await localBytes((await Filesystem.getUri(keptPath(id))).uri);
-    } catch { return null; } // none kept
+    } catch {
+      return null;
+    } // none kept
   },
   write: (id, bytes) => Filesystem.writeFile({ ...keptPath(id), data: window.radarBase64(bytes), recursive: true }),
-  remove: async (id) => { try { await Filesystem.deleteFile(keptPath(id)); return true; } catch { return false; } },
+  remove: async (id) => {
+    try {
+      await Filesystem.deleteFile(keptPath(id));
+      return true;
+    } catch {
+      return false;
+    }
+  },
 };
 
 window.radarLocalApi = createApi({
@@ -37,7 +46,9 @@ window.radarLocalApi = createApi({
   releasesRepo: RELEASES_REPO,
   posterTemplate: async () => (await fetch("shared/poster.html")).text(),
   dataDir: "app storage",
-  clearCookies: async () => { if (CapacitorCookies) await CapacitorCookies.clearAllCookies(); },
+  clearCookies: async () => {
+    if (CapacitorCookies) await CapacitorCookies.clearAllCookies();
+  },
   pdfFiles,
 });
 
@@ -49,20 +60,34 @@ window.radarLocalApi = createApi({
 // publishers let through where the app's own requests may be turned away (bot checks), so the
 // page's PDF link is followed in the view and the download it starts is the paper.
 const LIBRARY_SESSION = "radar.library.session";
-const sessionOf = () => { try { return localStorage.getItem(LIBRARY_SESSION); } catch { return null; } };
+const sessionOf = () => {
+  try {
+    return localStorage.getItem(LIBRARY_SESSION);
+  } catch {
+    return null;
+  }
+};
 
 async function libraryPrefix() {
-  try { return normalizeProxy((await window.radarLocalApi("GET", "/settings")).library_proxy.value); } catch { return ""; }
+  try {
+    return normalizeProxy((await window.radarLocalApi("GET", "/settings")).library_proxy.value);
+  } catch {
+    return "";
+  }
 }
 
 /** Sign in (paper null: resolves to whether it worked) or get a paper's PDF at link (resolves to its bytes, or null). */
 async function libraryView(link = null) {
   const prefix = await libraryPrefix();
   if (!prefix) return link ? null : false;
-  const first = loginPage(prefix), onward = link || through(prefix, SIGN_IN_TARGET);
+  const first = loginPage(prefix),
+    onward = link || through(prefix, SIGN_IN_TARGET);
   // signed in before: straight to the paper (back to the sign-in page if the proxy stays blank)
   let stage = first && !(link && sessionOf() === prefix) ? "library" : "proxy";
-  let result = null, steps = 0, finish, blank = null;
+  let result = null,
+    steps = 0,
+    finish,
+    blank = null;
   const done = new Promise((resolve) => (finish = resolve));
   const handles = await Promise.all([
     LibraryWeb.addListener("navigated", async (data) => {
@@ -70,8 +95,10 @@ async function libraryView(link = null) {
       if (!here) return;
       clearTimeout(blank);
       if (stage === "library") {
-        const now = new URL(here), page = new URL(first);
-        if (now.hostname === page.hostname && !now.pathname.startsWith(page.pathname)) { // signed in: on the library's site
+        const now = new URL(here),
+          page = new URL(first);
+        if (now.hostname === page.hostname && !now.pathname.startsWith(page.pathname)) {
+          // signed in: on the library's site
           stage = "proxy";
           LibraryWeb.navigate({ url: onward });
         }
@@ -82,7 +109,10 @@ async function libraryView(link = null) {
       } else if (stage === "proxy" && link) {
         if (first && !onPublisher(here, prefix) && inScope(here, prefix)) {
           // still on the proxy's own link page: a sign-in that ran out leaves it blank
-          blank = setTimeout(() => { stage = "library"; LibraryWeb.navigate({ url: first }); }, 8000);
+          blank = setTimeout(() => {
+            stage = "library";
+            LibraryWeb.navigate({ url: first });
+          }, 8000);
           return;
         }
         if (!inScope(here, prefix) || steps >= 3) return; // the school's sign-in, or left to the person
@@ -101,14 +131,24 @@ async function libraryView(link = null) {
         stage = "done";
         result = bytes;
         LibraryWeb.close();
-      } catch { /* left open: the person can try again or close it */ }
+      } catch {
+        /* left open: the person can try again or close it */
+      }
     }),
-    LibraryWeb.addListener("closed", () => { clearTimeout(blank); finish(result); }),
+    LibraryWeb.addListener("closed", () => {
+      clearTimeout(blank);
+      finish(result);
+    }),
   ]);
   try {
     await LibraryWeb.open({ url: stage === "library" ? first : onward, closeText: t("rd.close") });
     const got = await done;
-    if (got) try { localStorage.setItem(LIBRARY_SESSION, prefix); } catch { /* fine */ }
+    if (got)
+      try {
+        localStorage.setItem(LIBRARY_SESSION, prefix);
+      } catch {
+        /* fine */
+      }
     return link ? got || null : got === true;
   } finally {
     for (const handle of handles) handle.remove();
@@ -127,7 +167,12 @@ async function libraryPdf(doi) {
     if (error.status === 422 || (error.status === 401 && !signedIn)) throw error;
     const detail = error.detail && typeof error.detail === "object" ? error.detail : {};
     let link = detail.page_url || detail.login_url;
-    if (!link) try { link = await loginUrl(window.fetch, await libraryPrefix(), doi); } catch { throw error; }
+    if (!link)
+      try {
+        link = await loginUrl(window.fetch, await libraryPrefix(), doi);
+      } catch {
+        throw error;
+      }
     const bytes = await libraryView(link);
     if (bytes) return bytes;
     throw error;
@@ -138,7 +183,8 @@ if (LibraryWeb) {
   window.radarLibrarySignIn = () => libraryView(); // Settings › Library
   window.radarLibraryPdf = libraryPdf; // the reader
   // the reader's sign-in button: signs in and gets the paper in one go, resolving to its bytes
-  window.radarLibraryLogin = async (doi, url) => libraryView(url || await loginUrl(window.fetch, await libraryPrefix(), doi));
+  window.radarLibraryLogin = async (doi, url) =>
+    libraryView(url || (await loginUrl(window.fetch, await libraryPrefix(), doi)));
 }
 
 /** A PDF handed to the app ("Open with Research Radar", e.g. one downloaded in a browser). */
@@ -158,12 +204,16 @@ async function openSharedText(text) {
 const { SharedText } = plugins;
 if (SharedText) {
   SharedText.addListener("shared", (data) => openSharedText(data && data.text).catch(() => {}));
-  SharedText.take().then((data) => openSharedText(data && data.text)).catch(() => {});
+  SharedText.take()
+    .then((data) => openSharedText(data && data.text))
+    .catch(() => {});
 }
 const { App } = plugins;
 if (App) {
   App.addListener("appUrlOpen", (event) => openHandedPdf(event && event.url).catch(() => {}));
-  App.getLaunchUrl().then((launch) => launch && openHandedPdf(launch.url)).catch(() => {});
+  App.getLaunchUrl()
+    .then((launch) => launch && openHandedPdf(launch.url))
+    .catch(() => {});
 }
 
 // Save a file: write it to the app's cache and open Android's share sheet (Drive, e-mail, Files...).
@@ -171,7 +221,8 @@ const { Share } = plugins;
 if (Filesystem && Share) {
   window.radarSaveFile = async (name, content) => {
     // text as UTF-8; bytes (a saved PDF) as base64, which is what writeFile takes without an encoding
-    const file = content instanceof Uint8Array ? { data: window.radarBase64(content) } : { data: content, encoding: "utf8" };
+    const file =
+      content instanceof Uint8Array ? { data: window.radarBase64(content) } : { data: content, encoding: "utf8" };
     const written = await Filesystem.writeFile({ path: name, directory: "CACHE", ...file });
     try {
       await Share.share({ title: name, files: [written.uri] });

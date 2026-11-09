@@ -26,30 +26,59 @@ export function openalexLinks(work) {
 
 export async function europePmcLinks(fetch, doi) {
   const url = new URL(EUROPE_PMC_URL);
-  for (const [name, value] of Object.entries({ query: `DOI:"${doi}"`, resultType: "core", format: "json", pageSize: 1 })) url.searchParams.set(name, value);
+  for (const [name, value] of Object.entries({
+    query: `DOI:"${doi}"`,
+    resultType: "core",
+    format: "json",
+    pageSize: 1,
+  }))
+    url.searchParams.set(name, value);
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timer = controller && setTimeout(() => controller.abort(), TIMEOUT_MS); // as freecopies.py's TIMEOUT
   let response;
-  try { response = await fetch(url.toString(), { signal: controller && controller.signal }); } finally { if (timer) clearTimeout(timer); }
+  try {
+    response = await fetch(url.toString(), { signal: controller && controller.signal });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
   if (!response.ok) throw new Error(`Europe PMC ${response.status}`);
   const results = ((await response.json()).resultList || {}).result || [];
   if (!results.length) return [];
-  const record = results[0], links = [];
+  const record = results[0],
+    links = [];
   for (const entry of (record.fullTextUrlList || {}).fullTextUrl || []) {
     const link = webUrl(entry.url);
-    if (link && entry.documentStyle === "pdf" && ["OA", "F"].includes(entry.availabilityCode) && !links.includes(link)) links.push(link);
+    if (link && entry.documentStyle === "pdf" && ["OA", "F"].includes(entry.availabilityCode) && !links.includes(link))
+      links.push(link);
   }
-  if (record.pmcid && record.isOpenAccess === "Y") links.push(`https://europepmc.org/articles/${encodeURIComponent(record.pmcid)}?pdf=render`);
+  if (record.pmcid && record.isOpenAccess === "Y")
+    links.push(`https://europepmc.org/articles/${encodeURIComponent(record.pmcid)}?pdf=render`);
   return links;
 }
 
 /** Free PDF addresses for a DOI from every source, best first. */
 export async function freePdfLinks({ fetch, openalex, doi, email }) {
   const found = [];
-  const add = (links) => { for (const link of links) if (!found.includes(link)) found.push(link); };
-  if (email) { try { add(await unpaywallLinks(fetch, doi, email)); } catch { /* skipped */ } }
-  try { add(openalexLinks(await openalex.get(`${OPENALEX_URL}/doi:${encodeURIComponent(doi).replace(/%2F/gi, "/")}`, {}))); } catch { /* skipped */ }
-  try { add(await europePmcLinks(fetch, doi)); } catch { /* skipped */ }
+  const add = (links) => {
+    for (const link of links) if (!found.includes(link)) found.push(link);
+  };
+  if (email) {
+    try {
+      add(await unpaywallLinks(fetch, doi, email));
+    } catch {
+      /* skipped */
+    }
+  }
+  try {
+    add(openalexLinks(await openalex.get(`${OPENALEX_URL}/doi:${encodeURIComponent(doi).replace(/%2F/gi, "/")}`, {})));
+  } catch {
+    /* skipped */
+  }
+  try {
+    add(await europePmcLinks(fetch, doi));
+  } catch {
+    /* skipped */
+  }
   const arxiv = ARXIV_DOI.exec(doi);
   if (arxiv) add([arxivPdf(arxiv[1])]);
   return found;

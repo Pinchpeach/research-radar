@@ -38,6 +38,8 @@ jobs:
           pip install ruff==0.16.8
           ruff check .
           ruff format --check .
+      - name: Prettier (settings in .prettierrc.json)
+        run: npx --yes prettier@3.9.10 --check "**/*.{js,mjs}"
 
   build:
     name: ${{ matrix.os }}

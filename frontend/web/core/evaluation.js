@@ -13,7 +13,11 @@ export function ndcgAt(labels, k) {
   const top = labels.slice(0, k);
   if (!top.some(Boolean)) return null;
   const dcg = top.reduce((sum, j, i) => sum + (j ? GAIN[j] : 0) / Math.log2(i + 2), 0);
-  const ideal = labels.filter(Boolean).map((j) => GAIN[j]).sort((a, b) => b - a).slice(0, k);
+  const ideal = labels
+    .filter(Boolean)
+    .map((j) => GAIN[j])
+    .sort((a, b) => b - a)
+    .slice(0, k);
   const idcg = ideal.reduce((sum, g, i) => sum + g / Math.log2(i + 2), 0);
   return idcg ? dcg / idcg : 0;
 }

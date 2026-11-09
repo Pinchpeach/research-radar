@@ -1,0 +1,15 @@
+# Third-party, minified, generated
+frontend/web/vendor/
+mobile/android/
+mobile/node_modules/
+mobile/www/
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+# Data, kept as written
+*.json
+*.html
+*.css
+*.md
+*.yml
+*.toml
