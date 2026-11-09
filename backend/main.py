@@ -27,7 +27,7 @@ from backend.models import (
     SearchResponse,
     SettingsUpdate,
 )
-from backend.services import openalex, unpaywall
+from backend.services import freecopies, openalex, unpaywall
 from backend.services.dedupe import dedupe
 from backend.services.flow import build_flow, credible_foundations, outside_references
 from backend.services.ranking import rank_papers, recent_since, select_results
@@ -330,6 +330,14 @@ def free_copies(doi: str):
         return {"pdf_urls": unpaywall.pdf_links(doi, email)}
     except (RequestException, ValueError) as exc:
         raise HTTPException(status_code=502, detail="Unpaywall did not answer") from exc
+
+
+@app.get("/free-pdfs")
+def all_free_copies(doi: str):
+    """Free PDF addresses for a DOI from every source the app knows (backend/services/freecopies.py)."""
+    if not library.DOI.match(doi):
+        raise HTTPException(status_code=422, detail="not a DOI")
+    return {"pdf_urls": freecopies.pdf_links(doi, settings.get("openalex_email"))}
 
 
 @app.get("/library/pdf")

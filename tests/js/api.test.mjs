@@ -286,6 +286,30 @@ test("a picked PDF is kept with its handwriting and goes with it, like backend/a
   await assert.rejects(setup().api("PUT", "/annotations/W1/pdf", pdf), { status: 501 }); // nowhere to keep it
 });
 
+test("every free copy: Unpaywall, OpenAlex's locations, Europe PMC, arXiv, like tests/test_freecopies.py", async () => {
+  const doi = "10.1000/xyz123";
+  const { api } = setup({ handler: (url) => {
+    const u = new URL(url);
+    if (u.hostname === "api.unpaywall.org") return reply(200, { best_oa_location: { url_for_pdf: "https://oa.example/u.pdf" }, oa_locations: [{ url_for_pdf: "https://repo.example/a.pdf" }] });
+    if (u.pathname === `/works/doi:${doi}`) return reply(200, { best_oa_location: { pdf_url: "https://repo.example/a.pdf" },
+      locations: [{ pdf_url: null, landing_page_url: "https://arxiv.org/abs/2101.00001v2" }, { pdf_url: "javascript:alert(1)" }] });
+    if (u.hostname === "www.ebi.ac.uk") {
+      assert.equal(u.searchParams.get("query"), `DOI:"${doi}"`);
+      return reply(200, { resultList: { result: [{ pmcid: "PMC123", isOpenAccess: "Y", fullTextUrlList: { fullTextUrl: [
+        { url: "https://europepmc.org/a.pdf", documentStyle: "pdf", availabilityCode: "OA" },
+        { url: "https://publisher.example/p.pdf", documentStyle: "pdf", availabilityCode: "S" }] } }] } });
+    }
+    throw new Error(`unexpected ${url}`);
+  } });
+  await api("PUT", "/settings", { openalex_email: "me@uni.example" });
+  assert.deepEqual((await api("GET", `/free-pdfs?doi=${encodeURIComponent(doi)}`)).pdf_urls, [
+    "https://oa.example/u.pdf", "https://repo.example/a.pdf", "https://arxiv.org/pdf/2101.00001v2",
+    "https://europepmc.org/a.pdf", "https://europepmc.org/articles/PMC123?pdf=render"]);
+  const down = setup({ handler: () => { throw new Error("offline"); } }).api;
+  assert.deepEqual((await down("GET", "/free-pdfs?doi=10.48550/arXiv.1706.03762")).pdf_urls, ["https://arxiv.org/pdf/1706.03762"]);
+  await assert.rejects(api("GET", "/free-pdfs?doi=nope"), { status: 422 });
+});
+
 test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, like backend/library.py", async () => {
   const asked = [];
   const { api } = setup({ handler: (url) => {

@@ -8,6 +8,7 @@ import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranki
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
+import { freePdfLinks } from "./freecopies.js";
 import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
@@ -302,6 +303,11 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (!DOI.test(doi)) throw invalid("not a DOI");
       if (!email) throw new ApiError(409, "Add your e-mail in Settings to look for free copies");
       try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
+    }],
+    ["GET", /^\/free-pdfs$/, async (_, __, q) => {
+      const doi = q.get("doi") || "";
+      if (!DOI.test(doi)) throw invalid("not a DOI");
+      return { pdf_urls: await freePdfLinks({ fetch, openalex, doi, email: settings.get("openalex_email") }) };
     }],
     ["GET", /^\/library\/school$/, (_, __, q) => schoolFor(q.get("email"))],
     ["GET", /^\/library\/pdf$/, async (_, __, q) => {
