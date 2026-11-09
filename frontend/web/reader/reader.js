@@ -119,6 +119,7 @@ class Reader {
     }
     // kept with its document: opens again as it is, with no new download or sign-in (keptPdf)
     if (this.bytes && !this.kept && (this.file || this.paper)) this.keep();
+    else if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
     const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
     if (!this.bytes && (wanted || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
@@ -181,6 +182,7 @@ class Reader {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       }
       await this.flush(); // listed under Reading, where it opens again (and can be removed)
+      this.toast(t("rd.keptNote"));
     } catch { /* still open now; found again next time */ }
   }
 

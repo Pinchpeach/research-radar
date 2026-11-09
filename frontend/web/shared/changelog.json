@@ -5,12 +5,14 @@
     "ko": [
       "필기를 삼성 노트·굿노트처럼: 펜 종류(만년필·볼펜·붓펜), 부분 지우개(획 전체·형광펜만 지우기도 선택), 선을 긋고 잠깐 멈추면 곧은 선·삼각형·사각형·원으로 바뀌는 '그리고 멈추기', 곧은 줄 형광펜.",
       "두 손가락 탭으로 실행 취소, 세 손가락 탭으로 다시 실행. 스타일러스의 지우개 끝이나 S펜 버튼을 누른 채 그으면 지워져요.",
-      "올가미로 고른 필기를 복제하고, 모서리 손잡이를 끌어 크기를 바꿀 수 있어요."
+      "올가미로 고른 필기를 복제하고, 모서리 손잡이를 끌어 크기를 바꿀 수 있어요.",
+      "논문 카드의 버튼을 '열기' 하나로 합쳤어요: 저장된 노트가 있으면 그것을, 없으면 무료 원문이나 학교 도서관에서 받아 노트로 자동 저장하고 열어요. 처음 저장할 때와 저장된 노트를 열 때 알려 줘요."
     ],
     "en": [
       "Handwriting like Samsung Notes and GoodNotes: pen types (fountain, ballpoint, brush), a partial eraser (or whole strokes, or highlighter only), draw and hold to snap a stroke into a straight line, triangle, rectangle or ellipse, and a straight highlighter.",
       "Two-finger tap to undo, three-finger tap to redo. The stylus's eraser end, or drawing with the S Pen button held, erases.",
-      "Duplicate a lasso selection, and resize it by dragging its corner handle."
+      "Duplicate a lasso selection, and resize it by dragging its corner handle.",
+      "One Open button on paper cards: the saved note if there is one, otherwise the free copy or your library's, saved as a note automatically. It says when it saves one and when it opens a saved one."
     ]
   },
   {
