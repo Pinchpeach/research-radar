@@ -239,7 +239,12 @@ def import_bookmarks(request: ImportRequest, store: BookmarkStore = Depends(get_
             paper = by_doi.get((entry.doi or "").lower())
             if not paper and entry.title and lookups < MAX_TITLE_LOOKUPS:
                 lookups += 1
-                paper = openalex.by_title(entry.title, entry.year)
+                try:
+                    paper = openalex.by_title(entry.title, entry.year)
+                except openalex.RateLimited:  # out of budget: the rest without a DOI aren't looked up
+                    lookups = MAX_TITLE_LOOKUPS
+                except RequestException:  # this one couldn't be looked up: counted as not found
+                    pass
             if not paper:
                 missing.append(entry.title or entry.doi)
             elif openalex.short_id(paper["id"]) in have:

@@ -58,6 +58,11 @@ def test_import_limits_and_failures(monkeypatch):
 
     monkeypatch.setattr(openalex, "by_dois", down)
     assert api.post("/bookmarks/import", json={"entries": [{"doi": "10.1000/x"}]}).status_code == 502
+    # a title that can't be looked up is just not found; the rest go on
+    monkeypatch.setattr(openalex, "by_dois", lambda dois: {})
+    monkeypatch.setattr(openalex, "by_title", lambda title, year=None: down(title))
+    done = api.post("/bookmarks/import", json={"entries": [{"title": "a"}, {"title": "b"}]}).json()
+    assert done["not_found"] == ["a", "b"]
 
 
 def test_openalex_lookups(monkeypatch):

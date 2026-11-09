@@ -353,6 +353,7 @@ function followMenu(details, paper) {
         if (isFollowed(o.kind, o.id)) await api("DELETE", `/follows/${o.kind}/${o.id}`);
         else await api("PUT", "/follows", { kind: o.kind, id: o.id, name: o.name });
         await loadFollows();
+        updateNewsBadge();
       } catch (e) { alert(t("follow.failed", { error: e.message })); }
       paint();
     });

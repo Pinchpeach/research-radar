@@ -1,5 +1,23 @@
 [
   {
+    "version": "0.13.0",
+    "date": "2026-11-09",
+    "ko": [
+      "DOI나 논문 링크를 검색창에 넣으면 그 논문에서 바로 시작해요. Android에서는 다른 앱의 '공유 → Research Radar'로도 돼요.",
+      "무료 원문을 더 많은 곳에서 찾아요: Unpaywall에 더해 OpenAlex의 다른 위치, Europe PMC, arXiv.",
+      "내 북마크 취향: 북마크가 2편 이상이면 북마크와 비슷한 논문을 올리고 '★ 내 북마크와 비슷'으로 표시해요. 검색 옵션에서 비중을 바꿀 수 있어요.",
+      "저자·저널 팔로우: 논문 카드의 '팔로우'로 저자나 저널을 팔로우하면, 새로 낸 논문을 새소식에서 모아 보여 줘요.",
+      "Zotero 연동: Zotero·Mendeley·EndNote에서 내보낸 .ris/.bib 파일을 북마크로 가져오고, 북마크를 RIS로 저장할 수 있어요."
+    ],
+    "en": [
+      "Put a DOI or a paper's link in the search box to start from that paper. On Android, Share → Research Radar from another app works too.",
+      "Free full texts from more places: besides Unpaywall, OpenAlex's other locations, Europe PMC and arXiv.",
+      "Like your bookmarks: with two or more bookmarks, papers like them are lifted and marked '★ Like your bookmarks'. Its weight is in the search options.",
+      "Follow authors and journals from a paper card's Follow menu; their new papers gather in News.",
+      "Zotero: import a .ris or .bib export from Zotero, Mendeley or EndNote into your bookmarks, and save bookmarks as RIS."
+    ]
+  },
+  {
     "version": "0.12.2",
     "date": "2026-11-07",
     "ko": ["연구 흐름 지도 뒤에 앱 아이콘을 크고 은은하게 깔았어요. 지도를 움직여도 제자리에 있고, 가장자리는 배경에 스며들어요."],

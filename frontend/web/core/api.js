@@ -281,7 +281,12 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
         let paper = byDoi.get(doisOf(entry)) || null;
         if (!paper && entry.title && lookups < 50) {
           lookups += 1;
-          paper = await openalex.byTitle(String(entry.title).slice(0, 1000), entry.year ?? null);
+          try {
+            paper = await openalex.byTitle(String(entry.title).slice(0, 1000), entry.year ?? null);
+          } catch (error) {
+            if (error instanceof RateLimited) lookups = 50; // out of budget: the rest without a DOI aren't looked up
+            else if (!(error instanceof RequestError)) throw error; // otherwise: counted as not found
+          }
         }
         if (!paper) missing.push(entry.title || entry.doi);
         else if (have.has(shortId(paper.id))) existing += 1;

@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.12.2**:
+최신 버전 **v0.13.0**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.12.2-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.2/ResearchRadar-0.12.2-windows.zip) | [ResearchRadar-0.12.2-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.2/ResearchRadar-0.12.2-macos.zip) | [ResearchRadar-0.12.2-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.2/ResearchRadar-0.12.2-linux.tar.gz) | [ResearchRadar-0.12.2-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.2/ResearchRadar-0.12.2-android.apk) |
+| [ResearchRadar-0.13.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.13.0/ResearchRadar-0.13.0-windows.zip) | [ResearchRadar-0.13.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.13.0/ResearchRadar-0.13.0-macos.zip) | [ResearchRadar-0.13.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.13.0/ResearchRadar-0.13.0-linux.tar.gz) | [ResearchRadar-0.13.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.13.0/ResearchRadar-0.13.0-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.12.2/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.13.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -22,13 +22,13 @@
 
 | 화면 | 하는 일 |
 |---|---|
-| 🔎 **연구 탐색** | 연구 주제로 논문을 찾아 **◆ 핵심 흐름**(분야를 이해하는 데 중요한 논문)과 **🆕 최신 연구**(최근 연구) 두 묶음으로 보여줍니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. **정렬 평가**를 켜면 결과마다 관련/부분/무관을 표시해 Precision@10·20과 nDCG@20을 보고, 저장한 평가를 설정별로 비교할 수 있습니다. |
-| ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그, 읽기 상태(읽을 것 · 읽는 중 · 읽음)를 붙입니다. 태그와 상태로 거르고 BibTeX로 내보낼 수 있습니다. |
-| ✍ **PDF 리더** | 논문 카드의 **PDF 읽기**로 무료 원문을 열거나, 기기의 PDF 파일을 엽니다(직접 고른 PDF는 보관해서 다음엔 바로 열림). 터치펜으로 필기하고(필압, 손바닥 무시), 형광펜·텍스트 상자·여러 색을 쓰고, 올가미로 골라 옮기거나 지웁니다. 옆에 빈 노트 페이지를 띄워 따로 적을 수 있고, 필기를 합친 PDF와 노트 PDF를 저장합니다. 필기 숨기기, 본문 검색, 페이지 썸네일, 주석 모아보기를 지원하고, 끝까지 읽으면 독서 기록에 '읽음'으로 남고 형광펜 내용을 북마크 메모로 옮길 수 있습니다. |
+| 🔎 **연구 탐색** | 연구 주제로 논문을 찾아 **◆ 핵심 흐름**(분야를 이해하는 데 중요한 논문)과 **🆕 최신 연구**(최근 연구) 두 묶음으로 보여줍니다. 출판 연도 필터, 시드 논문(이미 아는 핵심 논문을 인용하거나 그 논문이 인용한 논문까지 탐색), 정렬 가중치를 조절할 수 있습니다. **정렬 평가**를 켜면 결과마다 관련/부분/무관을 표시해 Precision@10·20과 nDCG@20을 보고, 저장한 평가를 설정별로 비교할 수 있습니다. DOI나 논문 링크를 검색창에 넣으면(Android에서는 다른 앱에서 **공유 → Research Radar**) 그 논문에서 바로 시작합니다. 북마크가 2편 이상이면 **내 북마크 취향** 점수로 비슷한 논문을 올리고 ★ 표시를 붙입니다. 카드의 **팔로우**로 저자나 저널을 팔로우할 수 있습니다. |
+| ★ **북마크** | ☆를 눌러 논문을 저장하고 메모와 태그, 읽기 상태(읽을 것 · 읽는 중 · 읽음)를 붙입니다. 태그와 상태로 거르고 BibTeX로 내보낼 수 있습니다. Zotero·Mendeley·EndNote에서 내보낸 **.ris/.bib 파일을 가져오고**, **RIS**나 BibTeX로 저장합니다. |
+| ✍ **PDF 리더** | 논문 카드의 **PDF 읽기**로 무료 원문(OpenAlex, Unpaywall, Europe PMC, arXiv)을 찾아 열거나, 기기의 PDF 파일을 엽니다(직접 고른 PDF는 보관해서 다음엔 바로 열림). 터치펜으로 필기하고(필압, 손바닥 무시), 형광펜·텍스트 상자·여러 색을 쓰고, 올가미로 골라 옮기거나 지웁니다. 옆에 빈 노트 페이지를 띄워 따로 적을 수 있고, 필기를 합친 PDF와 노트 PDF를 저장합니다. 필기 숨기기, 본문 검색, 페이지 썸네일, 주석 모아보기를 지원하고, 끝까지 읽으면 독서 기록에 '읽음'으로 남고 형광펜 내용을 북마크 메모로 옮길 수 있습니다. |
 | 🏫 **학교 도서관** | 학교 메일을 넣으면 학교를 알아보고 도서관의 교외 접속 주소를 채웁니다. 논문을 열 때 무료본(OpenAlex, Unpaywall)이 없으면 학교 도서관을 거쳐 PDF를 받아 바로 엽니다. 설정 › 도서관의 **도서관에 로그인**으로 한 번 로그인해 두면 논문을 열 때마다 로그인하지 않아도 됩니다. 로그인은 앱 안의 창에서 합니다(PC와 Android 모두). |
 | 📖 **독서 기록** | 이번 달 '읽음'으로 표시한 논문 수가 온도계처럼 차오릅니다. 한 달 목표 편수를 정하고, 이번 달 읽은 논문과 읽는 중인 논문을 모아 봅니다. |
 | 🧭 **연구 흐름** | 검색 결과나 북마크를 *The Map of Physics* 스타일의 테크트리로 그립니다. 처음에는 큰 흐름만 보이고, 선 위의 점에 마우스를 올리거나 클릭하면 세부 정보가 나옵니다. HTML 포스터로 저장할 수 있습니다. 열면 최근 검색 결과로 바로 그려지고, 휴대폰에서는 가장 최근 연구부터 보여 옆으로 넘기며 거슬러 올라갑니다. |
-| 🔔 **새소식** | 버전마다 바뀐 점과 새 버전 알림을 보여 줍니다. |
+| 🔔 **새소식** | 팔로우한 저자·저널이 새로 낸 논문(지난번 확인 이후)과, 버전마다 바뀐 점과 새 버전 알림을 보여 줍니다. |
 | ⚙ **설정** | **API 키** 탭에서 OpenAlex API 키를 입력하고 바로 확인합니다. **언어** 탭에서 한국어/영어를 바꿉니다. 앱 화면과 연구 흐름 포스터가 함께 바뀌고, 논문 제목과 주제 이름은 원문 그대로 둡니다. **정보** 탭에 버전이 나오고 검색 기록을 지울 수 있습니다. |
 
 ![탐색 화면](docs/images/discover.png)
@@ -242,6 +242,10 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
 | `GET/PUT/DELETE /annotations/{id}`, `GET /annotations` | PDF 리더의 필기(페이지별 필기와 노트 페이지) 저장·불러오기와 필기한 문서 목록 |
 | `GET/PUT /annotations/{id}/pdf` | 직접 고른 PDF 보관·불러오기(문서를 지우면 함께 지워짐) |
 | `GET /unpaywall?doi=` | Unpaywall이 아는 무료 PDF 주소(설정의 이메일 필요) |
+| `GET /free-pdfs?doi=` | 찾을 수 있는 모든 무료 PDF 주소: Unpaywall, OpenAlex의 다른 위치, Europe PMC, arXiv |
+| `GET /works/lookup?id=` | DOI나 OpenAlex ID로 논문 한 편 |
+| `GET/PUT /follows`, `DELETE /follows/{kind}/{id}`, `POST /follows/{kind}/{id}/seen`, `GET /follows/new` | 저자·저널 팔로우와, 지난번 확인 이후 새 논문 |
+| `POST /bookmarks/import`, `GET /bookmarks/export.ris` | Zotero 등의 RIS/BibTeX 목록을 북마크로 가져오기, RIS로 저장 |
 | `GET /library/school?email=`, `GET /library/pdf?doi=`, `DELETE /library/session` | 메일로 학교 도서관 찾기, 도서관 프록시를 거쳐 PDF 받기(로그인 필요하면 401), 로그인 정보 지우기 |
 | `GET /pdf?url=` | 무료 PDF를 대신 받아 옴(공인 주소만, 80MB까지; PC 앱 전용) |
 | `GET /version` | 앱 버전과 GitHub Releases의 최신 버전(업데이트 알림용) |

@@ -361,7 +361,7 @@ code { background: var(--surface-2); padding: 1px 6px; border-radius: 5px; font-
 .paper-actions .follow summary { list-style: none; cursor: pointer; padding: 3px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 12.5px; }
 .paper-actions .follow summary::-webkit-details-marker { display: none; }
 .paper-actions .follow[open] summary { border-color: var(--accent); color: var(--accent); }
-.follow-menu { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; display: flex; flex-direction: column; gap: 4px; min-width: 200px;
+.follow-menu { position: absolute; z-index: 5; top: calc(100% + 6px); right: 0; display: flex; flex-direction: column; gap: 4px; min-width: 200px;
   max-width: min(320px, 80vw); padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 24px rgba(0,0,0,.12); }
 .follow-menu button { text-align: left; border: 0; background: none; padding: 6px 8px; border-radius: 8px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .follow-menu button:hover { background: var(--surface-2); }
