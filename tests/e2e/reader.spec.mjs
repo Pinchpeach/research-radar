@@ -100,10 +100,77 @@ test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   await expect(items(page)).toHaveCount(2);
 
   await page.locator(".rd-tool[data-tool=eraser]").click();
+  await page.locator(".rd-opt[data-opt=stroke]").click(); // whole strokes
   const at = await page.locator(".rd-page[data-page='1'] .rd-items > *").first().boundingBox();
   const pageBox = await page1(page).boundingBox();
-  await stroke(page, page1(page), [[at.x - pageBox.x + at.width / 2, at.y - pageBox.y - 10], [at.x - pageBox.x + at.width / 2, at.y - pageBox.y + at.height + 10]]);
+  const across = (box) => [[box.x - pageBox.x + box.width / 2, box.y - pageBox.y - 10], [box.x - pageBox.x + box.width / 2, box.y - pageBox.y + box.height + 10]];
+  await stroke(page, page1(page), across(at));
   await expect(items(page)).toHaveCount(1);
+
+  // the partial eraser (the default, as in the note apps): a cut through the middle leaves two pieces
+  await page.locator(".rd-opt[data-opt=area]").click();
+  await stroke(page, page1(page), across(await items(page).first().boundingBox()));
+  await expect(items(page)).toHaveCount(2);
+});
+
+test("pen types, draw and hold, a straight highlighter, two-finger undo, the stylus eraser, duplicate and resize", async ({ page }) => {
+  await openSample(page);
+  // a pen type is kept with the stroke
+  await page.locator(".rd-opt[data-opt=brush]").click();
+  await stroke(page, page1(page), wave);
+  await expect(items(page)).toHaveCount(1);
+
+  // draw and hold: a rough line rests still for a moment and becomes a straight one
+  const box = await page1(page).boundingBox();
+  await page.mouse.move(box.x + 60, box.y + 420);
+  await page.mouse.down();
+  for (let i = 1; i <= 12; i++) await page.mouse.move(box.x + 60 + i * 20, box.y + 420 + Math.sin(i) * 2);
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(items(page)).toHaveCount(2);
+  const line = await items(page).nth(1).getAttribute("d");
+  expect(line.split("L").length).toBeLessThan(20); // two ends and round caps, not the wobble
+
+  // the highlighter's straight option draws from end to end
+  await page.locator(".rd-tool[data-tool=highlighter]").click();
+  await page.locator(".rd-opt[data-opt=straight]").click();
+  await stroke(page, page1(page), [[60, 480], [140, 470], [220, 490], [300, 480]]);
+  await expect(items(page)).toHaveCount(3);
+  expect(await items(page).nth(2).getAttribute("d")).toMatch(/^M[\d. ]+L[\d. ]+$/);
+
+  // two fingers tapped together undo
+  await page1(page).evaluate((svg) => {
+    const r = svg.getBoundingClientRect(), fire = (type, id, x) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true,
+      pointerId: id, pointerType: "touch", clientX: r.left + x, clientY: r.top + 200, isPrimary: id === 21 }));
+    fire("pointerdown", 21, 100); fire("pointerdown", 22, 160); fire("pointerup", 21, 100); fire("pointerup", 22, 160);
+  });
+  await expect(items(page)).toHaveCount(2);
+
+  // the stylus's eraser end erases whatever the tool
+  await page.locator(".rd-tool[data-tool=pen]").click();
+  await page1(page).evaluate((svg) => {
+    const r = svg.getBoundingClientRect(), fire = (type, x, y) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true,
+      pointerId: 9, pointerType: "pen", button: type === "pointerdown" ? 5 : -1, buttons: type === "pointerup" ? 0 : 32, clientX: r.left + x, clientY: r.top + y, pressure: 0.5 }));
+    fire("pointerdown", 30, 300); for (let y = 300; y <= 560; y += 4) fire("pointermove", 150, y); fire("pointerup", 150, 560);
+  });
+  await expect(items(page)).not.toHaveCount(2);
+
+  // select everything, duplicate it, and drag the corner handle to make the copies bigger
+  await page.locator(".rd-tool[data-tool=select]").click();
+  await stroke(page, page1(page), [[10, 200], [560, 200], [560, 700], [10, 700], [10, 202]]);
+  const before = await items(page).count();
+  await page.locator(".rd-duplicate").click();
+  await expect(items(page)).toHaveCount(before * 2);
+  const handle = await page.locator(".rd-handle").boundingBox();
+  const widthBefore = (await page.locator(".rd-selbox").boundingBox()).width;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 60, handle.y + 60, { steps: 4 });
+  await page.mouse.up();
+  expect((await page.locator(".rd-selbox").boundingBox()).width).toBeGreaterThan(widthBefore * 1.05);
+  await page.waitForTimeout(1000); // autosave
+  const saved = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith("radar.annotations.")).map(([, v]) => JSON.parse(v)));
+  expect(saved[0].pages["1"].some((i) => i.pen === "brush")).toBe(true);
 });
 
 test("note pages beside the PDF, hiding handwriting, search and page list", async ({ page }) => {
