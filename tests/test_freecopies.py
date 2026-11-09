@@ -70,3 +70,18 @@ def test_route(monkeypatch):
     monkeypatch.setattr(freecopies, "pdf_links", lambda doi, email: [f"https://x.example/{doi}?{email}"])
     assert api.get("/free-pdfs", params={"doi": DOI}).json() == {"pdf_urls": [f"https://x.example/{DOI}?me@uni.example"]}
     assert api.get("/free-pdfs", params={"doi": "nope"}).status_code == 422
+
+
+def test_a_paper_by_doi_or_link_id(monkeypatch):
+    work = {"id": "https://openalex.org/W1", "title": "GNN", "abstract": "", "year": 2009, "doi": "https://doi.org/10.1/x",
+            "url": None, "open_access_url": None, "venue": None, "authors": [], "citations": 0,
+            "referenced_works": [], "keywords": [], "topic": None}
+    monkeypatch.setattr(openalex, "get_work", lambda identifier: work if identifier in ("10.1/x", "W1") else None)
+    assert api.get("/works/lookup", params={"id": "10.1/x"}).json()["title"] == "GNN"
+    assert api.get("/works/lookup", params={"id": "W404"}).status_code == 404
+
+    def down(identifier):
+        raise requests.ConnectionError("down")
+
+    monkeypatch.setattr(openalex, "get_work", down)
+    assert api.get("/works/lookup", params={"id": "W1"}).status_code == 502

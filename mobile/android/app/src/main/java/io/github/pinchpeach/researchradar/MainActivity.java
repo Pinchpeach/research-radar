@@ -9,6 +9,7 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         AiaTrust.install(); // servers that leave out a certificate of their chain, as Chrome connects to them
         registerPlugin(LibraryWebPlugin.class); // the library sign-in window (LibraryWebActivity)
+        registerPlugin(SharedTextPlugin.class); // a DOI or link shared to the app
         super.onCreate(savedInstanceState);
     }
 }

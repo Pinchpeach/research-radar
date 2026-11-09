@@ -190,6 +190,44 @@ function startFrom(paper, query) {
   $("search-form").requestSubmit();
 }
 
+/**
+ * The paper a piece of text points at, as OpenAlex takes it: a DOI (bare, doi.org, or inside a
+ * publisher's or a shared link), an arXiv page (arXiv's own DOI), or an OpenAlex work. Null if none.
+ */
+function paperIdentifier(text) {
+  let value = String(text || "").trim();
+  try { value = decodeURIComponent(value); } catch { /* not encoded */ }
+  const openalex = /(?:openalex\.org\/(?:works\/)?|^)(W\d{3,})(?![\w])/i.exec(value);
+  if (openalex) return openalex[1].toUpperCase();
+  const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})(?:v\d+)?/i.exec(value);
+  if (arxiv) return `10.48550/arXiv.${arxiv[1]}`;
+  const doi = /\b(10\.\d{4,9}\/[^\s"'<>]+)/i.exec(value);
+  if (!doi) return null;
+  let found = doi[1].replace(/[.,;:]+$/, "");
+  while (found.endsWith(")") && (found.match(/\(/g) || []).length < (found.match(/\)/g) || []).length) found = found.slice(0, -1);
+  return found.replace(/\/(?:full|abstract|pdf|epdf)$/i, "");
+}
+
+/**
+ * Open the paper a DOI or link points at: look it up, then search from it (what it cites, what
+ * cites it, what is close to it). Resolves to whether the text held such a link.
+ */
+async function openLink(text) {
+  const id = paperIdentifier(text);
+  if (!id) return false;
+  showTab("discover");
+  setStatus("search-status", t("link.finding", { id }));
+  try {
+    startFrom(await api("GET", `/works/lookup?id=${encodeURIComponent(id)}`));
+  } catch (e) {
+    setStatus("search-status", t("link.notFound", { id, error: e.message }), true);
+  }
+  return true;
+}
+// Android: a DOI or link shared to the app from another app (mobile.js), or other shared text
+window.radarOpenLink = openLink;
+window.radarSearchFor = (query) => searchFor(query);
+
 /** Open Discover and search for `query` there. */
 function searchFor(query) {
   $("query").value = query;
@@ -202,7 +240,7 @@ $("home-form").addEventListener("submit", (event) => {
   const query = $("home-query").value.trim();
   if (query.length < 2) return;
   $("home-query").value = "";
-  searchFor(query);
+  if (paperIdentifier(query)) openLink(query); else searchFor(query);
 });
 
 // ───────────── paper cards ─────────────
@@ -304,6 +342,7 @@ $("search-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   const query = $("query").value.trim();
   if (query.length < 2) return;
+  if (paperIdentifier(query)) return openLink(query); // a DOI or a paper's link: start from that paper
   let seeds = $("seeds").value.split("\n").map((s) => s.trim()).filter(Boolean);
   if ($("bookmark-seeds").checked) seeds = [...seeds, ...state.bookmarks.map((b) => b.id).filter((id) => !seeds.includes(id))];
   const weights = Object.fromEntries([...document.querySelectorAll("[data-weight]")].map((r) => [r.dataset.weight, Number(r.value)]));

@@ -188,6 +188,8 @@ const STRINGS = {
     "chip.coreRefTitle": "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문",
     "chip.seed": "🔗 시드와 연결",
     "chip.personal": "★ 내 북마크와 비슷",
+    "link.finding": "{id} 논문을 찾는 중…",
+    "link.notFound": "{id} 논문을 찾지 못했어요: {error}",
     "chip.personalTitle": "내 북마크와 닮은 정도 {score} (가장 닮은 결과 = 1)",
 
     "eval.toggle": "정렬 평가",
@@ -498,6 +500,8 @@ const STRINGS = {
     "chip.coreRefTitle": "Its wording differs from the query so the search missed it, but several results cite it",
     "chip.seed": "🔗 Linked to a seed",
     "chip.personal": "★ Like your bookmarks",
+    "link.finding": "Looking up {id}…",
+    "link.notFound": "Couldn't find {id}: {error}",
     "chip.personalTitle": "How close it is to your bookmarks: {score} (closest result = 1)",
 
     "eval.toggle": "Rate ranking",

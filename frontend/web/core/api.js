@@ -304,6 +304,15 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       if (!email) throw new ApiError(409, "Add your e-mail in Settings to look for free copies");
       try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
     }],
+    ["GET", /^\/works\/lookup$/, async (_, __, q) => {
+      let work;
+      try { work = await openalex.getWork(q.get("id") || ""); } catch (error) {
+        if (error instanceof RateLimited) throw new ApiError(429, rateLimitDetail(error));
+        throw new ApiError(502, "OpenAlex request failed");
+      }
+      if (!work) throw new ApiError(404, "OpenAlex doesn't know this paper");
+      return work;
+    }],
     ["GET", /^\/free-pdfs$/, async (_, __, q) => {
       const doi = q.get("doi") || "";
       if (!DOI.test(doi)) throw invalid("not a DOI");

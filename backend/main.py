@@ -22,6 +22,7 @@ from backend.models import (
     EvaluationRun,
     FlowRequest,
     KeyTest,
+    PaperData,
     PosterRequest,
     SearchRequest,
     SearchResponse,
@@ -146,6 +147,20 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
     if request.require_abstract:
         papers = [paper for paper in papers if paper["abstract"]]
     return papers
+
+
+@app.get("/works/lookup", response_model=PaperData)
+def lookup_work(id: str):
+    """One paper by DOI or OpenAlex ID: a paper opened from a link (a DOI pasted or shared)."""
+    try:
+        work = openalex.get_work(id)
+    except openalex.RateLimited as exc:
+        raise HTTPException(status_code=429, detail=rate_limit_detail(exc)) from exc
+    except RequestException as exc:
+        raise HTTPException(status_code=502, detail="OpenAlex request failed") from exc
+    if not work:
+        raise HTTPException(status_code=404, detail="OpenAlex doesn't know this paper")
+    return work
 
 
 PROFILE_SIZE = 100  # bookmarks that count toward the personal score

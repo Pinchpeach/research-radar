@@ -149,6 +149,17 @@ async function openHandedPdf(uri) {
   while (!window.radarOpenFile) await new Promise((resolve) => setTimeout(resolve, 100)); // app.js still loading
   window.radarOpenFile(new File([blob], "paper.pdf", { type: "application/pdf" }), null);
 }
+/** A DOI or a paper's link shared to the app (SharedTextPlugin): open that paper. */
+async function openSharedText(text) {
+  if (!text) return;
+  while (!window.radarOpenLink) await new Promise((resolve) => setTimeout(resolve, 100)); // app.js still loading
+  if (!(await window.radarOpenLink(text))) window.radarSearchFor(text.slice(0, 300)); // no DOI in it: search for it
+}
+const { SharedText } = plugins;
+if (SharedText) {
+  SharedText.addListener("shared", (data) => openSharedText(data && data.text).catch(() => {}));
+  SharedText.take().then((data) => openSharedText(data && data.text)).catch(() => {});
+}
 const { App } = plugins;
 if (App) {
   App.addListener("appUrlOpen", (event) => openHandedPdf(event && event.url).catch(() => {}));
