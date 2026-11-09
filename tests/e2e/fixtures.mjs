@@ -30,6 +30,9 @@ export const test = base.extend({
       const body = tamper ? tamper.edit(url, await reply.json()) : await reply.json();
       await route.fulfill({ status: reply.status, headers: CORS, contentType: "application/json", body: JSON.stringify(body) });
     });
+    // Europe PMC (free copies, core/freecopies.js) knows nothing unless a test says otherwise: no real network
+    await page.context().route("https://www.ebi.ac.uk/**", (route) => route.fulfill({ headers: CORS, contentType: "application/json",
+      body: JSON.stringify({ resultList: { result: [] } }) }));
     await page.context().route("https://api.github.com/**", (route) => route.fulfill({
       headers: CORS, contentType: "application/json",
       body: JSON.stringify({ tag_name: `v${latestRelease}`, html_url: `https://github.com/Pinchpeach/research-radar/releases/tag/v${latestRelease}`, published_at: `${TODAY}T00:00:00Z` }),
