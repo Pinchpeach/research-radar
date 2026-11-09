@@ -16,8 +16,9 @@ import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
-from backend.services import flow, openalex, ranking, techtree
+from backend import deps, main
+from backend.routes import search as search_routes
+from backend.services import candidates, flow, openalex, ranking, techtree
 from backend.services.dedupe import dedupe, title_key
 from backend.evaluation import ndcg_at_k, precision_at_k
 from backend.storage import BookmarkStore, to_bibtex
@@ -93,10 +94,11 @@ def python_api(recorded, monkeypatch, tmp_path):
     today = date.fromisoformat(recorded["today"])
     fixed = type("FixedDate", (date,), {"today": classmethod(lambda cls: today)})
     monkeypatch.setattr(openalex._session, "get", get)
-    monkeypatch.setattr(main, "date", fixed)
+    monkeypatch.setattr(search_routes, "date", fixed)
+    monkeypatch.setattr(candidates, "date", fixed)
     monkeypatch.setattr(ranking, "date", fixed)
     store = BookmarkStore(tmp_path / "parity.db")
-    main.app.dependency_overrides[main.get_store] = lambda: store
+    main.app.dependency_overrides[deps.get_store] = lambda: store
     yield TestClient(main.app, base_url="http://127.0.0.1")
     main.app.dependency_overrides.clear()
 

@@ -11,7 +11,7 @@ import { kmeans } from "../../frontend/web/core/kmeans.js";
 import { buildFlow } from "../../frontend/web/core/flow.js";
 import { citationContext } from "../../frontend/web/core/context.js";
 import { VERSION } from "../../frontend/web/core/version.js";
-import { doiUrl, libraryPdf, normalizeProxy, publisherUrl, through, unwrap } from "../../frontend/web/core/library.js";
+import { doiUrl, libraryPdf, normalizeProxy, publisherUrl, through, unpaywallLinks, unwrap } from "../../frontend/web/core/library.js";
 
 const template = fs.readFileSync(new URL("../../frontend/web/shared/poster.html", import.meta.url), "utf8");
 const reply = (status, body, headers = {}) => ({ status, ok: status >= 200 && status < 300, headers: new Headers(headers), json: async () => body });
@@ -370,11 +370,10 @@ test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, li
   } });
   assert.equal((await api("GET", "/library/school?email=lee%40mail.yonsei.ac.kr")).name_en, "Yonsei University");
   assert.equal(await api("GET", "/library/school?email=x%40notsnu.ac.kr"), null);
-  await assert.rejects(api("GET", "/unpaywall?doi=10.1000%2Fxyz"), { status: 409 });
-  await api("PUT", "/settings", { openalex_email: "me@uni.example" });
-  assert.deepEqual(await api("GET", "/unpaywall?doi=10.1000%2Fxyz"), { pdf_urls: ["https://repo.example/a.pdf", "https://arxiv.org/pdf/1"] });
+  const fetch = async (url) => { asked.push(url); return { ok: true, status: 200, json: async () => ({ best_oa_location: { url_for_pdf: "https://repo.example/a.pdf" },
+    oa_locations: [{ url_for_pdf: "https://repo.example/a.pdf" }, { url_for_pdf: "javascript:x" }, { url_for_pdf: "https://arxiv.org/pdf/1" }] }) }; };
+  assert.deepEqual(await unpaywallLinks(fetch, "10.1000/xyz", "me@uni.example"), ["https://repo.example/a.pdf", "https://arxiv.org/pdf/1"]);
   assert.equal(asked.pop(), "https://api.unpaywall.org/v2/10.1000/xyz?email=me%40uni.example");
-  await assert.rejects(api("GET", "/unpaywall?doi=nope"), { status: 422 });
   await assert.rejects(api("PUT", "/settings", { library_proxy: "javascript:alert(1)" }), { status: 422 });
   const view = await api("PUT", "/settings", { library_proxy: "https://libproxy.uni.example/_Lib_Proxy_Url/" });
   assert.equal(view.library_proxy.value, "https://libproxy.uni.example/_Lib_Proxy_Url/");

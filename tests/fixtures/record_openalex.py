@@ -16,6 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from fastapi.testclient import TestClient  # noqa: E402
 
 from backend import main  # noqa: E402
+from backend.routes import search  # noqa: E402
+from backend.services import candidates  # noqa: E402
 from backend.services import openalex  # noqa: E402
 
 TODAY = date(2026, 10, 17)
@@ -71,7 +73,7 @@ def main_(query: str) -> None:
         return response
 
     openalex._session.get = get
-    main.date = type("FixedDate", (date,), {"today": classmethod(lambda cls: TODAY)})
+    search.date = candidates.date = type("FixedDate", (date,), {"today": classmethod(lambda cls: TODAY)})
     response = TestClient(main.app, base_url="http://127.0.0.1").post("/search", json={"query": query, "limit": 20})
     response.raise_for_status()
     shrink_references(recorded)

@@ -7,6 +7,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend import history, main
+from backend.routes import news
 from backend.services import openalex
 
 api = TestClient(main.app, base_url="http://127.0.0.1")
@@ -32,9 +33,9 @@ def test_new_papers_since_the_day_after_each_search(monkeypatch):
         def today(cls):
             return date(2026, 10, 20)
 
-    monkeypatch.setattr(main, "date", Today)
+    monkeypatch.setattr(news, "date", Today)
     monkeypatch.setattr(openalex, "count_since", count)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     history.record("protein folding")
     history.record("graph neural networks")
     entries = history.load()
@@ -56,7 +57,7 @@ def test_new_papers_survive_openalex_being_down(monkeypatch):
         raise requests.ConnectionError("offline")
 
     monkeypatch.setattr(openalex, "count_since", down)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     history.record("x-ray binaries")
     entries = history.load()
     entries[0]["searched_at"] = "2020-01-01T00:00:00+00:00"

@@ -241,7 +241,6 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
 | `POST/GET /evaluations`, `DELETE /evaluations/{run_id}` | 정렬 평가(관련도 판정) 저장, 실행별 Precision@k·nDCG 목록, 삭제 |
 | `GET/PUT/DELETE /annotations/{id}`, `GET /annotations` | PDF 리더의 필기(페이지별 필기와 노트 페이지) 저장·불러오기와 필기한 문서 목록 |
 | `GET/PUT /annotations/{id}/pdf` | 직접 고른 PDF 보관·불러오기(문서를 지우면 함께 지워짐) |
-| `GET /unpaywall?doi=` | Unpaywall이 아는 무료 PDF 주소(설정의 이메일 필요) |
 | `GET /free-pdfs?doi=` | 찾을 수 있는 모든 무료 PDF 주소: Unpaywall, OpenAlex의 다른 위치, Europe PMC, arXiv |
 | `GET /works/lookup?id=` | DOI나 OpenAlex ID로 논문 한 편 |
 | `GET/PUT /follows`, `DELETE /follows/{kind}/{id}`, `POST /follows/{kind}/{id}/seen`, `GET /follows/new` | 저자·저널 팔로우와, 지난번 확인 이후 새 논문 |
@@ -255,7 +254,9 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
 ```text
 research-radar/
 ├── backend/
-│   ├── main.py              # FastAPI 앱: API + 화면 제공
+│   ├── main.py              # FastAPI 앱: 라우터를 모으고 화면 제공
+│   ├── deps.py              # 라우터가 함께 쓰는 것 (북마크 저장소, OpenAlex 오류 처리)
+│   ├── routes/              # 영역별 API: search, bookmarks, reader, library, news, settings, evaluations
 │   ├── settings.py          # API 키 등 사용자 설정
 │   ├── version.py           # 앱 버전 (릴리스 태그와 일치해야 함)
 │   ├── updates.py           # 새 버전 확인
@@ -263,6 +264,7 @@ research-radar/
 │   ├── models.py
 │   └── services/
 │       ├── openalex.py      # OpenAlex 검색, 시드, 키 확인
+│       ├── candidates.py    # 정렬할 후보 논문 모으기
 │       ├── dedupe.py        # 같은 논문의 여러 버전 합치기
 │       ├── ranking.py       # 정렬 점수
 │       ├── context.py       # 인용 맥락 (관련도 보정)

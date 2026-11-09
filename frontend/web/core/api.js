@@ -9,7 +9,7 @@ import CHANGELOG from "../shared/changelog.json" with { type: "json" };
 import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex, toRis } from "./store.js";
 import { renderHtml } from "./techtree.js";
 import { freePdfLinks } from "./freecopies.js";
-import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
+import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl } from "./library.js";
 
 const LIBRARY_SESSION = "radar.library.session";
 const CITING_PER_SEED = 25, CORE_REFERENCES = 25, CORE_MIN_CITERS = 3, RECENT_FETCH_MIN = 20;
@@ -360,12 +360,6 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     }],
     ["GET", /^\/settings$/, () => settingsView()],
     ["PUT", /^\/settings$/, (_, body) => { settings.save(settingsUpdate(body)); return settingsView(); }],
-    ["GET", /^\/unpaywall$/, async (_, __, q) => {
-      const doi = q.get("doi") || "", email = settings.get("openalex_email");
-      if (!DOI.test(doi)) throw invalid("not a DOI");
-      if (!email) throw new ApiError(409, "Add your e-mail in Settings to look for free copies");
-      try { return { pdf_urls: await unpaywallLinks(fetch, doi, email) }; } catch { throw new ApiError(502, "Unpaywall did not answer"); }
-    }],
     ["GET", /^\/works\/lookup$/, async (_, __, q) => {
       let work;
       try { work = await openalex.getWork(q.get("id") || ""); } catch (error) {

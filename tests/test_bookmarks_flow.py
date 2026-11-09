@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import deps, main
 from backend.services import flow, openalex
 from backend.storage import BookmarkStore, to_bibtex
 
@@ -136,7 +136,7 @@ def test_longest_chain_ignores_cycles():
 
 @pytest.fixture
 def api(store, monkeypatch):
-    main.app.dependency_overrides[main.get_store] = lambda: store
+    main.app.dependency_overrides[deps.get_store] = lambda: store
     fetched = []
 
     def fake_by_ids(ids, **_):
@@ -339,7 +339,7 @@ def test_old_databases_get_the_reading_columns(tmp_path):
 
 def test_status_over_the_api(tmp_path):
     store = BookmarkStore(tmp_path / "api.db")
-    main.app.dependency_overrides[main.get_store] = lambda: store
+    main.app.dependency_overrides[deps.get_store] = lambda: store
     try:
         client = TestClient(main.app, base_url="http://127.0.0.1")
         client.put("/bookmarks", json={"paper": {"id": "https://openalex.org/W7", "title": "T"}})

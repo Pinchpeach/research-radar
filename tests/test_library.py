@@ -133,7 +133,7 @@ def test_endpoints(monkeypatch):
     assert api.get("/settings").json()["library_signed_in"] is False
 
 
-def test_unpaywall_lists_free_pdfs_best_first(monkeypatch):
+def test_unpaywall_lists_free_pdfs_best_first():
     record = {"best_oa_location": {"url_for_pdf": "https://repo.example/a.pdf"},
               "oa_locations": [{"url_for_pdf": "https://repo.example/a.pdf"}, {"url_for_pdf": "javascript:x"}, {"url_for_pdf": "https://arxiv.org/pdf/1"}]}
 
@@ -156,10 +156,6 @@ def test_unpaywall_lists_free_pdfs_best_first(monkeypatch):
     assert unpaywall.pdf_links(DOI, "me@uni.example", Session()) == ["https://repo.example/a.pdf", "https://arxiv.org/pdf/1"]
     assert asked == {"url": "https://api.unpaywall.org/v2/10.1000/xyz123", "email": "me@uni.example"}
 
-    assert api.get("/unpaywall", params={"doi": DOI}).status_code == 409  # no e-mail yet
-    settings.save({"openalex_email": "me@uni.example"})
-    monkeypatch.setattr(unpaywall, "pdf_links", lambda doi, email: ["https://repo.example/a.pdf"])
-    assert api.get("/unpaywall", params={"doi": DOI}).json() == {"pdf_urls": ["https://repo.example/a.pdf"]}
 
 
 def test_schools_are_known_by_their_email_domain():

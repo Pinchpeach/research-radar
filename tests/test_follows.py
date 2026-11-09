@@ -6,6 +6,7 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend import follows, main
+from backend.routes import news
 from backend.services import openalex
 
 api = TestClient(main.app, base_url="http://127.0.0.1")
@@ -42,7 +43,7 @@ def test_new_papers_since_last_look(monkeypatch):
         return 7, [paper]
 
     monkeypatch.setattr(openalex, "published_by", published_by)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     api.put("/follows", json={"kind": "author", "id": "A123", "name": "Ada"})
     new = api.get("/follows/new").json()
     assert new[0]["count"] == 7 and new[0]["papers"][0]["title"] == "New result"
@@ -56,7 +57,7 @@ def test_new_papers_since_last_look(monkeypatch):
         raise requests.ConnectionError("down")
 
     monkeypatch.setattr(openalex, "published_by", down)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     follows.remove("author", "A123")
     api.put("/follows", json={"kind": "source", "id": "S1", "name": "Nature"})
     assert api.get("/follows/new").json()[0]["count"] is None
