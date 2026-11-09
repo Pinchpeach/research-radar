@@ -310,6 +310,31 @@ test("every free copy: Unpaywall, OpenAlex's locations, Europe PMC, arXiv, like 
   await assert.rejects(api("GET", "/free-pdfs?doi=nope"), { status: 422 });
 });
 
+test("following authors and journals and their new papers, like tests/test_follows.py", async () => {
+  let asked = 0;
+  const { api } = setup({ handler: (url) => {
+    const u = new URL(url);
+    asked += 1;
+    assert.equal(u.searchParams.get("filter"), "authorships.author.id:A123,from_publication_date:2026-06-01");
+    assert.equal(u.searchParams.get("sort"), "publication_date:desc");
+    return reply(200, { meta: { count: 7 }, results: [{ id: "https://openalex.org/W5", title: "New result",
+      authorships: [{ author: { id: "https://openalex.org/A123", display_name: "Ada" } }], primary_location: { source: { id: "https://openalex.org/S4", display_name: "Nature" } } }] });
+  } });
+  assert.deepEqual(await api("GET", "/follows"), []);
+  assert.equal((await api("PUT", "/follows", { kind: "author", id: "A123", name: "Ada" })).since, "2026-06-01");
+  assert.equal((await api("PUT", "/follows", { kind: "author", id: "A123", name: "again" })).name, "Ada");
+  await assert.rejects(api("PUT", "/follows", { kind: "author", id: "S9" }), { status: 422 });
+  const [news] = await api("GET", "/follows/new");
+  assert.equal(news.count, 7);
+  assert.deepEqual([news.papers[0].author_ids, news.papers[0].venue_id], [["A123"], "S4"]);
+  await api("GET", "/follows/new");
+  assert.equal(asked, 1); // cached
+  assert.equal((await api("POST", "/follows/author/A123/seen")).since, "2026-06-02");
+  assert.equal((await api("GET", "/follows/new"))[0].count, 0); // nothing can be new before tomorrow
+  await api("DELETE", "/follows/author/A123");
+  await assert.rejects(api("DELETE", "/follows/author/A123"), { status: 404 });
+});
+
 test("library: schools by e-mail, Unpaywall's free copies, the proxy setting, like backend/library.py", async () => {
   const asked = [];
   const { api } = setup({ handler: (url) => {

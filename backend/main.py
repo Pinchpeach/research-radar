@@ -11,7 +11,7 @@ from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse, Res
 from fastapi.staticfiles import StaticFiles
 from requests import RequestException
 
-from backend import annotations, history, judgments, library, pdf_proxy, security, settings, updates
+from backend import annotations, follows, history, judgments, library, pdf_proxy, security, settings, updates
 from backend.paths import WEB_DIR, shared_json
 from backend.version import __version__
 from backend.models import (
@@ -21,6 +21,7 @@ from backend.models import (
     BookmarkUpdate,
     EvaluationRun,
     FlowRequest,
+    FollowIn,
     KeyTest,
     PaperData,
     PosterRequest,
@@ -477,6 +478,61 @@ def new_papers(limit: int = 3):
                 except RequestException:  # includes rate limits: the home screen just shows no count
                     count = None
         out.append({**entry, "since": since.isoformat(), "new_papers": count})
+    return out
+
+
+# ---------- followed authors and journals ----------
+
+
+@app.get("/follows")
+def list_follows():
+    return follows.load()
+
+
+@app.put("/follows")
+def add_follow(item: FollowIn):
+    try:
+        return follows.add(item.kind, item.id, item.name)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except OverflowError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.delete("/follows/{kind}/{follow_id}", status_code=204)
+def remove_follow(kind: str, follow_id: str):
+    if not follows.remove(kind, follow_id):
+        raise HTTPException(status_code=404, detail="Not followed")
+
+
+@app.post("/follows/{kind}/{follow_id}/seen")
+def follow_seen(kind: str, follow_id: str):
+    item = follows.seen(kind, follow_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="Not followed")
+    _new_papers_cache.pop(("follow", kind, follow_id), None)
+    return item
+
+
+@app.get("/follows/new")
+def followed_new_papers():
+    """For each followed author or journal: papers published since the person last looked
+    (`count` None when OpenAlex could not be asked). Cached like /history/new."""
+    today, out = date.today().isoformat(), []
+    for item in follows.load():
+        count, papers = 0, []
+        if item["since"] <= today:
+            key = ("follow", item["kind"], item["id"])
+            cached = _new_papers_cache.get(key)
+            if cached and time.monotonic() - cached[0] < NEW_PAPERS_TTL and cached[1][0] == item["since"]:
+                count, papers = cached[1][1]
+            else:
+                try:
+                    count, papers = openalex.published_by(item["kind"], item["id"], item["since"])
+                    _new_papers_cache[key] = (time.monotonic(), (item["since"], (count, papers)))
+                except RequestException:
+                    count = None
+        out.append({**item, "count": count, "papers": papers})
     return out
 
 

@@ -1,14 +1,14 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "authors", "citations",
+const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "venue_id", "authors", "author_ids", "citations",
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
 const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
 const PERSONAL_CHIP = 0.7;  // closeness to the person's bookmarks from which a paper says so
 
 const state = { run: null, bookmarks: [], flow: null, flowRun: null, poster: null, posterTitle: "", evalMode: false, judgments: {},
-  version: null, changelog: null };
+  version: null, changelog: null, follows: [] };
 
 // ───────────── helpers ─────────────
 
@@ -275,6 +275,8 @@ function paperCard(paper, { rank, query, extra } = {}) {
   }
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
+  followMenu(node.querySelector(".follow"), paper);
+
   const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);
   if (freeUrl) { free.href = freeUrl; free.hidden = false; }
   node.querySelector(".from-here").addEventListener("click", () => startFrom(paper, query));
@@ -322,6 +324,71 @@ function paperCard(paper, { rank, query, extra } = {}) {
   }
   if (extra) node.append(extra);
   return node;
+}
+
+// ───────────── following authors and journals (backend/follows.py) ─────────────
+
+const isFollowed = (kind, id) => state.follows.some((f) => f.kind === kind && f.id === id);
+
+async function loadFollows() {
+  try { state.follows = await api("GET", "/follows"); } catch { state.follows = []; }
+}
+
+/** The paper card's 팔로우 menu: its authors (up to 5) and its journal, each followed with a tap. */
+function followMenu(details, paper) {
+  const ids = paper.author_ids || [];
+  const options = (paper.authors || []).slice(0, 5).map((name, i) => ({ kind: "author", id: ids[i], name }))
+    .concat(paper.venue_id && paper.venue ? [{ kind: "source", id: paper.venue_id, name: paper.venue }] : [])
+    .filter((o) => o.id);
+  if (!options.length) return details.remove();
+  details.hidden = false;
+  const menu = details.querySelector(".follow-menu");
+  const paint = () => menu.replaceChildren(...options.map((o) => {
+    const on = isFollowed(o.kind, o.id);
+    const button = el("button", { type: "button", class: on ? "on" : "", text: `${on ? "✓ " : "+ "}${o.name}`,
+      title: t(o.kind === "author" ? "follow.author" : "follow.source") });
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        if (isFollowed(o.kind, o.id)) await api("DELETE", `/follows/${o.kind}/${o.id}`);
+        else await api("PUT", "/follows", { kind: o.kind, id: o.id, name: o.name });
+        await loadFollows();
+      } catch (e) { alert(t("follow.failed", { error: e.message })); }
+      paint();
+    });
+    return button;
+  }));
+  details.addEventListener("toggle", () => details.open && paint());
+}
+
+/** News: what the followed authors and journals published since the person last looked. */
+async function renderFollowNews() {
+  let items = [];
+  try { items = await api("GET", "/follows/new"); } catch { /* offline: shown as empty */ }
+  $("follow-empty").hidden = items.length > 0;
+  $("follow-news").replaceChildren(...items.map((item) => {
+    const seen = el("button", { type: "button", class: "small-button", text: t("follow.seen") });
+    seen.addEventListener("click", async () => { await api("POST", `/follows/${item.kind}/${item.id}/seen`); renderFollowNews(); updateNewsBadge(); });
+    const stop = el("button", { type: "button", class: "link-button small", text: t("follow.stop") });
+    stop.addEventListener("click", async () => { await api("DELETE", `/follows/${item.kind}/${item.id}`); await loadFollows(); renderFollowNews(); updateNewsBadge(); });
+    const count = item.count == null ? t("follow.offline") : item.count ? t("follow.count", { n: item.count, since: item.since }) : t("follow.none", { since: item.since });
+    return el("div", { class: "follow-item" },
+      el("h3", {}, el("span", { class: "chip", text: t(item.kind === "author" ? "follow.authorChip" : "follow.sourceChip") }), ` ${item.name} `,
+        el("small", { text: count }), item.count ? seen : null, stop),
+      item.papers.length ? el("ol", { class: "papers" }, ...item.papers.map((p) => paperCard(p))) : null);
+  }));
+}
+
+/** The menu's News badge: a new version, or new papers from followed authors and journals. */
+async function updateNewsBadge() {
+  let papers = 0;
+  if (state.follows.length) {
+    try { papers = (await api("GET", "/follows/new")).reduce((n, f) => n + (f.count || 0), 0); } catch { /* offline */ }
+  }
+  const update = newRelease(state.version);
+  $("menu-dot").hidden = !update && !papers;
+  $("news-badge").hidden = !update && !papers;
+  $("news-badge").textContent = update ? t("news.new") : String(papers > 99 ? "99+" : papers);
 }
 
 // ───────────── discover ─────────────
@@ -974,9 +1041,7 @@ async function checkVersion() {
   state.version = info;
   $("app-version").textContent = `v${info.version}`;
   const update = newRelease(info);
-  $("menu-dot").hidden = !update;
-  $("news-badge").hidden = !update;
-  $("news-badge").textContent = t("news.new");
+  updateNewsBadge();
   if (update) {
     $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: t("set.newVersion", { version: info.latest.version }) }));
   } else {
@@ -988,6 +1053,7 @@ async function checkVersion() {
 // ───────────── news ─────────────
 
 async function renderNews() {
+  renderFollowNews();
   const info = state.version;
   const card = $("update-card");
   card.hidden = !newRelease(info);
@@ -1012,5 +1078,6 @@ showTab("home");
 
 loadSettings({ applyLanguage: true });
 loadBookmarks();
+loadFollows().then(updateNewsBadge);
 checkVersion();
 loadEvaluations();

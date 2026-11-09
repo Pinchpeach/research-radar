@@ -177,6 +177,11 @@
     <!-- ───────────── 새소식 / News ───────────── -->
     <section id="tab-news" class="panel news" hidden>
       <a id="update-card" class="update-card" target="_blank" rel="noopener" hidden></a>
+      <section class="followed">
+        <h2 data-i18n="follow.heading">팔로우한 저자·저널의 새 논문</h2>
+        <p id="follow-empty" class="hint" data-i18n="follow.empty">논문 카드의 팔로우로 저자나 저널을 팔로우하면, 새로 나온 논문이 여기에 모입니다.</p>
+        <div id="follow-news"></div>
+      </section>
       <ol id="changelog" class="changelog"></ol>
     </section>
 
@@ -267,6 +272,7 @@
         <a class="free" target="_blank" rel="noopener" data-i18n="paper.free" data-i18n-title="paper.freeTitle" hidden>무료로 읽기 ↗</a>
         <button type="button" class="read-pdf" data-i18n="paper.readPdf" data-i18n-title="paper.readPdfTitle">필기하며 읽기</button>
         <button type="button" class="from-here" data-i18n="paper.fromHere" data-i18n-title="paper.fromHereTitle">이 논문에서 시작</button>
+        <details class="follow" hidden><summary data-i18n="follow.button" data-i18n-title="follow.buttonTitle">팔로우</summary><div class="follow-menu"></div></details>
       </div>
       <details class="abstract"><summary data-i18n="paper.abstract">초록</summary><p></p></details>
       <div class="judge" hidden>

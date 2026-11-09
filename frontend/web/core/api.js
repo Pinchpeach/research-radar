@@ -6,7 +6,7 @@ import { buildFlow, credibleFoundations, outsideReferences } from "./flow.js";
 import { MAX_PER_PAGE, OpenAlex, RateLimited, RequestError } from "./openalex.js";
 import { DEFAULT_WEIGHTS, rankPapers, recentSince, selectResults } from "./ranking.js";
 import CHANGELOG from "../shared/changelog.json" with { type: "json" };
-import { Annotations, Bookmarks, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
+import { Annotations, Bookmarks, Follows, History, Judgments, READING_STATUSES, Settings, toBibtex } from "./store.js";
 import { renderHtml } from "./techtree.js";
 import { freePdfLinks } from "./freecopies.js";
 import { DOI, libraryPdf, NeedsLogin, normalizeProxy, NoPdf, PROXY, schoolFor, signInUrl, unpaywallLinks } from "./library.js";
@@ -36,7 +36,8 @@ export function paperData(raw) {
   if (!raw || typeof raw.id !== "string") throw invalid("paper.id is required");
   return {
     id: raw.id, title: raw.title || "", abstract: raw.abstract || "", year: raw.year ?? null, doi: raw.doi ?? null,
-    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, authors: raw.authors || [], citations: raw.citations || 0,
+    url: raw.url ?? null, open_access_url: raw.open_access_url ?? null, venue: raw.venue ?? null, venue_id: raw.venue_id ?? null,
+    authors: raw.authors || [], author_ids: raw.author_ids || [], citations: raw.citations || 0,
     referenced_works: raw.referenced_works || [], keywords: raw.keywords || [], topic: raw.topic ?? null,
   };
 }
@@ -73,7 +74,7 @@ const isPdfBytes = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).tri
 export function createApi({ fetch, storage, version, releasesRepo, posterTemplate, dataDir = "this device", today = () => new Date(),
   clearCookies = async () => {}, pdfFiles = null }) {
   const settings = new Settings(storage), bookmarks = new Bookmarks(storage), judgments = new Judgments(storage);
-  const history = new History(storage), annotations = new Annotations(storage);
+  const history = new History(storage), annotations = new Annotations(storage), follows = new Follows(storage);
   /** Like the AnnotationDoc model: the fields kept, with their limits. */
   const annotationDoc = (body) => {
     const doc = {
@@ -266,6 +267,28 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     return out;
   }
 
+  /** For each followed author or journal: papers published since the person last looked (main.py). */
+  async function followedNew() {
+    const todayIso = isoDay(today()), out = [];
+    for (const item of follows.load()) {
+      let count = 0, papers = [];
+      if (item.since <= todayIso) {
+        const key = `follow\u0000${item.kind}\u0000${item.id}`, cached = newPapersCache.get(key);
+        if (cached && Date.now() - cached.at < NEW_PAPERS_TTL_MS && cached.since === item.since) [count, papers] = cached.result;
+        else {
+          try {
+            [count, papers] = await openalex.publishedBy(item.kind, item.id, item.since);
+            newPapersCache.set(key, { at: Date.now(), since: item.since, result: [count, papers] });
+          } catch {
+            count = null;
+          }
+        }
+      }
+      out.push({ ...item, count, papers });
+    }
+    return out;
+  }
+
   /** Like backend/settings.public_view; signed in = the last library fetch with this proxy worked. */
   const settingsView = () => {
     const view = settings.publicView(dataDir), proxy = settings.get("library_proxy");
@@ -381,6 +404,25 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
     }],
     ["GET", /^\/history\/new$/, (_, __, q) => newPapers(Math.max(0, Number(q.get("limit") ?? 3) || 0))],
     ["DELETE", /^\/history$/, () => { history.clear(); return null; }],
+    // followed authors and journals (backend/follows.py)
+    ["GET", /^\/follows$/, () => follows.load()],
+    ["PUT", /^\/follows$/, (_, body) => {
+      if (!["author", "source"].includes(body.kind)) throw invalid("kind must be author or source");
+      try { return follows.add(body.kind, String(body.id || ""), String(body.name || "").slice(0, 200), isoDay(today())); } catch (error) {
+        throw new ApiError(error instanceof RangeError ? 409 : 422, error.message);
+      }
+    }],
+    ["DELETE", /^\/follows\/([^/]+)\/([^/]+)$/, ([kind, id]) => {
+      if (!follows.remove(kind, id)) throw new ApiError(404, "Not followed");
+      return null;
+    }],
+    ["POST", /^\/follows\/([^/]+)\/([^/]+)\/seen$/, ([kind, id]) => {
+      const item = follows.seen(kind, id, isoDay(today()));
+      if (!item) throw new ApiError(404, "Not followed");
+      newPapersCache.delete(`follow\u0000${kind}\u0000${id}`);
+      return item;
+    }],
+    ["GET", /^\/follows\/new$/, () => followedNew()],
     ["GET", /^\/changelog$/, () => CHANGELOG],
     ["GET", /^\/version$/, async () => {
       const latest = await latestRelease(), current = parseVersion(version);

@@ -52,7 +52,9 @@ class PaperData(BaseModel):
     url: Optional[str] = None
     open_access_url: Optional[str] = None
     venue: Optional[str] = None
+    venue_id: Optional[str] = None  # OpenAlex source, to follow the journal
     authors: list[str] = Field(default_factory=list)
+    author_ids: list[str] = Field(default_factory=list)  # OpenAlex authors, in step with authors
     citations: int = 0
     referenced_works: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
@@ -111,6 +113,14 @@ class Bookmark(BaseModel):
     updated_at: str
     status: ReadingStatus = "to_read"
     read_at: Optional[str] = None  # when it was marked read
+
+
+class FollowIn(BaseModel):
+    """An author (OpenAlex A...) or journal (source, S...) to follow (backend/follows.py)."""
+
+    kind: Literal["author", "source"]
+    id: str = Field(max_length=20)
+    name: str = Field(default="", max_length=200)
 
 
 class FlowRequest(BaseModel):
