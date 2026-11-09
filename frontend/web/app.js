@@ -5,6 +5,7 @@ const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_acc
   "referenced_works", "keywords", "topic"];
 const MAX_SEEDS = 10;
 const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
+const PERSONAL_CHIP = 0.7;  // closeness to the person's bookmarks from which a paper says so
 
 const state = { run: null, bookmarks: [], flow: null, flowRun: null, poster: null, posterTitle: "", evalMode: false, judgments: {},
   version: null, changelog: null };
@@ -231,6 +232,9 @@ function paperCard(paper, { rank, query, extra } = {}) {
     chips.append(el("span", { class: "chip", text: t("chip.coreRef"), title: t("chip.coreRefTitle") }));
   }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: t("chip.seed") }));
+  if (paper.scores && paper.scores.personal >= PERSONAL_CHIP) {
+    chips.append(el("span", { class: "chip personal", text: t("chip.personal"), title: t("chip.personalTitle", { score: paper.scores.personal.toFixed(2) }) }));
+  }
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
   const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);

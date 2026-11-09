@@ -4,7 +4,8 @@ import { byCodePoint, cosine, cosineDense, DEFAULT_TOKENS, meanRow, pyRound, tfi
 import { citationContext } from "./context.js";
 
 export const RECENCY_HALF_LIFE_YEARS = 5;
-export const DEFAULT_WEIGHTS = { relevance: 0.35, influence: 0.45, seed: 0.2, recency: 0.05, impact: 0.15 };
+export const DEFAULT_WEIGHTS = { relevance: 0.35, influence: 0.45, seed: 0.2, recency: 0.05, impact: 0.15, personal: 0.15 };
+export const PROFILE_MIN = 2; // bookmarks needed before they say anything about the person's interests
 
 export const paperText = (paper) => `${paper.title || ""} ${paper.abstract || ""}`.trim();
 
@@ -161,10 +162,25 @@ export function selectResults(ranked, limit, recentShare, since) {
   return [...core.map((p) => ({ ...p, group: "core" })), ...pool.slice(0, needed).map((p) => ({ ...p, group: "recent" }))];
 }
 
-export function rankPapers(query, papers, { seeds = [], weights = {}, currentYear, recentYears = 5 } = {}) {
+/** Closeness to the person's bookmarks: TF-IDF cosine to the closest one, scaled (see ranking.py). */
+export function personalScores(papers, profile) {
+  if (profile.length < PROFILE_MIN || !papers.length) return new Array(papers.length).fill(0);
+  let rows;
+  try {
+    ({ rows } = tfidf([...papers.map(matchText), ...profile.map(matchText)], { fold: singular }));
+  } catch {
+    return new Array(papers.length).fill(0);
+  }
+  const own = profile.map((p) => short(p.id));
+  const mine = rows.slice(papers.length);
+  return scaleToMax(papers.map((paper, i) => Math.max(...mine.map((row, j) => (own[j] === short(paper.id) ? 0 : cosine(rows[i], row))))));
+}
+
+export function rankPapers(query, papers, { seeds = [], weights = {}, currentYear, recentYears = 5, profile = [] } = {}) {
   if (!papers.length) return [];
   weights = { ...DEFAULT_WEIGHTS, ...weights };
   if (!seeds.length) weights.seed = 0;
+  if (profile.length < PROFILE_MIN) weights.personal = 0;
   currentYear = currentYear || new Date().getFullYear();
 
   const texts = papers.map(matchText);
@@ -208,6 +224,7 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
     });
   }
 
+  const personal = personalScores(papers, profile);
   const recency = papers.map((p) => recencyScore(p.year, currentYear));
   const impact = scaleToMax(impactValues(papers, currentYear));
   let influence = scaleToMax(citationInfluence(papers, relevance)).map((v, i) => Math.sqrt(v) * (0.3 + 0.7 * relevance[i]));
@@ -218,7 +235,7 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0) || 1;
   const ranked = papers.map((paper, i) => {
     const combined = (weights.relevance * relevance[i] + weights.seed * seedScores[i] + weights.influence * influence[i]
-      + weights.recency * recency[i] + weights.impact * impact[i]) / totalWeight;
+      + weights.recency * recency[i] + weights.impact * impact[i] + weights.personal * personal[i]) / totalWeight;
     return {
       ...paper,
       score: pyRound(combined * 100, 1),
@@ -232,6 +249,7 @@ export function rankPapers(query, papers, { seeds = [], weights = {}, currentYea
         seed: pyRound(seedScores[i], 3),
         recency: pyRound(recency[i], 3),
         impact: pyRound(impact[i], 3),
+        personal: pyRound(personal[i], 3),
         frontier: pyRound(frontier[i], 3),
       },
     };

@@ -165,7 +165,9 @@ export function createApi({ fetch, storage, version, releasesRepo, posterTemplat
       throw error;
     }
     const currentYear = today().getFullYear();
-    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years });
+    // the person's bookmarks, newest first (PROFILE_SIZE, as backend/main.py)
+    const profile = bookmarks.all().slice(0, 100).map((b) => b.paper);
+    const ranked = rankPapers(request.query, candidates, { seeds, weights: request.weights, currentYear, recentYears: request.recent_years, profile });
     const papers = selectResults(ranked, request.limit, request.recent_share, recentSince(currentYear, request.recent_years));
     history.record(request.query);
     return {

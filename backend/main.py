@@ -148,8 +148,11 @@ def gather_candidates(request: SearchRequest, seeds: list[dict]) -> list[dict]:
     return papers
 
 
+PROFILE_SIZE = 100  # bookmarks that count toward the personal score
+
+
 @app.post("/search", response_model=SearchResponse)
-def search(request: SearchRequest):
+def search(request: SearchRequest, store: BookmarkStore = Depends(get_store)):
     try:
         seeds, unresolved = [], []
         for identifier in request.seed_ids:
@@ -170,6 +173,8 @@ def search(request: SearchRequest):
         seeds,
         request.weights.model_dump(),
         recent_years=request.recent_years,
+        # the person's bookmarks, newest first: what they keep says what they're after
+        profile=[bookmark["paper"] for bookmark in store.all()[:PROFILE_SIZE]],
     )
     since = recent_since(date.today().year, request.recent_years)
     papers = select_results(ranked, request.limit, request.recent_share, since)

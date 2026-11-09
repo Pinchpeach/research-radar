@@ -9,6 +9,7 @@ class Weights(BaseModel):
     seed: float = Field(default=0.2, ge=0)
     recency: float = Field(default=0.05, ge=0)
     impact: float = Field(default=0.15, ge=0)
+    personal: float = Field(default=0.15, ge=0)  # closeness to the person's bookmarks
 
 
 class SearchRequest(BaseModel):
@@ -37,6 +38,7 @@ class Scores(BaseModel):
     seed: float
     recency: float
     impact: float
+    personal: float = 0.0
 
 
 class PaperData(BaseModel):

@@ -155,6 +155,8 @@ const STRINGS = {
     "w.impact": "인용 영향력",
     "w.recency": "최신성",
     "w.seed": "시드 연결",
+    "w.personal": "내 북마크 취향",
+    "w.personalTitle": "북마크한 논문과 비슷한 논문을 올립니다. 북마크가 2편 이상일 때 쓰입니다.",
     "w.reset": "기본값",
 
     "search.running": "검색 중…",
@@ -185,6 +187,8 @@ const STRINGS = {
     "chip.coreRef": "📌 검색어 밖 핵심 참고문헌",
     "chip.coreRefTitle": "검색어와 단어가 달라 검색에는 안 걸렸지만, 결과 여러 편이 인용해 추가된 논문",
     "chip.seed": "🔗 시드와 연결",
+    "chip.personal": "★ 내 북마크와 비슷",
+    "chip.personalTitle": "내 북마크와 닮은 정도 {score} (가장 닮은 결과 = 1)",
 
     "eval.toggle": "정렬 평가",
     "eval.toggleTitle": "검색 결과마다 관련/부분/무관을 표시해 정렬 품질을 잽니다",
@@ -461,6 +465,8 @@ const STRINGS = {
     "w.impact": "Citation impact",
     "w.recency": "Recency",
     "w.seed": "Seed links",
+    "w.personal": "Like my bookmarks",
+    "w.personalTitle": "Lifts papers like the ones you bookmarked. Used once you have 2 or more bookmarks.",
     "w.reset": "Defaults",
 
     "search.running": "Searching…",
@@ -491,6 +497,8 @@ const STRINGS = {
     "chip.coreRef": "📌 Key reference outside the query",
     "chip.coreRefTitle": "Its wording differs from the query so the search missed it, but several results cite it",
     "chip.seed": "🔗 Linked to a seed",
+    "chip.personal": "★ Like your bookmarks",
+    "chip.personalTitle": "How close it is to your bookmarks: {score} (closest result = 1)",
 
     "eval.toggle": "Rate ranking",
     "eval.toggleTitle": "Mark each result relevant / partial / not relevant to measure ranking quality",
