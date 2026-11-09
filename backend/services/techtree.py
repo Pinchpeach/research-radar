@@ -134,15 +134,23 @@ def layout(flow: dict) -> dict:
         citing, cited = by_id.get(e["source"]), by_id.get(e["target"])
         if not citing or not cited:
             continue
-        edges.append({"s": citing["id"], "t": cited["id"], "path": curve(cited["x"], cited["y"], citing["x"], citing["y"]),
-                      "color": cited["color"]})
+        edges.append(
+            {
+                "s": citing["id"],
+                "t": cited["id"],
+                "path": curve(cited["x"], cited["y"], citing["x"], citing["y"]),
+                "color": cited["color"],
+            }
+        )
         if citing["lane"] != cited["lane"]:
             pair_edges[(cited["lane"], citing["lane"])].append((citing, cited))
 
     # ---- topic lineage: a topic branches off the earlier topic it cites most ----
     for lane in lanes:
         counts = Counter(
-            src for (src, dst), items in pair_edges.items() if dst == lane["lane"]
+            src
+            for (src, dst), items in pair_edges.items()
+            if dst == lane["lane"]
             for _ in items
             if lane_by_no[src]["x_start"] < lane["x_start"]
         )
@@ -170,8 +178,12 @@ def layout(flow: dict) -> dict:
                 "width": 2 + 1.6 * math.sqrt(len(items)),
                 "path": curve(x_from, a["rail_y"], x_to, b["rail_y"]),
                 "examples": [
-                    {"citing": citing["title"], "citing_year": citing["year"],
-                     "cited": cited["title"], "cited_year": cited["year"]}
+                    {
+                        "citing": citing["title"],
+                        "citing_year": citing["year"],
+                        "cited": cited["title"],
+                        "cited_year": cited["year"],
+                    }
                     for citing, cited in sorted(items, key=lambda it: -(it[1]["citations"] or 0))[:4]
                 ],
             }
@@ -214,7 +226,6 @@ def _t(value) -> str:
 
 def _svg(lay: dict, title: str, text: dict) -> str:
     W, H = lay["width"], lay["height"]
-    by_id = {n["id"]: n for n in lay["nodes"]}
     out = [
         f'<svg id="map" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W:.0f} {H:.0f}" '
         f'font-family="NanumSquareRound, Inter, system-ui, -apple-system, Segoe UI, sans-serif">',
@@ -234,7 +245,7 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     rng = random.Random(7)
     stars = "".join(
         f'<circle cx="{rng.uniform(0, W):.0f}" cy="{rng.uniform(0, H):.0f}" r="{rng.choice([0.6, 0.8, 1.1])}" '
-        f'opacity="{rng.uniform(.15, .55):.2f}"/>'
+        f'opacity="{rng.uniform(0.15, 0.55):.2f}"/>'
         for _ in range(int(W * H / 9000))
     )
     out.append(f'<g fill="#fff" pointer-events="none">{stars}</g>')
@@ -265,7 +276,7 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     # era grid; the year numbers live in the screen-space ruler so they stay readable
     axis_y = TOP - 80
     out.append('<g pointer-events="none">')
-    for year, x in lay["ticks"]:
+    for _year, x in lay["ticks"]:
         out.append(
             f'<line x1="{x:.1f}" x2="{x:.1f}" y1="{axis_y + 12}" y2="{H - 150:.0f}" stroke="#fff" '
             f'stroke-opacity=".05" stroke-dasharray="2 6"/>'
@@ -323,7 +334,9 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     for n in lay["nodes"]:
         if n["glow"]:
             r = 40 + 8 * min(5, n["cited_by_in_set"])
-            out.append(f'<circle class="halo" data-id="{_t(n["id"])}" cx="{n["x"]:.1f}" cy="{n["y"]:.1f}" r="{r}" fill="url(#glow)"/>')
+            out.append(
+                f'<circle class="halo" data-id="{_t(n["id"])}" cx="{n["x"]:.1f}" cy="{n["y"]:.1f}" r="{r}" fill="url(#glow)"/>'
+            )
     out.append("</g>")
 
     # dots (papers) — fill shows topic; outline shows role
@@ -331,13 +344,18 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     for n in lay["nodes"]:
         x, y, r = n["x"], n["y"], n["r"]
         if n["role"] == "foundation":
-            mark = f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{SURFACE}" stroke="{TEXT}" stroke-width="2.2"/>'
+            mark = (
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{SURFACE}" stroke="{TEXT}" stroke-width="2.2"/>'
+            )
         else:
-            ring = f' stroke="{TEXT}" stroke-width="2.5"' if n["bookmarked"] else f' stroke="{SURFACE}" stroke-width="2"'
+            ring = (
+                f' stroke="{TEXT}" stroke-width="2.5"' if n["bookmarked"] else f' stroke="{SURFACE}" stroke-width="2"'
+            )
             mark = f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="{n["color"]}"{ring}/>'
         star = (
             f'<text x="{x:.1f}" y="{y - r - 4:.1f}" text-anchor="middle" font-size="11" fill="{TEXT}">★</text>'
-            if n["bookmarked"] else ""
+            if n["bookmarked"]
+            else ""
         )
         out.append(
             f'<g class="dot" data-id="{_t(n["id"])}" tabindex="0">{mark}{star}'
@@ -346,7 +364,9 @@ def _svg(lay: dict, title: str, text: dict) -> str:
     out.append("</g>")
 
     # topic name at the rail start and a summary at the rail end (paper titles are placed by the script)
-    out.append(f'<g pointer-events="none" stroke="{SURFACE}" stroke-width="5" paint-order="stroke" stroke-linejoin="round">')
+    out.append(
+        f'<g pointer-events="none" stroke="{SURFACE}" stroke-width="5" paint-order="stroke" stroke-linejoin="round">'
+    )
     for lane in lay["lanes"]:
         y = lane["rail_y"]
         # a topic that starts late would push its label past the arrow; right-align it instead
@@ -401,8 +421,27 @@ def render_html(flow: dict, title: str, lang: str = "ko") -> str:
         "chain": lay.get("chain", []),
         "edges": [{"s": e["s"], "t": e["t"]} for e in lay["edges"]],
         "nodes": [
-            {key: n.get(key) for key in ("id", "title", "authors", "year", "citations", "url", "open_access_url", "role", "bookmarked",
-                                          "cited_by_in_set", "lane_label", "color", "x", "y", "r", "glow")}
+            {
+                key: n.get(key)
+                for key in (
+                    "id",
+                    "title",
+                    "authors",
+                    "year",
+                    "citations",
+                    "url",
+                    "open_access_url",
+                    "role",
+                    "bookmarked",
+                    "cited_by_in_set",
+                    "lane_label",
+                    "color",
+                    "x",
+                    "y",
+                    "r",
+                    "glow",
+                )
+            }
             for n in lay["nodes"]
         ],
         "lanes": [

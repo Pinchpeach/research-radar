@@ -5,7 +5,7 @@ Each saved judgment is one JSON line in judgments.jsonl in the app's data folder
 
 import json
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from backend import settings
@@ -20,7 +20,7 @@ def save_run(run: dict, judgments: dict[str, str], path: Path | None = None) -> 
     """Append one line per judged paper. Returns the number of lines written."""
     path = path or default_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    saved_at = datetime.now(timezone.utc).isoformat(timespec="seconds")
+    saved_at = datetime.now(UTC).isoformat(timespec="seconds")
     rows = [
         {
             "run_id": run["run_id"],

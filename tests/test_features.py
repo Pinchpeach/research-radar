@@ -14,11 +14,17 @@ api = TestClient(main.app, base_url="http://127.0.0.1")
 
 
 def test_free_full_text_prefers_the_pdf():
-    work = {"id": "https://openalex.org/W1", "best_oa_location": {"pdf_url": "https://r.example/p.pdf"},
-            "open_access": {"oa_url": "https://r.example/landing"}}
+    work = {
+        "id": "https://openalex.org/W1",
+        "best_oa_location": {"pdf_url": "https://r.example/p.pdf"},
+        "open_access": {"oa_url": "https://r.example/landing"},
+    }
     assert openalex.normalize_work(work)["open_access_url"] == "https://r.example/p.pdf"
     assert openalex.normalize_work({**work, "best_oa_location": None})["open_access_url"] == "https://r.example/landing"
-    assert openalex.normalize_work({"id": "W2", "open_access": {"oa_url": "javascript:alert(1)"}})["open_access_url"] is None
+    assert (
+        openalex.normalize_work({"id": "W2", "open_access": {"oa_url": "javascript:alert(1)"}})["open_access_url"]
+        is None
+    )
 
 
 def test_new_papers_since_the_day_after_each_search(monkeypatch):

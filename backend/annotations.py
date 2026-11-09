@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from backend import settings
@@ -41,7 +41,7 @@ def load(doc_id: str) -> dict | None:
 
 
 def save(doc_id: str, doc: dict) -> dict:
-    doc = {**doc, "id": doc_id, "updated_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    doc = {**doc, "id": doc_id, "updated_at": datetime.now(UTC).isoformat(timespec="seconds")}
     text = json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
     if len(text.encode("utf-8")) > MAX_BYTES:
         raise OverflowError("handwriting too large")
@@ -111,7 +111,9 @@ def all_summaries() -> list[dict]:
     docs = []
     for path in folder().glob("*.json"):
         try:
-            docs.append({**summary(json.loads(path.read_text(encoding="utf-8"))), "has_pdf": path.with_suffix(".pdf").exists()})
+            docs.append(
+                {**summary(json.loads(path.read_text(encoding="utf-8"))), "has_pdf": path.with_suffix(".pdf").exists()}
+            )
         except (ValueError, KeyError):
             continue
     return sorted(docs, key=lambda d: d.get("updated_at") or "", reverse=True)

@@ -107,7 +107,11 @@ def on_publisher(url: str, prefix: str) -> bool:
     (www-nature-com-ssl.access.yonsei.ac.kr/..., or .../_Lib_Proxy_Url/https://...)."""
     if not in_scope(url, prefix):
         return False
-    return (urlsplit(url).hostname or "").lower() != proxy_host(prefix) or (url.startswith(prefix) and re.match(r"https?://", url[len(prefix):], re.I) is not None and not prefix.endswith("="))
+    return (urlsplit(url).hostname or "").lower() != proxy_host(prefix) or (
+        url.startswith(prefix)
+        and re.match(r"https?://", url[len(prefix) :], re.I) is not None
+        and not prefix.endswith("=")
+    )
 
 
 def valid_proxy(prefix: str) -> bool:
@@ -135,7 +139,7 @@ def unwrap(prefix: str, url: str) -> str:
     page's relative links; a host-rewriting proxy's addresses are left as they are."""
     if not url.startswith(prefix):
         return url
-    inner = url[len(prefix):]
+    inner = url[len(prefix) :]
     if prefix.endswith("=") and inner.lower().startswith(("http%3a", "https%3a")):
         inner = unquote(inner.split("&", 1)[0])
     return inner if re.match(r"https?://", inner, re.I) else url
@@ -149,7 +153,11 @@ def publisher_url(doi: str, session=None) -> str:
     """Where the DOI points (the publisher's page), asked of doi.org without the library: a proxy
     serves the publishers its library subscribes to, which doi.org itself may not be among."""
     try:
-        record = (session or requests).get(f"https://doi.org/api/handles/{quote(doi, safe='/')}", params={"type": "URL"}, timeout=15).json()
+        record = (
+            (session or requests)
+            .get(f"https://doi.org/api/handles/{quote(doi, safe='/')}", params={"type": "URL"}, timeout=15)
+            .json()
+        )
         url = next(v["data"]["value"] for v in record.get("values", []) if v.get("type") == "URL")
         if re.match(r"https?://", url, re.I):
             # many DOIs still point at http:// pages; proxies keep the scheme, and http pages
@@ -177,7 +185,14 @@ def save_cookies(prefix: str, cookies: list[dict]) -> int:
     for c in cookies:
         domain = str(c.get("domain") or "").lstrip(".").lower()
         if c.get("name") and domain and in_scope(f"https://{domain}/", prefix):
-            kept.append({"name": str(c["name"]), "value": str(c.get("value") or ""), "domain": domain, "path": str(c.get("path") or "/")})
+            kept.append(
+                {
+                    "name": str(c["name"]),
+                    "value": str(c.get("value") or ""),
+                    "domain": domain,
+                    "path": str(c.get("path") or "/"),
+                }
+            )
     path = session_path()
     fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=".library-")
     try:

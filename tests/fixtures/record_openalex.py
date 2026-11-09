@@ -17,12 +17,23 @@ from fastapi.testclient import TestClient  # noqa: E402
 
 from backend import main  # noqa: E402
 from backend.routes import search  # noqa: E402
-from backend.services import candidates  # noqa: E402
-from backend.services import openalex  # noqa: E402
+from backend.services import (
+    candidates,  # noqa: E402
+    openalex,  # noqa: E402
+)
 
 TODAY = date(2026, 10, 17)
-KEEP = ("id", "title", "display_name", "abstract_inverted_index", "publication_year", "doi", "cited_by_count",
-        "referenced_works", "primary_topic")
+KEEP = (
+    "id",
+    "title",
+    "display_name",
+    "abstract_inverted_index",
+    "publication_year",
+    "doi",
+    "cited_by_count",
+    "referenced_works",
+    "primary_topic",
+)
 
 
 def request_key(url: str, params: dict) -> str:
@@ -33,11 +44,15 @@ def request_key(url: str, params: dict) -> str:
 def trim(work: dict) -> dict:
     out = {k: work.get(k) for k in KEEP}
     location = work.get("primary_location") or {}
-    out["primary_location"] = {"landing_page_url": location.get("landing_page_url"),
-                               "source": {"display_name": (location.get("source") or {}).get("display_name")}}
+    out["primary_location"] = {
+        "landing_page_url": location.get("landing_page_url"),
+        "source": {"display_name": (location.get("source") or {}).get("display_name")},
+    }
     out["open_access"] = {"oa_url": (work.get("open_access") or {}).get("oa_url")}
     out["best_oa_location"] = {"pdf_url": (work.get("best_oa_location") or {}).get("pdf_url")}
-    out["authorships"] = [{"author": {"display_name": a.get("author", {}).get("display_name")}} for a in work.get("authorships", [])]
+    out["authorships"] = [
+        {"author": {"display_name": a.get("author", {}).get("display_name")}} for a in work.get("authorships", [])
+    ]
     out["keywords"] = [{"display_name": k.get("display_name")} for k in work.get("keywords") or []]
     if out["primary_topic"]:
         out["primary_topic"] = {"display_name": out["primary_topic"].get("display_name")}
@@ -54,8 +69,9 @@ def shrink_references(recorded: dict) -> None:
         for ref in set(w.get("referenced_works") or []):
             counts[ref] = counts.get(ref, 0) + 1
     for w in works:
-        w["referenced_works"] = [r for r in w.get("referenced_works") or []
-                                 if openalex.short_id(r) in ids or counts.get(r, 0) >= 2]
+        w["referenced_works"] = [
+            r for r in w.get("referenced_works") or [] if openalex.short_id(r) in ids or counts.get(r, 0) >= 2
+        ]
 
 
 def main_(query: str) -> None:

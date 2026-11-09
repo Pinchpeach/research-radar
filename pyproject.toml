@@ -1,0 +1,26 @@
+# Lint and format settings (ruff), the way FastAPI and Pydantic keep their code.
+#   ruff check . && ruff format --check .
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["mobile", "frontend", "node_modules"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501", # long lines: the formatter decides, and long strings stay whole
+    "B008", # FastAPI's Depends() in defaults
+    "B905", # zip() without strict=: the lists are the same length by construction
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["backend", "desktop"]

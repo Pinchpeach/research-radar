@@ -1,4 +1,4 @@
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -15,8 +15,8 @@ class Weights(BaseModel):
 class SearchRequest(BaseModel):
     query: str = Field(min_length=2)
     limit: int = Field(default=20, ge=1, le=100)
-    year_from: Optional[int] = Field(default=None, ge=1800, le=2100)
-    year_to: Optional[int] = Field(default=None, ge=1800, le=2100)
+    year_from: int | None = Field(default=None, ge=1800, le=2100)
+    year_to: int | None = Field(default=None, ge=1800, le=2100)
     seed_ids: list[str] = Field(default_factory=list, max_length=10)
     require_abstract: bool = False
     weights: Weights = Field(default_factory=Weights)
@@ -47,18 +47,18 @@ class PaperData(BaseModel):
     id: str
     title: str = ""
     abstract: str = ""
-    year: Optional[int] = None
-    doi: Optional[str] = None
-    url: Optional[str] = None
-    open_access_url: Optional[str] = None
-    venue: Optional[str] = None
-    venue_id: Optional[str] = None  # OpenAlex source, to follow the journal
+    year: int | None = None
+    doi: str | None = None
+    url: str | None = None
+    open_access_url: str | None = None
+    venue: str | None = None
+    venue_id: str | None = None  # OpenAlex source, to follow the journal
     authors: list[str] = Field(default_factory=list)
     author_ids: list[str] = Field(default_factory=list)  # OpenAlex authors, in step with authors
     citations: int = 0
     referenced_works: list[str] = Field(default_factory=list)
     keywords: list[str] = Field(default_factory=list)
-    topic: Optional[str] = None
+    topic: str | None = None
 
 
 class Paper(PaperData):
@@ -75,7 +75,7 @@ class Paper(PaperData):
 class Seed(BaseModel):
     id: str
     title: str
-    year: Optional[int] = None
+    year: int | None = None
 
 
 class SearchResponse(BaseModel):
@@ -90,17 +90,17 @@ class SearchResponse(BaseModel):
 class BookmarkIn(BaseModel):
     paper: PaperData
     note: str = ""
-    tags: Optional[list[str]] = None
-    query: Optional[str] = None
+    tags: list[str] | None = None
+    query: str | None = None
 
 
 ReadingStatus = Literal["to_read", "reading", "read"]
 
 
 class BookmarkUpdate(BaseModel):
-    note: Optional[str] = None
-    tags: Optional[list[str]] = None
-    status: Optional[ReadingStatus] = None
+    note: str | None = None
+    tags: list[str] | None = None
+    status: ReadingStatus | None = None
 
 
 class Bookmark(BaseModel):
@@ -108,24 +108,24 @@ class Bookmark(BaseModel):
     paper: PaperData
     note: str
     tags: list[str]
-    query: Optional[str] = None
+    query: str | None = None
     created_at: str
     updated_at: str
     status: ReadingStatus = "to_read"
-    read_at: Optional[str] = None  # when it was marked read
+    read_at: str | None = None  # when it was marked read
 
 
 class ImportEntry(BaseModel):
     """One reference from a Zotero (RIS/BibTeX) export, as frontend/web/core/citations.js reads it."""
 
-    doi: Optional[str] = Field(default=None, max_length=300)
+    doi: str | None = Field(default=None, max_length=300)
     title: str = Field(default="", max_length=1000)
-    year: Optional[int] = None
+    year: int | None = None
     authors: list[str] = Field(default_factory=list)
-    venue: Optional[str] = Field(default=None, max_length=500)
+    venue: str | None = Field(default=None, max_length=500)
     tags: list[str] = Field(default_factory=list, max_length=50)
     note: str = Field(default="", max_length=5000)
-    url: Optional[str] = Field(default=None, max_length=2000)
+    url: str | None = Field(default=None, max_length=2000)
 
 
 class ImportRequest(BaseModel):
@@ -142,7 +142,7 @@ class FollowIn(BaseModel):
 
 class FlowRequest(BaseModel):
     papers: list[PaperData] = Field(default_factory=list, max_length=300)
-    query: Optional[str] = None  # kept out of topic labels
+    query: str | None = None  # kept out of topic labels
     include_bookmarks: bool = False
     include_foundations: bool = True
     max_foundations: int = Field(default=10, ge=0, le=30)
@@ -151,16 +151,18 @@ class FlowRequest(BaseModel):
 class SettingsUpdate(BaseModel):
     """Fields left out stay as they are; an empty string removes the saved value."""
 
-    openalex_api_key: Optional[str] = Field(default=None, max_length=200)
-    openalex_email: Optional[str] = Field(default=None, max_length=200)
-    language: Optional[Literal["ko", "en", ""]] = None
-    reading_goal: Optional[str] = Field(default=None, pattern=r"^([1-9][0-9]{0,2})?$")  # 1-999, "" resets
+    openalex_api_key: str | None = Field(default=None, max_length=200)
+    openalex_email: str | None = Field(default=None, max_length=200)
+    language: Literal["ko", "en", ""] | None = None
+    reading_goal: str | None = Field(default=None, pattern=r"^([1-9][0-9]{0,2})?$")  # 1-999, "" resets
     # a library proxy prefix (backend/library.py), "" removes it
-    library_proxy: Optional[str] = Field(default=None, max_length=300, pattern=r"^(https?://[A-Za-z0-9.-]+(:\d+)?(/\S*)?)?$")
+    library_proxy: str | None = Field(
+        default=None, max_length=300, pattern=r"^(https?://[A-Za-z0-9.-]+(:\d+)?(/\S*)?)?$"
+    )
 
 
 class KeyTest(BaseModel):
-    api_key: Optional[str] = Field(default=None, max_length=200)
+    api_key: str | None = Field(default=None, max_length=200)
 
 
 class AnnotationDoc(BaseModel):
@@ -168,8 +170,8 @@ class AnnotationDoc(BaseModel):
     reader owns their shape, and draws them only as SVG attributes and text."""
 
     title: str = Field(default="", max_length=500)
-    paper_id: Optional[str] = Field(default=None, max_length=100)
-    source: Optional[str] = Field(default=None, max_length=2000)  # where the PDF came from
+    paper_id: str | None = Field(default=None, max_length=100)
+    source: str | None = Field(default=None, max_length=2000)  # where the PDF came from
     page_count: int = Field(default=0, ge=0, le=10000)
     last_page: int = Field(default=1, ge=1, le=10000)
     pages: dict[str, list[dict]] = Field(default_factory=dict)  # PDF page number -> items
@@ -188,7 +190,7 @@ Judgment = Literal["relevant", "partial", "not_relevant"]
 class JudgedPaper(BaseModel):
     id: str
     title: str = ""
-    score: Optional[float] = None
+    score: float | None = None
 
 
 class EvaluationRun(BaseModel):

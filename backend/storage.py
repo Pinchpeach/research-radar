@@ -4,11 +4,10 @@ import json
 import os
 import sqlite3
 from contextlib import contextmanager
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from backend import settings
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS bookmarks (
@@ -96,7 +95,7 @@ class BookmarkStore:
     def save(self, paper: dict, note: str = "", tags: list[str] | None = None, query: str | None = None) -> dict:
         """Insert or replace the stored paper; keeps note/tags/created_at unless new ones are given."""
         bookmark_id = short_id(paper["id"])
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         existing = self.get(bookmark_id)
         with self._connect() as db:
             db.execute(
@@ -124,7 +123,7 @@ class BookmarkStore:
         existing = self.get(bookmark_id)
         if not existing:
             return None
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         status = existing["status"] if status is None else status
         if status not in STATUSES:
             raise ValueError(f"unknown reading status {status}")
@@ -158,11 +157,19 @@ def to_ris(bookmarks: list[dict]) -> str:
     entries = []
     for bookmark in bookmarks:
         paper = bookmark["paper"]
-        lines = [("TY", "JOUR"), ("TI", paper.get("title")), *(("AU", name) for name in paper.get("authors") or []),
-                 ("PY", paper.get("year")), ("JO", paper.get("venue")),
-                 ("DO", (paper.get("doi") or "").replace("https://doi.org/", "") or None), ("UR", paper.get("url")),
-                 ("AB", paper.get("abstract")), *(("KW", tag) for tag in bookmark.get("tags") or []),
-                 ("N1", bookmark.get("note")), ("ID", bookmark["id"])]
+        lines = [
+            ("TY", "JOUR"),
+            ("TI", paper.get("title")),
+            *(("AU", name) for name in paper.get("authors") or []),
+            ("PY", paper.get("year")),
+            ("JO", paper.get("venue")),
+            ("DO", (paper.get("doi") or "").replace("https://doi.org/", "") or None),
+            ("UR", paper.get("url")),
+            ("AB", paper.get("abstract")),
+            *(("KW", tag) for tag in bookmark.get("tags") or []),
+            ("N1", bookmark.get("note")),
+            ("ID", bookmark["id"]),
+        ]
         body = [f"{tag}  - {_ris_value(value)}" for tag, value in lines if value not in (None, "")]
         entries.append("\n".join([*body, "ER  - "]))
     return "\n\n".join(entries) + ("\n" if entries else "")

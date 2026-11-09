@@ -56,7 +56,9 @@ def recent_candidates(request: SearchRequest) -> list[dict]:
     if request.year_to and request.year_to < since:
         return []
     size = max(RECENT_FETCH_MIN, math.ceil(request.limit * request.recent_share * 3))
-    return openalex.search_papers(request.query, min(size, openalex.MAX_PER_PAGE), year_from=since, year_to=request.year_to)
+    return openalex.search_papers(
+        request.query, min(size, openalex.MAX_PER_PAGE), year_from=since, year_to=request.year_to
+    )
 
 
 def merge_candidates(papers: list[dict], exclude: set[str]) -> list[dict]:

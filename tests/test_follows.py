@@ -68,9 +68,17 @@ def test_openalex_filter_for_follows(monkeypatch):
 
     def get(url, params):
         seen.update(params)
-        return {"meta": {"count": 3}, "results": [{"id": "https://openalex.org/W1", "title": "x",
-                 "authorships": [{"author": {"id": "https://openalex.org/A9", "display_name": "Ada"}}],
-                 "primary_location": {"source": {"id": "https://openalex.org/S4", "display_name": "Nature"}}}]}
+        return {
+            "meta": {"count": 3},
+            "results": [
+                {
+                    "id": "https://openalex.org/W1",
+                    "title": "x",
+                    "authorships": [{"author": {"id": "https://openalex.org/A9", "display_name": "Ada"}}],
+                    "primary_location": {"source": {"id": "https://openalex.org/S4", "display_name": "Nature"}},
+                }
+            ],
+        }
 
     monkeypatch.setattr(openalex, "_get", get)
     count, papers = openalex.published_by("source", "S4", "2026-01-01")

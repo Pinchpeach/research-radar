@@ -16,11 +16,11 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-ROOT = Path(__file__).resolve().parent.parent
-
 from backend import main
 from backend.services import openalex
 from backend.services.techtree import layout, render_html
+
+ROOT = Path(__file__).resolve().parent.parent
 
 
 def check(label: str, ok: bool, detail: str = "") -> bool:
@@ -87,12 +87,16 @@ def main_cli() -> int:
     nodes = {n["id"]: n for n in flow["nodes"]}
     roles = Counter(n["role"] for n in flow["nodes"])
     lanes = {c["lane"]: c for c in flow["clusters"]}
-    print(f"\nFlow ({flow_s:.1f}s): {len(nodes)} papers ({dict(roles)}), {len(flow['edges'])} citation links, "
-          f"{len(flow['clusters'])} topics")
+    print(
+        f"\nFlow ({flow_s:.1f}s): {len(nodes)} papers ({dict(roles)}), {len(flow['edges'])} citation links, "
+        f"{len(flow['clusters'])} topics"
+    )
     for c in sorted(flow["clusters"], key=lambda c: c["lane"]):
         hub = nodes[c["hub"]]
-        print(f"  lane {c['lane']}: {c['label']!r}  {c['size']} papers {c['year_min']}–{c['year_max']}  "
-              f"hub: {hub['title'][:60]} ({hub['year']})")
+        print(
+            f"  lane {c['lane']}: {c['label']!r}  {c['size']} papers {c['year_min']}–{c['year_max']}  "
+            f"hub: {hub['title'][:60]} ({hub['year']})"
+        )
     for link in flow["cluster_links"][:6]:
         print(f"  {lanes[link['from_lane']]['label']!r} → {lanes[link['to_lane']]['label']!r}: {link['count']}")
     chain = [nodes[i] for i in flow["chain"]]
@@ -118,8 +122,11 @@ def main_cli() -> int:
         check("foundational works added", roles.get("foundation", 0) > 0, f"{roles.get('foundation', 0)}"),
         check("more than one topic", len(flow["clusters"]) > 1, f"{len(flow['clusters'])}"),
         check("every dated paper drawn", len(lay["nodes"]) == sum(1 for n in flow["nodes"] if n["year"])),
-        check("topic branching found", any(p is not None for p in parents.values()),
-              ", ".join(f"{k}←{v}" for k, v in parents.items() if v is not None) or "none"),
+        check(
+            "topic branching found",
+            any(p is not None for p in parents.values()),
+            ", ".join(f"{k}←{v}" for k, v in parents.items() if v is not None) or "none",
+        ),
     ]
     print(f"\nPoster: {args.out}  ({len(page) // 1024} KB, {lay['width']:.0f}×{lay['height']:.0f})")
     return 0 if all(results) else 1

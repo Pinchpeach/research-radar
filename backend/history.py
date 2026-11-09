@@ -5,7 +5,7 @@ each run, so the browser's own storage would forget them).
 """
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from backend import settings
@@ -22,7 +22,9 @@ def load(path: Path | None = None) -> list[dict]:
         data = json.loads((path or default_path()).read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return []
-    return [e for e in data if isinstance(e, dict) and isinstance(e.get("query"), str)] if isinstance(data, list) else []
+    return (
+        [e for e in data if isinstance(e, dict) and isinstance(e.get("query"), str)] if isinstance(data, list) else []
+    )
 
 
 def record(query: str, path: Path | None = None) -> None:
@@ -32,7 +34,7 @@ def record(query: str, path: Path | None = None) -> None:
         return
     path = path or default_path()
     entries = [e for e in load(path) if e["query"].casefold() != query.casefold()]
-    entry = {"query": query, "searched_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    entry = {"query": query, "searched_at": datetime.now(UTC).isoformat(timespec="seconds")}
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps([entry, *entries][:MAX_ENTRIES], ensure_ascii=False), encoding="utf-8")
 

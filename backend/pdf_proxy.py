@@ -15,7 +15,10 @@ import requests
 MAX_BYTES = 80 * 1024 * 1024
 MAX_REDIRECTS = 5
 TIMEOUT = 30
-HEADERS = {"User-Agent": "ResearchRadar (+https://github.com/Pinchpeach/research-radar)", "Accept": "application/pdf,*/*"}
+HEADERS = {
+    "User-Agent": "ResearchRadar (+https://github.com/Pinchpeach/research-radar)",
+    "Accept": "application/pdf,*/*",
+}
 
 
 class Refused(Exception):

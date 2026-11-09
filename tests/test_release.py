@@ -14,7 +14,6 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "desktop"))
 import release  # noqa: E402
 
-
 # ---------- release helper used by the workflow ----------
 
 
@@ -37,10 +36,13 @@ def test_other_tags_are_rejected(tag):
 
 
 def test_check_tag_command_fails_the_build_on_mismatch():
-    bad = subprocess.run([sys.executable, "desktop/release.py", "check-tag", "v0.0.1"], cwd=ROOT, capture_output=True, text=True)
+    bad = subprocess.run(
+        [sys.executable, "desktop/release.py", "check-tag", "v0.0.1"], cwd=ROOT, capture_output=True, text=True
+    )
     assert bad.returncode == 1 and "::error::" in bad.stdout
-    good = subprocess.run([sys.executable, "desktop/release.py", "check-tag", f"v{__version__}"], cwd=ROOT,
-                          capture_output=True, text=True)
+    good = subprocess.run(
+        [sys.executable, "desktop/release.py", "check-tag", f"v{__version__}"], cwd=ROOT, capture_output=True, text=True
+    )
     assert good.returncode == 0
 
 
@@ -52,8 +54,13 @@ def test_release_notes_name_the_versioned_files():
     assert notes.count("curl") >= 4 and "What's Changed" not in notes  # downloads only
     assert "android.apk" not in notes
     assert f"ResearchRadar-{__version__}-android.apk" in release.notes(f"v{__version__}", android=True)
-    cli = subprocess.run([sys.executable, "desktop/release.py", "notes", "v1.2.3", "--android"], cwd=ROOT,
-                         capture_output=True, text=True, encoding="utf-8")  # release.py writes UTF-8
+    cli = subprocess.run(
+        [sys.executable, "desktop/release.py", "notes", "v1.2.3", "--android"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )  # release.py writes UTF-8
     assert cli.returncode == 0 and "ResearchRadar-1.2.3-android.apk" in cli.stdout
 
 
@@ -84,7 +91,9 @@ def test_newer_release_is_reported(monkeypatch):
 
     def fake_get(url, headers, timeout):
         calls.append(url)
-        return Resp(200, {"tag_name": "v99.0.0", "html_url": "https://github.com/x/releases/v99.0.0", "published_at": "2027"})
+        return Resp(
+            200, {"tag_name": "v99.0.0", "html_url": "https://github.com/x/releases/v99.0.0", "published_at": "2027"}
+        )
 
     monkeypatch.setattr(updates.requests, "get", fake_get)
     info = TestClient(main.app, base_url="http://127.0.0.1").get("/version").json()
@@ -112,7 +121,10 @@ def test_update_check_failures_are_silent(monkeypatch):
 
 def test_readme_download_links_point_at_this_version():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
-    links = re.findall(r"releases/download/(v[^/]+)/ResearchRadar-([^)]+?)-(windows\.zip|macos\.zip|linux\.tar\.gz|android\.apk)\)", readme)
+    links = re.findall(
+        r"releases/download/(v[^/]+)/ResearchRadar-([^)]+?)-(windows\.zip|macos\.zip|linux\.tar\.gz|android\.apk)\)",
+        readme,
+    )
     assert {"windows.zip", "macos.zip", "linux.tar.gz"} <= {kind for _, _, kind in links}
     for tag, version, _ in links:
         assert tag == f"v{__version__}" and version == __version__, "update the README download links"

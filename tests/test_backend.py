@@ -70,7 +70,9 @@ QUERY = "optical observations of isolated neutron stars"
 
 def candidates():
     return [
-        paper("W1", "Optical observations of isolated neutron stars", "VLT photometry of isolated neutron stars", 2015, 50),
+        paper(
+            "W1", "Optical observations of isolated neutron stars", "VLT photometry of isolated neutron stars", 2015, 50
+        ),
         paper("W2", "Deep learning for images", "convolutional networks", 2023, 5000),
         paper("W3", "X-ray thermal emission of neutron stars", "isolated neutron stars blackbody", 2005, 300),
     ]
@@ -109,16 +111,26 @@ def test_seed_weight_ignored_without_seeds():
 def test_relevance_is_text_only_without_references():
     ranked = rank_papers(QUERY, candidates(), current_year=2026)
     top = max(p["relevance_score"] for p in ranked)
-    assert [p["scores"]["relevance"] for p in ranked] == pytest.approx([p["relevance_score"] / top for p in ranked], abs=0.01)
+    assert [p["scores"]["relevance"] for p in ranked] == pytest.approx(
+        [p["relevance_score"] / top for p in ranked], abs=0.01
+    )
 
 
 def test_an_acronym_finds_the_spelled_out_term_and_plurals_match():
     papers = [
-        paper("W1", "Graph neural networks for molecules", "We study graph neural networks (GNNs) on molecular graphs.", 2020, 10),
+        paper(
+            "W1",
+            "Graph neural networks for molecules",
+            "We study graph neural networks (GNNs) on molecular graphs.",
+            2020,
+            10,
+        ),
         paper("W2", "A survey of convolution", "Convolutional neural networks (CNNs) for images.", 2020, 10),
         paper("W3", "Message passing", "A graph neural network passes messages between atoms.", 2021, 10),
     ]
-    ranked = rank_papers("GNN", papers, weights={"relevance": 1, "influence": 0, "impact": 0, "recency": 0}, current_year=2026)
+    ranked = rank_papers(
+        "GNN", papers, weights={"relevance": 1, "influence": 0, "impact": 0, "recency": 0}, current_year=2026
+    )
     assert [p["id"].rsplit("/", 1)[-1] for p in ranked][:2] in (["W1", "W3"], ["W3", "W1"])  # neither says "GNN" alone
     assert ranked[-1]["id"].endswith("W2")
     assert ranking.expand_query("graph neural network", [p["abstract"] for p in papers]) == "graph neural network gnn"
@@ -129,7 +141,9 @@ def test_keywords_count_as_text_and_feedback_lifts_like_papers():
     def one(pid, title, abstract, keywords=()):
         return {**paper(pid, title, abstract, 2020, 10), "keywords": list(keywords)}
 
-    papers = [one(f"W{i}", f"Pulsar timing {i}", "pulsar timing arrays detect gravitational waves") for i in range(1, 5)]
+    papers = [
+        one(f"W{i}", f"Pulsar timing {i}", "pulsar timing arrays detect gravitational waves") for i in range(1, 5)
+    ]
     papers.append(one("W8", "Nanohertz background", "a background of nanohertz gravitational waves", ["Pulsar timing"]))
     papers.append(one("W9", "Cooking", "recipes for bread"))
     ranked = {p["id"].rsplit("/", 1)[-1]: p for p in rank_papers("pulsar timing", papers, current_year=2026)}
@@ -143,8 +157,10 @@ def test_bookmarks_lift_papers_like_them_and_need_two_to_count():
         paper("W2", "Exoplanet atmospheres", "transmission spectra of hot jupiters", 2020, 10),
         paper("W3", "Magnetar outbursts", "x-ray outbursts of magnetars and neutron stars", 2020, 10),
     ]
-    mine = [paper("W8", "Cooling of young neutron stars", "neutron star thermal evolution", 2010, 5),
-            paper("W9", "Magnetars", "magnetar x-ray emission", 2012, 5)]
+    mine = [
+        paper("W8", "Cooling of young neutron stars", "neutron star thermal evolution", 2010, 5),
+        paper("W9", "Magnetars", "magnetar x-ray emission", 2012, 5),
+    ]
     plain = rank_papers("stars", papers, current_year=2026)
     personal = rank_papers("stars", papers, weights={"personal": 1.0}, current_year=2026, profile=mine)
     by_id = {p["id"].rsplit("/", 1)[-1]: p["scores"]["personal"] for p in personal}
@@ -157,11 +173,27 @@ def test_bookmarks_lift_papers_like_them_and_need_two_to_count():
 def test_citation_context_lifts_papers_that_share_references():
     refs = [f"R{i}" for i in range(6)]
     papers = [
-        paper("W1", "Optical observations of isolated neutron stars", "isolated neutron stars photometry", 2010, refs=refs),
-        paper("W2", "Isolated neutron stars in the optical", "deep imaging of isolated neutron stars", 2012, refs=refs[1:]),
-        paper("W3", "Faint counterparts of thermally emitting X-ray sources", "VLT imaging of RX J1856", 2014, refs=refs[:5]),
+        paper(
+            "W1", "Optical observations of isolated neutron stars", "isolated neutron stars photometry", 2010, refs=refs
+        ),
+        paper(
+            "W2", "Isolated neutron stars in the optical", "deep imaging of isolated neutron stars", 2012, refs=refs[1:]
+        ),
+        paper(
+            "W3",
+            "Faint counterparts of thermally emitting X-ray sources",
+            "VLT imaging of RX J1856",
+            2014,
+            refs=refs[:5],
+        ),
         paper("W4", "Isolated neutron stars", "", 2019),  # stub: title only
-        paper("W5", "Neutron star equation of state", "dense matter in neutron stars", 2020, refs=["Q1", "Q2", "Q3", "Q4", "Q5"]),
+        paper(
+            "W5",
+            "Neutron star equation of state",
+            "dense matter in neutron stars",
+            2020,
+            refs=["Q1", "Q2", "Q3", "Q4", "Q5"],
+        ),
     ]
     context = citation_context(papers, np.array([1.0, 0.9, 0.0, 0.95, 0.3]))
     assert context[2] > context[4] and context[2] > context[3] == 0
@@ -376,7 +408,9 @@ def test_influence_rewards_papers_the_relevant_literature_builds_on():
     from backend.services.ranking import citation_influence
 
     core = paper("W1", "Graph convolutional networks", "graph convolution", 2016, 5000)
-    followers = [paper(f"W{i}", f"Graph network variant {i}", "graph network", 2020, 10, refs=["W1"]) for i in range(2, 6)]
+    followers = [
+        paper(f"W{i}", f"Graph network variant {i}", "graph network", 2020, 10, refs=["W1"]) for i in range(2, 6)
+    ]
     loner = paper("W9", "Graph networks again", "graph network", 2021, 10)
     papers = [core, *followers, loner]
     received = citation_influence(papers, np.ones(len(papers)))
@@ -385,8 +419,13 @@ def test_influence_rewards_papers_the_relevant_literature_builds_on():
 
 
 def test_key_paper_outranks_relevant_but_uncited_paper():
-    core = paper("W1", "Semi-supervised classification with graph convolutional networks", "graph convolution layer", 2016, 7000)
-    followers = [paper(f"W{i}", f"Graph neural networks for task {i}", "graph neural networks", 2022, 20, refs=["W1"]) for i in range(2, 7)]
+    core = paper(
+        "W1", "Semi-supervised classification with graph convolutional networks", "graph convolution layer", 2016, 7000
+    )
+    followers = [
+        paper(f"W{i}", f"Graph neural networks for task {i}", "graph neural networks", 2022, 20, refs=["W1"])
+        for i in range(2, 7)
+    ]
     ranked = rank_papers("graph neural networks", [core, *followers], current_year=2026)
     assert ranked[0]["id"].endswith("W1")
     assert ranked[0]["scores"]["influence"] == 1.0 and ranked[0]["cited_by_results"] == 5
@@ -398,9 +437,13 @@ def test_key_paper_outranks_relevant_but_uncited_paper():
 def test_influence_is_damped_for_off_topic_hubs():
     on_topic = paper("W1", "Graph attention networks", "graph attention networks neural", 2017, 8000)
     generic = paper("W2", "Adam: a method for stochastic optimization", "stochastic optimization gradient", 2014, 90000)
-    followers = [paper(f"W{i}", f"Graph neural network model {i}", "graph neural network attention", 2021, 5, refs=["W1", "W2"])
-                 for i in range(3, 8)]
-    ranked = {p["id"].rsplit("/", 1)[-1]: p for p in rank_papers("graph neural networks", [on_topic, generic, *followers])}
+    followers = [
+        paper(f"W{i}", f"Graph neural network model {i}", "graph neural network attention", 2021, 5, refs=["W1", "W2"])
+        for i in range(3, 8)
+    ]
+    ranked = {
+        p["id"].rsplit("/", 1)[-1]: p for p in rank_papers("graph neural networks", [on_topic, generic, *followers])
+    }
     assert ranked["W1"]["scores"]["influence"] > ranked["W2"]["scores"]["influence"]
     assert ranked["W1"]["score"] > ranked["W2"]["score"]
 
@@ -418,10 +461,23 @@ def test_search_adds_core_references(monkeypatch):
     def fake_get(url, params):
         flt = params.get("filter", "")
         if "ids.openalex" in flt:
-            return {"results": [work("W500", "Semi-supervised classification with graph convolutional networks",
-                                     "graph convolution", 2016, 7000)]}
-        return {"results": [work(f"W{i}", f"Graph neural networks study {i}", "graph neural networks", 2022, 10, refs=["W500"])
-                            for i in range(1, 6)]}
+            return {
+                "results": [
+                    work(
+                        "W500",
+                        "Semi-supervised classification with graph convolutional networks",
+                        "graph convolution",
+                        2016,
+                        7000,
+                    )
+                ]
+            }
+        return {
+            "results": [
+                work(f"W{i}", f"Graph neural networks study {i}", "graph neural networks", 2022, 10, refs=["W500"])
+                for i in range(1, 6)
+            ]
+        }
 
     monkeypatch.setattr(openalex, "_get", fake_get)
     body = api.post("/search", json={"query": "graph neural networks", "limit": 10}).json()
@@ -437,11 +493,23 @@ def test_recent_group_is_added_on_top_and_skips_shown_and_stub_papers():
     from backend.services.ranking import select_results
 
     def item(wid, year, score, frontier=0.0, abstract="text"):
-        return {"id": wid, "year": year, "score": score, "abstract": abstract, "referenced_works": [],
-                "scores": {"frontier": frontier}}
+        return {
+            "id": wid,
+            "year": year,
+            "score": score,
+            "abstract": abstract,
+            "referenced_works": [],
+            "scores": {"frontier": frontier},
+        }
 
-    ranked = [item("A", 2010, 90), item("B", 2024, 80, 0.9), item("C", 2012, 70),
-              item("D", 2025, 10, 0.8), item("E", 2026, 9, 0.95, abstract=""), item("F", 2023, 8, 0.5)]
+    ranked = [
+        item("A", 2010, 90),
+        item("B", 2024, 80, 0.9),
+        item("C", 2012, 70),
+        item("D", 2025, 10, 0.8),
+        item("E", 2026, 9, 0.95, abstract=""),
+        item("F", 2023, 8, 0.5),
+    ]
     out = select_results(ranked, limit=3, recent_share=0.67, since=2022)
     assert [p["id"] for p in out] == ["A", "B", "C", "D", "F"]  # E is a stub; B is already shown
     assert [p["group"] for p in out] == ["core"] * 3 + ["recent"] * 2
@@ -470,9 +538,17 @@ def test_search_fetches_recent_candidates_and_returns_groups(monkeypatch):
         calls.append(params)
         flt = params.get("filter", "")
         if "from_publication_date" in flt:  # the recent-only search
-            return {"results": [work(f"W9{i}", f"New graph neural networks method {i}", "graph neural networks", 2026, 1)
-                                for i in range(3)]}
-        return {"results": [work(f"W{i}", f"Graph neural networks {i}", "graph neural networks", 2010 + i, 100) for i in range(5)]}
+            return {
+                "results": [
+                    work(f"W9{i}", f"New graph neural networks method {i}", "graph neural networks", 2026, 1)
+                    for i in range(3)
+                ]
+            }
+        return {
+            "results": [
+                work(f"W{i}", f"Graph neural networks {i}", "graph neural networks", 2010 + i, 100) for i in range(5)
+            ]
+        }
 
     monkeypatch.setattr(openalex, "_get", fake_get)
     body = api.post("/search", json={"query": "graph neural networks", "limit": 4, "recent_share": 0.5}).json()
