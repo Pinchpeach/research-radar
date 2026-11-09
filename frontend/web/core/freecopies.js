@@ -5,6 +5,7 @@ import { unpaywallLinks } from "./library.js";
 import { OPENALEX_URL, webUrl } from "./openalex.js";
 
 const EUROPE_PMC_URL = "https://www.ebi.ac.uk/europepmc/webservices/rest/search";
+const TIMEOUT_MS = 20_000;
 const ARXIV_DOI = /^10\.48550\/arxiv\.(.+)$/i;
 const ARXIV_PAGE = /^https?:\/\/(?:www\.)?arxiv\.org\/(?:abs|pdf)\/([^?#]+?)(?:\.pdf)?$/i;
 
@@ -26,7 +27,10 @@ export function openalexLinks(work) {
 export async function europePmcLinks(fetch, doi) {
   const url = new URL(EUROPE_PMC_URL);
   for (const [name, value] of Object.entries({ query: `DOI:"${doi}"`, resultType: "core", format: "json", pageSize: 1 })) url.searchParams.set(name, value);
-  const response = await fetch(url.toString());
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller && setTimeout(() => controller.abort(), TIMEOUT_MS); // as freecopies.py's TIMEOUT
+  let response;
+  try { response = await fetch(url.toString(), { signal: controller && controller.signal }); } finally { if (timer) clearTimeout(timer); }
   if (!response.ok) throw new Error(`Europe PMC ${response.status}`);
   const results = ((await response.json()).resultList || {}).result || [];
   if (!results.length) return [];

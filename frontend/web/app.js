@@ -277,8 +277,6 @@ function paperCard(paper, { rank, query, extra } = {}) {
 
   followMenu(node.querySelector(".follow"), paper);
 
-  const free = node.querySelector(".free"), freeUrl = webUrl(paper.open_access_url);
-  if (freeUrl) { free.href = freeUrl; free.hidden = false; }
   node.querySelector(".from-here").addEventListener("click", () => startFrom(paper, query));
   node.querySelector(".read-pdf").addEventListener("click", () => readPaper(paper));
 
@@ -622,7 +620,8 @@ let readerModule = null;
 async function openReader(options) {
   readerModule ??= await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
   return readerModule.openReader({ api, saveFile, onOpened: readingStarted, onFinished: readingFinished,
-    onAttachNote: attachToNote, onClose: () => { loadBookmarks(); if (currentTab === "reading") renderDocs(); }, ...options });
+    onAttachNote: attachToNote,
+    onClose: () => { loadBookmarks(); if (currentTab === "reading") renderDocs(); }, ...options });
 }
 
 // Android: a PDF opened with the app (mobile.js), on the paper it was fetched for, if any.

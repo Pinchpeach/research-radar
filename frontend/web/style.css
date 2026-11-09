@@ -157,11 +157,8 @@ textarea { width: 100%; resize: vertical; }
   .drawer { transition: none; }
 }
 
-/* ── paper actions: free full text, start from here, reading status ── */
+/* ── paper actions: open, start from here, follow, reading status ── */
 .paper-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin-top: 8px; }
-.paper-actions .free { font-size: 12.5px; font-weight: 700; text-decoration: none; color: var(--ok);
-  border: 1px solid var(--ok); border-radius: 999px; padding: 3px 10px; }
-.paper-actions .free:hover { background: rgba(26, 127, 75, .08); }
 .paper-actions .from-here { font-size: 12.5px; padding: 3px 10px; border-radius: 999px; color: var(--accent); border-color: var(--accent); background: none; }
 .status-control { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; }
 .status-control button { border: 0; border-radius: 0; padding: 3px 10px; font-size: 12.5px; background: none; color: var(--text-2); }

@@ -20,7 +20,7 @@ async function drawItems(PDFLib, pdf, page, items, toPdf, rasterize) {
   const flipped = (pts) => pts.map(([x, y]) => toPdf(x, y));
   for (const item of items) {
     if (item.type === "ink") {
-      const path = polygonPath(flipped(strokeOutline(item.points, item.width)), true);
+      const path = polygonPath(flipped(strokeOutline(item.points, item.width, item.pen)), true);
       page.drawSvgPath(path, { x: 0, y: 0, color: rgbOf(PDFLib, item.color), borderWidth: 0 });
     } else if (item.type === "highlight") {
       page.drawSvgPath(linePath(flipped(item.points), true), {

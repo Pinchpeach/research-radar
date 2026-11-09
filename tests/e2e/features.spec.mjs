@@ -2,6 +2,7 @@
 
 import fs from "node:fs";
 import { expect, go, QUERY, search, test } from "./fixtures.mjs";
+import { samplePdf } from "./sample-pdf.mjs";
 
 const FIXTURE = JSON.parse(fs.readFileSync(new URL("../fixtures/openalex_graph_neural_networks.json", import.meta.url), "utf8"));
 const GNN_MODEL = "W2116341502"; // "The Graph Neural Network Model", first for the recorded search
@@ -13,13 +14,35 @@ test.describe("free full text", () => {
   test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
     (w.id.endsWith(`/${GNN_MODEL}`) ? { ...w, best_oa_location: { pdf_url: PDF }, open_access: { oa_url: "https://example.org/landing" } } : w)) }) } });
 
-  test("open-access papers get a free-reading link, the PDF first", async ({ page }) => {
+  test("one Open button: the free PDF the first time, the saved note after that", async ({ page }) => {
+    let fetched = 0;
+    await page.context().route(PDF, async (route) => {
+      fetched += 1;
+      return route.fulfill({ headers: JSON_HEADERS, contentType: "application/pdf", body: await samplePdf(3) });
+    });
+    await page.addInitScript(() => {
+      if (window !== window.top) return; // a stand-in for the app's storage, where opened PDFs are kept
+      const files = {};
+      window.Capacitor = { convertFileSrc: (uri) => files[uri.slice(7)], Plugins: { Filesystem: {
+        stat: async ({ path }) => { if (!files[path]) throw new Error("no file"); return {}; },
+        getUri: async ({ path }) => ({ uri: "kept://" + path }),
+        writeFile: async ({ path, data }) => { files[path] = URL.createObjectURL(new Blob([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))])); return {}; },
+        deleteFile: async ({ path }) => { delete files[path]; },
+      } } };
+    });
     await search(page);
     const card = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first();
-    await expect(card.locator(".free")).toBeVisible();
-    await expect(card.locator(".free")).toHaveAttribute("href", PDF);
-    const others = page.locator("#results .paper .free:not([hidden])");
-    await expect(others).toHaveCount(1);
+    await expect(card.locator(".paper-actions a, .paper-actions .free")).toHaveCount(0); // no separate free link
+    await expect(card.locator(".read-pdf")).toHaveText("열기");
+    await card.locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    await expect(page.locator(".rd-toast")).toHaveText("이 PDF를 노트로 저장했어요. 다음에는 받지 않고 바로 열려요.");
+    await page.locator(".rd-close").click();
+
+    await card.locator(".read-pdf").click();
+    await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
+    await expect(page.locator(".rd-toast")).toHaveText("저장된 노트를 열었어요.");
+    expect(fetched).toBe(1);
   });
 });
 

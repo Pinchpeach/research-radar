@@ -6,8 +6,8 @@
 // PDF when saved (export.js).
 
 import {
-  bbox, hits, HIGHLIGHT_OPACITY, lassoed, linePath, moved, newId, polygonPath, safeColour, simplify,
-  strokeOutline, TEXT_LINE, textLines,
+  bbox, eraseFrom, hits, HIGHLIGHT_OPACITY, lassoed, linePath, moved, newId, PEN_TYPES, polygonPath, recognizeShape, safeColour,
+  scaled, simplify, strokeOutline, TEXT_LINE, textLines,
 } from "./ink.js";
 import { annotatedPdf, NOTE_PAGE, notesPdf } from "./export.js";
 
@@ -18,6 +18,9 @@ const PEN_COLOURS = ["#1b1b1a", "#e5484d", "#2a78d6", "#1a7f4b", "#c98500", "#8e
 const HIGHLIGHT_COLOURS = ["#ffd400", "#7ee081", "#ff8fb1", "#8ecbff"];
 const SIZES = { pen: [0.8, 6, 1.6], highlighter: [6, 28, 12], text: [8, 32, 12] }; // min, max, default
 const MAX_ZOOM = 4, MIN_ZOOM = 0.5;
+const ERASER_MODES = ["area", "stroke", "highlight"]; // part of a stroke, whole strokes, highlighter only
+const HOLD_MS = 500; // draw and hold this still: the stroke snaps to a clean line or shape
+const TAP_MS = 300; // two or three fingers down and up this quickly: undo or redo
 
 let pdfjsLib = null;
 async function loadPdfjs() {
@@ -86,6 +89,7 @@ class Reader {
     this.colours = { pen: PEN_COLOURS[0], highlighter: HIGHLIGHT_COLOURS[0], text: PEN_COLOURS[0] };
     this.sizes = { pen: SIZES.pen[2], highlighter: SIZES.highlighter[2], text: SIZES.text[2] };
     this.penOnly = false; this.penOnlyChosen = false;
+    this.penType = "fountain"; this.eraserMode = "area"; this.straightHighlight = false;
     this.zoom = 1; this.undo = []; this.redo = []; this.selection = null;
     this.surfaces = new Map(); this.viewports = new Map(); this.textCache = new Map();
     this.doc = null; this.docId = null; this.bytes = null; this.pdf = null;
@@ -115,6 +119,7 @@ class Reader {
     }
     // kept with its document: opens again as it is, with no new download or sign-in (keptPdf)
     if (this.bytes && !this.kept && (this.file || this.paper)) this.keep();
+    else if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
     const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
     if (!this.bytes && (wanted || error)) this.showUnavailable(error);
     else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
@@ -177,6 +182,7 @@ class Reader {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       }
       await this.flush(); // listed under Reading, where it opens again (and can be removed)
+      this.toast(t("rd.keptNote"));
     } catch { /* still open now; found again next time */ }
   }
 
@@ -316,6 +322,7 @@ class Reader {
     const tool = (name, label, icon) => el("button", { type: "button", class: "rd-tool", "data-tool": name, title: label, "aria-label": label,
       onclick: () => this.setTool(name) }, icon);
     this.colourRow = el("div", { class: "rd-colours" });
+    this.optionsRow = el("div", { class: "rd-options" }); // the tool's own choices: pen type, eraser mode, straight highlighter
     this.sizeInput = el("input", { type: "range", class: "rd-size", "aria-label": t("rd.size"), oninput: () => this.setSize(Number(this.sizeInput.value)) });
     this.customColour = el("input", { type: "color", class: "rd-custom", title: t("rd.customColour"), "aria-label": t("rd.customColour"),
       oninput: () => this.setColour(this.customColour.value) });
@@ -352,8 +359,9 @@ class Reader {
           tool("eraser", t("rd.eraser"), I('<path d="m4 15 9-9 7 7-6 6H8z"/><path d="M9 20h11"/>')),
           tool("text", t("rd.text"), I('<path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/>')),
           tool("select", t("rd.select"), I('<path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="m10 9 6 3-3 1-1 3z"/>')),
-          el("span", { class: "rd-sep" }), this.colourRow, this.customColour, this.sizeInput,
+          el("span", { class: "rd-sep" }), this.optionsRow, this.colourRow, this.customColour, this.sizeInput,
           el("span", { class: "rd-sep" }),
+          action("rd-duplicate", t("rd.duplicate"), I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'), () => this.duplicateSelection()),
           action("rd-delete", t("rd.deleteSelection"), I('<path d="M5 7h14"/><path d="M10 7V5h4v2"/><path d="M7 7l1 13h8l1-13"/>'), () => this.deleteSelection())),
         el("div", { class: "rd-row rd-views" },
           action("rd-penonly", t("rd.penOnly"), I('<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M3 3l18 18"/>'), () => this.setPenOnly(!this.penOnly, true)),
@@ -421,6 +429,21 @@ class Reader {
     const [min, max] = SIZES[kind];
     Object.assign(this.sizeInput, { min, max, step: kind === "pen" ? 0.2 : 1, value: this.sizes[kind] });
     this.showColour(kind);
+    this.showOptions();
+  }
+
+  /** The current tool's own choices, as the note apps have them: pen types, eraser modes, a straight highlighter. */
+  showOptions() {
+    const choice = (value, current, label, set) => el("button", { type: "button", class: `rd-opt${value === current ? " on" : ""}`,
+      "data-opt": value, text: label, onclick: () => { set(value); this.showOptions(); } });
+    let options = [];
+    if (this.tool === "pen") options = PEN_TYPES.map((p) => choice(p, this.penType, t(`rd.pen_${p}`), (v) => (this.penType = v)));
+    else if (this.tool === "eraser") options = ERASER_MODES.map((m) => choice(m, this.eraserMode, t(`rd.erase_${m}`), (v) => (this.eraserMode = v)));
+    else if (this.tool === "highlighter") {
+      options = [choice("straight", this.straightHighlight ? "straight" : "", t("rd.straight"), () => (this.straightHighlight = !this.straightHighlight))];
+    }
+    this.optionsRow.replaceChildren(...options);
+    this.optionsRow.hidden = !options.length;
   }
 
   get kind() { return this.tool === "highlighter" ? "highlighter" : this.tool === "text" ? "text" : "pen"; }
@@ -590,7 +613,7 @@ class Reader {
   itemNode(item) {
     const colour = safeColour(item.color);
     let node;
-    if (item.type === "ink") node = svgEl("path", { d: polygonPath(strokeOutline(item.points, item.width)), fill: colour });
+    if (item.type === "ink") node = svgEl("path", { d: polygonPath(strokeOutline(item.points, item.width, item.pen)), fill: colour });
     else if (item.type === "highlight") {
       node = svgEl("path", { d: linePath(item.points), fill: "none", stroke: colour, "stroke-width": item.width,
         "stroke-linecap": "round", "stroke-linejoin": "round", opacity: HIGHLIGHT_OPACITY, class: "rd-hl" });
@@ -679,7 +702,13 @@ class Reader {
       this.setPenOnly(true); // a stylus: fingers now only scroll and zoom (palm rejection)
       this.toast(t("rd.penDetected"));
     }
-    if (e.pointerType === "touch") this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === "touch") {
+      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      // two or three fingers tapped together: undo or redo (GoodNotes, Notability)
+      if (!this.tap || this.touches.size === 1) this.tap = { at: Date.now(), fingers: 0, moved: false, starts: new Map() };
+      this.tap.fingers = Math.max(this.tap.fingers, this.touches.size);
+      this.tap.starts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    }
     if (this.gesture && this.gesture.kind === "draw" && e.pointerType === "touch" && this.touches.size > 1) {
       s.liveG.replaceChildren(); this.gesture = null; // a second finger: it was a pinch, not a line
     }
@@ -688,18 +717,27 @@ class Reader {
     e.preventDefault();
     try { s.svg.setPointerCapture(e.pointerId); } catch { /* not a live pointer (synthetic events) */ }
     const p = this.pointOn(s, e), pressure = e.pointerType === "pen" ? e.pressure || 0.5 : 0;
-    if (this.tool === "pen" || this.tool === "highlighter") {
-      this.gesture = { kind: "draw", s, id: e.pointerId, points: [[...p, pressure]] };
-      this.drawLive();
-    } else if (this.tool === "eraser") {
+    // the stylus's eraser end, or its side button held (S Pen): erase whatever the tool is
+    const stylusErases = e.pointerType === "pen" && (e.button === 5 || e.button === 2 || (e.buttons & 32) || (e.buttons & 2));
+    if (stylusErases || this.tool === "eraser") {
       this.gesture = { kind: "erase", s, id: e.pointerId, before: clone(this.itemsOf(s.key)), removed: 0 };
       this.eraseAt(s, p);
+    } else if (this.tool === "pen" || this.tool === "highlighter") {
+      this.gesture = { kind: "draw", s, id: e.pointerId, points: [[...p, pressure]], highlight: this.tool === "highlighter" };
+      this.drawLive();
+      this.holdAt(e);
     } else if (this.tool === "text") {
       const item = this.itemAt(s, p, (i) => i.type === "text");
       if (item) this.editText(s, item);
       else this.newText(s, p);
     } else if (this.tool === "select") {
       const sel = this.selection;
+      const box = sel && sel.key === s.key && this.selectionBox();
+      const corner = box && Math.hypot(p[0] - box[2], p[1] - box[3]) <= 12 * this.unitsPerPx(s);
+      if (corner) { // the resize handle: scale around the selection's top-left corner
+        this.gesture = { kind: "resize", s, id: e.pointerId, origin: [box[0], box[1]], from: Math.max(1, Math.hypot(box[2] - box[0], box[3] - box[1])), k: 1 };
+        return;
+      }
       const grabbed = sel && sel.key === s.key && this.insideSelection(p);
       const item = grabbed ? null : this.itemAt(s, p);
       if (item) this.select({ key: s.key, ids: new Set([item.id]) });
@@ -709,15 +747,28 @@ class Reader {
   }
 
   move(s, e) {
-    if (e.pointerType === "touch" && this.touches.has(e.pointerId)) this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (e.pointerType === "touch" && this.touches.has(e.pointerId)) {
+      this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      const start = this.tap && this.tap.starts.get(e.pointerId);
+      if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) this.tap.moved = true;
+    }
     if (this.nav) { this.navigate(e); return; }
     const g = this.gesture;
     if (!g || g.id !== e.pointerId || g.s !== s) return;
     e.preventDefault();
     const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    if (g.kind === "draw") {
+    if (g.kind === "draw" && g.snapped) { // a snapped straight line: its end follows the pen until lifted
+      if (g.points.length === 2) { g.points[1] = [...this.pointOn(s, e), g.points[1][2]]; this.drawLive(); }
+    } else if (g.kind === "draw") {
       for (const ev of events.length ? events : [e]) g.points.push([...this.pointOn(s, ev), e.pointerType === "pen" ? ev.pressure || 0.5 : 0]);
       this.drawLive();
+      this.holdAt(e);
+    } else if (g.kind === "resize") {
+      const p = this.pointOn(s, e), box = this.selectionBox();
+      g.k = Math.max(0.1, Math.hypot(p[0] - g.origin[0], p[1] - g.origin[1]) / g.from);
+      const ids = this.selection.ids;
+      s.itemsG.replaceChildren(...this.itemsOf(s.key).map((i) => this.itemNode(ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i)));
+      if (box) this.drawSelection();
     } else if (g.kind === "erase") {
       for (const ev of events.length ? events : [e]) this.eraseAt(s, this.pointOn(s, ev));
     } else if (g.kind === "move") {
@@ -732,7 +783,19 @@ class Reader {
   }
 
   up(s, e, cancelled = false) {
-    if (e.pointerType === "touch") this.touches.delete(e.pointerId);
+    if (e.pointerType === "touch") {
+      this.touches.delete(e.pointerId);
+      const tap = this.tap;
+      if (tap && !this.touches.size) {
+        this.tap = null;
+        if (!tap.moved && !cancelled && Date.now() - tap.at < TAP_MS && tap.fingers >= 2) {
+          this.nav = null;
+          if (tap.fingers === 2) this.doUndo(); else this.doRedo();
+          return;
+        }
+      }
+    }
+    clearTimeout(this.holdTimer);
     if (this.nav) { if (!this.touches.size || e.pointerType !== "touch") this.nav = null; else this.startNavigation(e); return; }
     const g = this.gesture;
     if (!g || g.id !== e.pointerId) return;
@@ -740,11 +803,13 @@ class Reader {
     s.liveG.replaceChildren();
     if (cancelled) { this.drawSurface(s); return; }
     if (g.kind === "draw") {
-      const highlight = this.tool === "highlighter";
-      const points = simplify(g.points, 0.25 * this.unitsPerPx(s));
+      const highlight = g.highlight;
+      let points = g.snapped ? g.points : simplify(g.points, 0.25 * this.unitsPerPx(s));
+      if (highlight && this.straightHighlight && points.length > 1) points = [points[0], points[points.length - 1]];
       const item = { id: newId(), type: highlight ? "highlight" : "ink", color: this.colours[highlight ? "highlighter" : "pen"],
         width: Math.round(this.sizes[highlight ? "highlighter" : "pen"] * 10) / 10,
         points: highlight ? points.map(([x, y]) => [x, y]) : points };
+      if (!highlight) item.pen = this.penType;
       this.record(s.key, () => this.itemsOf(s.key).push(item));
       this.drawSurface(s);
     } else if (g.kind === "erase") {
@@ -755,6 +820,12 @@ class Reader {
         this.record(s.key, () => this.setItems(s.key, this.itemsOf(s.key).map((i) => (ids.has(i.id) ? moved(i, g.dx, g.dy) : i))));
       }
       this.drawSurface(s);
+    } else if (g.kind === "resize") {
+      if (Math.abs(g.k - 1) > 0.01) {
+        const ids = this.selection.ids;
+        this.record(s.key, () => this.setItems(s.key, this.itemsOf(s.key).map((i) => (ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i))));
+      }
+      this.drawSurface(s);
     } else if (g.kind === "lasso") {
       const caught = lassoed(this.itemsOf(s.key), g.points);
       this.select(caught.length ? { key: s.key, ids: new Set(caught.map((i) => i.id)) } : null);
@@ -762,12 +833,35 @@ class Reader {
   }
 
   drawLive() {
-    const g = this.gesture, highlight = this.tool === "highlighter";
+    const g = this.gesture, highlight = g.highlight;
     const colour = this.colours[highlight ? "highlighter" : "pen"], width = this.sizes[highlight ? "highlighter" : "pen"];
+    const points = highlight && this.straightHighlight && g.points.length > 1 ? [g.points[0], g.points[g.points.length - 1]] : g.points;
     const node = highlight
-      ? svgEl("path", { d: linePath(g.points), fill: "none", stroke: colour, "stroke-width": width, "stroke-linecap": "round", opacity: HIGHLIGHT_OPACITY, class: "rd-hl" })
-      : svgEl("path", { d: polygonPath(strokeOutline(g.points, width)), fill: colour });
+      ? svgEl("path", { d: linePath(points), fill: "none", stroke: colour, "stroke-width": width, "stroke-linecap": "round", opacity: HIGHLIGHT_OPACITY, class: "rd-hl" })
+      : svgEl("path", { d: polygonPath(strokeOutline(points, width, this.penType)), fill: colour });
     g.s.liveG.replaceChildren(node);
+  }
+
+  /**
+   * Draw and hold (GoodNotes, Samsung Notes, Notability): when the pen rests HOLD_MS without
+   * moving, the stroke becomes the clean line or shape it was meant to be. A highlighter only
+   * straightens.
+   */
+  holdAt(e) {
+    const g = this.gesture;
+    if (!g || g.kind !== "draw" || g.snapped) return;
+    if (g.rest && Math.hypot(e.clientX - g.rest.x, e.clientY - g.rest.y) < 4) return; // still resting
+    g.rest = { x: e.clientX, y: e.clientY };
+    clearTimeout(this.holdTimer);
+    this.holdTimer = setTimeout(() => {
+      if (this.gesture !== g) return;
+      const shape = recognizeShape(g.points);
+      if (!shape || (g.highlight && shape.length !== 2)) return;
+      g.points = shape;
+      g.snapped = true;
+      this.drawLive();
+      if (navigator.vibrate) try { navigator.vibrate(10); } catch { /* not allowed */ }
+    }, HOLD_MS);
   }
 
   itemAt(s, [x, y], filter = () => true) {
@@ -776,14 +870,36 @@ class Reader {
     return null;
   }
 
+  /** Erase at (x, y): part of a stroke ("area"), whole strokes ("stroke"), or whole highlights only ("highlight"). */
   eraseAt(s, [x, y]) {
     const items = this.itemsOf(s.key), tolerance = Math.max(4, this.sizes.pen * 2) * this.unitsPerPx(s);
-    const kept = items.filter((i) => !hits(i, x, y, tolerance));
-    if (kept.length !== items.length) {
-      this.gesture.removed += items.length - kept.length;
+    let kept, changed = false;
+    if (this.eraserMode === "area") {
+      kept = items.flatMap((i) => {
+        const rest = i.type === "text" ? (hits(i, x, y, tolerance) ? [] : null) : eraseFrom(i, x, y, tolerance);
+        if (!rest) return [i];
+        changed = true;
+        return rest;
+      });
+    } else {
+      kept = items.filter((i) => !((this.eraserMode === "stroke" || i.type === "highlight") && hits(i, x, y, tolerance)));
+      changed = kept.length !== items.length;
+    }
+    if (changed) {
+      this.gesture.removed += 1;
       this.setItems(s.key, kept);
       this.drawSurface(s);
     }
+  }
+
+  /** Copies of the selection, a little down and to the right, selected instead (the note apps' Duplicate). */
+  duplicateSelection() {
+    if (!this.selection) return;
+    const { key, ids } = this.selection, s = this.surfaces.get(key), shift = 12 * (s ? this.unitsPerPx(s) : 1);
+    const copies = this.itemsOf(key).filter((i) => ids.has(i.id)).map((i) => ({ ...moved(i, shift, shift), id: newId() }));
+    this.record(key, () => this.itemsOf(key).push(...copies));
+    if (s) this.drawSurface(s);
+    this.select({ key, ids: new Set(copies.map((i) => i.id)) });
   }
 
   // ───────────── moving around ─────────────
@@ -865,7 +981,7 @@ class Reader {
   select(selection) {
     this.selection = selection && selection.ids.size ? selection : null;
     this.root.classList.toggle("has-selection", !!this.selection);
-    for (const s of this.surfaces.values()) s.svg.querySelectorAll(".rd-selbox").forEach((n) => n.remove());
+    for (const s of this.surfaces.values()) s.svg.querySelectorAll(".rd-selbox, .rd-handle").forEach((n) => n.remove());
     this.drawSelection();
   }
 
@@ -886,9 +1002,11 @@ class Reader {
     if (!this.selection) return;
     const s = this.surfaces.get(this.selection.key), b = this.selectionBox(dx, dy);
     if (!s || !b) return;
-    s.svg.querySelectorAll(".rd-selbox").forEach((n) => n.remove());
+    s.svg.querySelectorAll(".rd-selbox, .rd-handle").forEach((n) => n.remove());
     const pad = 3 * this.unitsPerPx(s);
     s.svg.append(svgEl("rect", { class: "rd-selbox", x: b[0] - pad, y: b[1] - pad, width: b[2] - b[0] + 2 * pad, height: b[3] - b[1] + 2 * pad }));
+    const r = 6 * this.unitsPerPx(s); // drag the corner to resize
+    s.svg.append(svgEl("rect", { class: "rd-handle", x: b[2] - r, y: b[3] - r, width: 2 * r, height: 2 * r }));
   }
 
   deleteSelection() {

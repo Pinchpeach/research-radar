@@ -28,8 +28,13 @@ body.reader-open { overflow: hidden; }
 .rd-custom { width: 28px; height: 28px; padding: 0; border: 0; background: none; }
 .rd-size { width: 90px; }
 .rd-zoom-label { min-width: 44px; text-align: center; font-size: 12px; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.rd-delete { display: none !important; }
+.rd-delete, .rd-duplicate { display: none !important; }
 .reader.has-selection .rd-delete { display: grid !important; color: var(--danger); }
+.reader.has-selection .rd-duplicate { display: grid !important; }
+.rd-options { display: flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--surface-2); margin-right: 4px; }
+.rd-options[hidden] { display: none; }
+.rd-opt { border: 0; background: none; padding: 5px 9px; border-radius: 8px; font-size: 12.5px; color: var(--text-2); white-space: nowrap; }
+.rd-opt.on { background: var(--surface); color: var(--accent); font-weight: 700; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
 .rd-save-wrap { position: relative; }
 .rd-menu { position: absolute; right: 0; top: 42px; z-index: 5; display: flex; flex-direction: column; min-width: 210px; background: var(--surface);
   border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 12px 30px rgba(0, 0, 0, .18); padding: 6px; }
@@ -55,6 +60,7 @@ body.reader-open { overflow: hidden; }
 .rd-hl { mix-blend-mode: multiply; }
 .rd-text { font-family: NanumSquareRound, sans-serif; white-space: pre; }
 .rd-lasso { fill: rgba(57, 135, 229, .08); stroke: var(--accent); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; }
+.rd-handle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
 .rd-selbox { fill: none; stroke: var(--accent); stroke-width: 1.2; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }
 .rd-hit { fill: rgba(255, 196, 0, .35); }
 .rd-hit.on { fill: rgba(255, 140, 0, .55); }
