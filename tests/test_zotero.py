@@ -11,17 +11,48 @@ api = TestClient(main.app, base_url="http://127.0.0.1")
 
 
 def work(wid, title, doi=None, year=2020):
-    return {"id": f"https://openalex.org/{wid}", "title": title, "abstract": "", "year": year,
-            "doi": f"https://doi.org/{doi}" if doi else None, "url": None, "open_access_url": None, "venue": "Nature",
-            "authors": ["Ada Lovelace"], "citations": 0, "referenced_works": [], "keywords": [], "topic": None}
+    return {
+        "id": f"https://openalex.org/{wid}",
+        "title": title,
+        "abstract": "",
+        "year": year,
+        "doi": f"https://doi.org/{doi}" if doi else None,
+        "url": None,
+        "open_access_url": None,
+        "venue": "Nature",
+        "authors": ["Ada Lovelace"],
+        "citations": 0,
+        "referenced_works": [],
+        "keywords": [],
+        "topic": None,
+    }
 
 
 def test_ris_has_one_line_per_field_and_ends_each_entry():
-    ris = to_ris([{"id": "W1", "paper": {**work("W1", "A\ntitle", "10.1000/x"), "abstract": "line one\nline two"},
-                   "note": "read\nthis", "tags": ["gnn", "key"]}])
-    assert ris.splitlines() == ["TY  - JOUR", "TI  - A title", "AU  - Ada Lovelace", "PY  - 2020", "JO  - Nature",
-                                "DO  - 10.1000/x", "AB  - line one line two", "KW  - gnn", "KW  - key", "N1  - read this",
-                                "ID  - W1", "ER  - "]
+    ris = to_ris(
+        [
+            {
+                "id": "W1",
+                "paper": {**work("W1", "A\ntitle", "10.1000/x"), "abstract": "line one\nline two"},
+                "note": "read\nthis",
+                "tags": ["gnn", "key"],
+            }
+        ]
+    )
+    assert ris.splitlines() == [
+        "TY  - JOUR",
+        "TI  - A title",
+        "AU  - Ada Lovelace",
+        "PY  - 2020",
+        "JO  - Nature",
+        "DO  - 10.1000/x",
+        "AB  - line one line two",
+        "KW  - gnn",
+        "KW  - key",
+        "N1  - read this",
+        "ID  - W1",
+        "ER  - ",
+    ]
     assert to_ris([]) == ""
 
 
@@ -38,8 +69,12 @@ def test_import_by_doi_then_title_keeping_tags_and_notes(monkeypatch):
 
     monkeypatch.setattr(openalex, "by_dois", by_dois)
     monkeypatch.setattr(openalex, "by_title", by_title)
-    entries = [{"doi": "10.1000/X", "title": "Paper one", "tags": ["GNN"], "note": "from zotero"},
-               {"title": "Paper two", "year": 2019}, {"title": "Unknown paper"}, {"doi": "not a doi", "title": ""}]
+    entries = [
+        {"doi": "10.1000/X", "title": "Paper one", "tags": ["GNN"], "note": "from zotero"},
+        {"title": "Paper two", "year": 2019},
+        {"title": "Unknown paper"},
+        {"doi": "not a doi", "title": ""},
+    ]
     done = api.post("/bookmarks/import", json={"entries": entries}).json()
     assert done == {"total": 4, "imported": 2, "existing": 0, "not_found": ["Unknown paper", "not a doi"]}
     assert asked["dois"] == ["10.1000/x"] and asked["titles"] == [("Paper two", 2019), ("Unknown paper", None)]
@@ -72,9 +107,13 @@ def test_openalex_lookups(monkeypatch):
         calls.append(params["filter"])
         if params["filter"].startswith("doi:"):
             return {"results": [{"id": "https://openalex.org/W1", "title": "One", "doi": "https://doi.org/10.1000/X"}]}
-        return {"results": [{"id": "https://openalex.org/W8", "title": "Graph attention networks?", "publication_year": 2017},
-                            {"id": "https://openalex.org/W9", "title": "Graph Attention Networks", "publication_year": 2018},
-                            {"id": "https://openalex.org/W7", "title": "Graph attention networks for X", "publication_year": 2018}]}
+        return {
+            "results": [
+                {"id": "https://openalex.org/W8", "title": "Graph attention networks?", "publication_year": 2017},
+                {"id": "https://openalex.org/W9", "title": "Graph Attention Networks", "publication_year": 2018},
+                {"id": "https://openalex.org/W7", "title": "Graph attention networks for X", "publication_year": 2018},
+            ]
+        }
 
     monkeypatch.setattr(openalex, "_get", get)
     assert list(openalex.by_dois(["10.1000/x"])) == ["10.1000/x"]

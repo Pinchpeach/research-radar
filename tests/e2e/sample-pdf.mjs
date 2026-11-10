@@ -5,7 +5,11 @@ import * as PDFLib from "pdf-lib";
 export { PDFLib };
 const { PDFDocument, StandardFonts } = PDFLib;
 
-export const SAMPLE_TEXT = ["Graph neural networks pass messages along edges.", "Spectral methods use the graph Laplacian.", "Attention weighs each neighbour."];
+export const SAMPLE_TEXT = [
+  "Graph neural networks pass messages along edges.",
+  "Spectral methods use the graph Laplacian.",
+  "Attention weighs each neighbour.",
+];
 
 export async function samplePdf(pages = 3) {
   const pdf = await PDFDocument.create();

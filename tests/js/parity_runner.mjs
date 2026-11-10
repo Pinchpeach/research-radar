@@ -4,7 +4,16 @@
 import fs from "node:fs";
 import { createApi } from "../../frontend/web/core/api.js";
 import { dedupe, titleKey } from "../../frontend/web/core/dedupe.js";
-import { buildFlow, labelTerms, longestChain, nameClusters, outsideReferences, queryWords, tidyPhrase, titleCase } from "../../frontend/web/core/flow.js";
+import {
+  buildFlow,
+  labelTerms,
+  longestChain,
+  nameClusters,
+  outsideReferences,
+  queryWords,
+  tidyPhrase,
+  titleCase,
+} from "../../frontend/web/core/flow.js";
 import { normalizeWork, workPath, yearFilter } from "../../frontend/web/core/openalex.js";
 import { acronyms, expandQuery, rankPapers, singular } from "../../frontend/web/core/ranking.js";
 import { memoryStorage, toBibtex } from "../../frontend/web/core/store.js";
@@ -30,12 +39,25 @@ if (input.fixture) {
   for (const body of input.searches) out.searches.push(await api("POST", "/search", body));
   out.flow = await api("POST", "/flow", input.flow_request);
 }
-if (input.rank) out.rank = input.rank.map((c) => rankPapers(c.query, c.papers, { seeds: c.seeds, weights: c.weights, currentYear: c.current_year, profile: c.profile || [] }));
+if (input.rank)
+  out.rank = input.rank.map((c) =>
+    rankPapers(c.query, c.papers, {
+      seeds: c.seeds,
+      weights: c.weights,
+      currentYear: c.current_year,
+      profile: c.profile || [],
+    }),
+  );
 if (input.layout) out.layout = layout(input.layout);
 if (input.poster) out.poster = renderHtml(input.poster.flow, input.poster.title, input.poster.lang, template);
-if (input.names) out.names = nameClusters(input.names.papers, input.names.assignment, input.names.fallback, input.names.query);
+if (input.names)
+  out.names = nameClusters(input.names.papers, input.names.assignment, input.names.fallback, input.names.query);
 if (input.labels) out.labels = input.labels.map((c) => labelTerms(c.scores, c.terms));
-if (input.flow_papers) out.flow_build = buildFlow(input.flow_papers.papers, { bookmarked: new Set(input.flow_papers.bookmarked), query: input.flow_papers.query });
+if (input.flow_papers)
+  out.flow_build = buildFlow(input.flow_papers.papers, {
+    bookmarked: new Set(input.flow_papers.bookmarked),
+    query: input.flow_papers.query,
+  });
 if (input.chain) out.chain = longestChain(input.chain.nodes, input.chain.edges);
 if (input.dedupe) out.dedupe = dedupe(input.dedupe);
 if (input.outside) out.outside = outsideReferences(input.outside.papers, input.outside.min_count, input.outside.limit);

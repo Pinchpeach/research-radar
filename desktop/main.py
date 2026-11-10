@@ -118,7 +118,9 @@ class DesktopApi:
                 here = window.get_current_url() or ""
                 if state["to_proxy"]:
                     now, page = urlsplit(here), urlsplit(first)
-                    if now.hostname == page.hostname and not now.path.startswith(page.path):  # signed in on the library's site
+                    if now.hostname == page.hostname and not now.path.startswith(
+                        page.path
+                    ):  # signed in on the library's site
                         state["to_proxy"] = False
                         window.load_url(onward)
                     return
@@ -126,7 +128,14 @@ class DesktopApi:
                     cookies = []
                     for jar in window.get_cookies() or []:
                         for name, morsel in jar.items():
-                            cookies.append({"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]})
+                            cookies.append(
+                                {
+                                    "name": name,
+                                    "value": morsel.value,
+                                    "domain": morsel["domain"],
+                                    "path": morsel["path"],
+                                }
+                            )
                     if library.save_cookies(prefix, cookies):
                         result["ok"] = True
                         done.set()
@@ -162,7 +171,9 @@ class DesktopApi:
         # some proxies (Yonsei's) show a blank page until the person has signed in on the library's
         # site: start there, unless signed in already, and go on to the paper once they've left it
         state = {"to_paper": bool(first) and not library.signed_in(prefix), "steps": 0}
-        window = webview.create_window(f"{APP_NAME} — library", link if not state["to_paper"] else first, width=1100, height=820)
+        window = webview.create_window(
+            f"{APP_NAME} — library", link if not state["to_paper"] else first, width=1100, height=820
+        )
 
         def loaded():
             if done.is_set() or not lock.acquire(blocking=False):
@@ -170,14 +181,18 @@ class DesktopApi:
             try:
                 if state["to_paper"]:
                     here, page = urlsplit(window.get_current_url() or ""), urlsplit(first)
-                    if here.hostname == page.hostname and not here.path.startswith(page.path):  # signed in: back on the library's site
+                    if here.hostname == page.hostname and not here.path.startswith(
+                        page.path
+                    ):  # signed in: back on the library's site
                         state["to_paper"] = False
                         window.load_url(link)
                     return
                 cookies = []
                 for jar in window.get_cookies() or []:
                     for name, morsel in jar.items():
-                        cookies.append({"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]})
+                        cookies.append(
+                            {"name": name, "value": morsel.value, "domain": morsel["domain"], "path": morsel["path"]}
+                        )
                 if not library.save_cookies(prefix, cookies):
                     return
                 try:

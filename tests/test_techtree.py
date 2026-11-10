@@ -21,7 +21,9 @@ def big_corpus():
             if t and k % 2 == 0:
                 refs.append(f"W{t - 1}{min(9, k + 2):02d}")
             # two papers per year in places, to exercise dot spreading
-            papers.append(p(f"W{t}{k:02d}", f"{phrase.title()} {k}", phrase, start + 2 * (k // 2) + k % 2 * 0, 10 * k + 1, refs))
+            papers.append(
+                p(f"W{t}{k:02d}", f"{phrase.title()} {k}", phrase, start + 2 * (k // 2) + k % 2 * 0, 10 * k + 1, refs)
+            )
     return papers
 
 
@@ -101,7 +103,11 @@ def test_render_html_is_self_contained_and_interactive(flow_data):
     assert page.count('class="hit rail-hit"') == len(data["lanes"])
     assert page.count('class="hit bundle-hit"') == len(data["bundles"])
     # the app's icon as a faint watermark behind the map, which lets it show through
-    assert "#wrap::before" in page and "data:image/svg+xml," in page and "#viewport>rect:first-child{fill:transparent}" in page
+    assert (
+        "#wrap::before" in page
+        and "data:image/svg+xml," in page
+        and "#viewport>rect:first-child{fill:transparent}" in page
+    )
 
 
 def test_render_html_escapes_script_breakout():

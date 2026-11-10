@@ -14,7 +14,11 @@ export const DEFAULT_TOKENS = new RegExp(`${WORD}{2,}`, "gu");
 export const TOPIC_TOKENS = new RegExp(`(?<!${WORD})\\p{L}[\\p{L}\\p{N}_-]+[\\p{L}\\p{N}](?!${WORD})`, "gu");
 
 export function analyze(text, { tokens = DEFAULT_TOKENS, stopWords = ENGLISH_STOP_WORDS, maxN = 2, fold = null } = {}) {
-  let words = (String(text || "").toLowerCase().match(tokens) || []).filter((w) => !stopWords.has(w));
+  let words = (
+    String(text || "")
+      .toLowerCase()
+      .match(tokens) || []
+  ).filter((w) => !stopWords.has(w));
   if (fold) words = words.map(fold);
   const out = [...words];
   for (let n = 2; n <= Math.min(maxN, words.length); n++) {
@@ -76,13 +80,15 @@ const norm = (row) => Math.sqrt([...row.values()].reduce((s, w) => s + w * w, 0)
 
 /** Cosine similarity of sparse rows (0 when either is empty). */
 export function cosine(a, b) {
-  const na = norm(a), nb = norm(b);
+  const na = norm(a),
+    nb = norm(b);
   return na && nb ? dot(a, b) / (na * nb) : 0;
 }
 
 /** Cosine similarity of a dense array and a sparse row (0 when either is empty). */
 export function cosineDense(dense, row) {
-  let d = 0, nd = 0;
+  let d = 0,
+    nd = 0;
   for (const v of dense) nd += v * v;
   for (const [i, w] of row) d += dense[i] * w;
   const nr = norm(row);
@@ -99,6 +105,8 @@ export function meanRow(rows, size) {
 
 /** Python's round(x, digits): ties go to the even digit. */
 export function pyRound(x, digits = 0) {
-  const f = 10 ** digits, y = x * f, r = Math.round(y);
+  const f = 10 ** digits,
+    y = x * f,
+    r = Math.round(y);
   return (Math.abs(y % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r) / f;
 }

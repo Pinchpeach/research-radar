@@ -1,6 +1,6 @@
 """Smoke-test a built app: start it in server-only mode and check the UI and API answer.
 
-    python desktop/smoke.py dist/ResearchRadar/ResearchRadar[.exe]
+python desktop/smoke.py dist/ResearchRadar/ResearchRadar[.exe]
 """
 
 import json
@@ -59,8 +59,9 @@ def main(executable: str) -> int:
             status, body = get(base + path)
             assert status == 200 and needle in body, f"{path}: {status} {body[:120]!r}"
             print(f"ok {path}")
-        flow = json.dumps({"papers": [{"id": "W1", "title": "Graph neural networks", "year": 2020}],
-                           "include_foundations": False}).encode()
+        flow = json.dumps(
+            {"papers": [{"id": "W1", "title": "Graph neural networks", "year": 2020}], "include_foundations": False}
+        ).encode()
         req = urllib.request.Request(base + "/flow", data=flow, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=10) as res:
             assert res.status == 200 and json.loads(res.read())["nodes"], "flow failed"

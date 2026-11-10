@@ -8,7 +8,10 @@ test("first start: greeting, example topics and a hint to add a key", async ({ p
   await expect(page.locator("#recent-topics .topic")).toHaveCount(3);
   await expect(page.locator("#banner")).toBeVisible();
   await expect(page.locator("#key-pill")).toHaveText("OpenAlex 키 없음");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth), "no sideways scroll").toBeLessThanOrEqual(0);
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+    "no sideways scroll",
+  ).toBeLessThanOrEqual(0);
 });
 
 test("the ☰ menu: Home first, every page reachable, Escape closes it", async ({ page }) => {
@@ -17,7 +20,13 @@ test("the ☰ menu: Home first, every page reachable, Escape closes it", async (
   await expect(page.locator(".drawer .tab").first()).toHaveAttribute("data-tab", "home");
   await page.keyboard.press("Escape");
   await expect(page.locator("#drawer")).not.toHaveClass(/open/);
-  for (const [tab, title] of [["discover", "연구 탐색"], ["bookmarks", "북마크"], ["map", "연구 흐름"], ["news", "새소식"], ["settings", "설정"]]) {
+  for (const [tab, title] of [
+    ["discover", "연구 탐색"],
+    ["bookmarks", "북마크"],
+    ["map", "연구 흐름"],
+    ["news", "새소식"],
+    ["settings", "설정"],
+  ]) {
     await go(page, tab);
     await expect(page.locator("#page-title")).toHaveText(title);
   }
@@ -31,7 +40,10 @@ test("search from home: key papers, then recent work, and the topic is remembere
   expect(await page.locator("#results .paper").count()).toBeGreaterThanOrEqual(20);
   await expect(page.locator(".chip.key").first()).toBeVisible();
   await expect(page.locator(".chip.recent").first()).toBeVisible();
-  expect(openalexCalls.every((url) => !url.includes("api_key=")), "no key was set").toBe(true);
+  expect(
+    openalexCalls.every((url) => !url.includes("api_key=")),
+    "no key was set",
+  ).toBe(true);
   await page.locator("#home-logo").click();
   await expect(page.locator("#recent-topics .topic.recent")).toHaveText([QUERY]);
 });
@@ -59,11 +71,14 @@ test("research flow: drawn on opening, titled with the topic, titles never overl
   await expect.poll(() => titleOverlaps(frame).then((o) => o.shown)).toBeGreaterThan(0);
   expect((await titleOverlaps(frame)).pairs).toBe(0);
   // the sandboxed map can't load the app's files, so its font comes inlined
-  expect(await frame.evaluate(() => document.fonts.ready.then(() => document.fonts.check("700 12px NanumSquareRound")))).toBe(true);
+  expect(
+    await frame.evaluate(() => document.fonts.ready.then(() => document.fonts.check("700 12px NanumSquareRound"))),
+  ).toBe(true);
   if (info.project.name === "phone") {
     // a phone opens zoomed on the latest work, with the timeline bar to swipe back
     await expect(map.locator("#track")).toBeVisible();
-    const thumb = await map.locator("#thumb").boundingBox(), track = await map.locator("#track").boundingBox();
+    const thumb = await map.locator("#thumb").boundingBox(),
+      track = await map.locator("#track").boundingBox();
     expect(thumb.x + thumb.width).toBeGreaterThan(track.x + track.width - 4);
   }
   await map.locator("#zin").click();

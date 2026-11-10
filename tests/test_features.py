@@ -7,17 +7,24 @@ import requests
 from fastapi.testclient import TestClient
 
 from backend import history, main
+from backend.routes import news
 from backend.services import openalex
 
 api = TestClient(main.app, base_url="http://127.0.0.1")
 
 
 def test_free_full_text_prefers_the_pdf():
-    work = {"id": "https://openalex.org/W1", "best_oa_location": {"pdf_url": "https://r.example/p.pdf"},
-            "open_access": {"oa_url": "https://r.example/landing"}}
+    work = {
+        "id": "https://openalex.org/W1",
+        "best_oa_location": {"pdf_url": "https://r.example/p.pdf"},
+        "open_access": {"oa_url": "https://r.example/landing"},
+    }
     assert openalex.normalize_work(work)["open_access_url"] == "https://r.example/p.pdf"
     assert openalex.normalize_work({**work, "best_oa_location": None})["open_access_url"] == "https://r.example/landing"
-    assert openalex.normalize_work({"id": "W2", "open_access": {"oa_url": "javascript:alert(1)"}})["open_access_url"] is None
+    assert (
+        openalex.normalize_work({"id": "W2", "open_access": {"oa_url": "javascript:alert(1)"}})["open_access_url"]
+        is None
+    )
 
 
 def test_new_papers_since_the_day_after_each_search(monkeypatch):
@@ -32,9 +39,9 @@ def test_new_papers_since_the_day_after_each_search(monkeypatch):
         def today(cls):
             return date(2026, 10, 20)
 
-    monkeypatch.setattr(main, "date", Today)
+    monkeypatch.setattr(news, "date", Today)
     monkeypatch.setattr(openalex, "count_since", count)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     history.record("protein folding")
     history.record("graph neural networks")
     entries = history.load()
@@ -56,7 +63,7 @@ def test_new_papers_survive_openalex_being_down(monkeypatch):
         raise requests.ConnectionError("offline")
 
     monkeypatch.setattr(openalex, "count_since", down)
-    main._new_papers_cache.clear()
+    news._cache.clear()
     history.record("x-ray binaries")
     entries = history.load()
     entries[0]["searched_at"] = "2020-01-01T00:00:00+00:00"

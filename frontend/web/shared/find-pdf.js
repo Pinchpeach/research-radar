@@ -5,8 +5,14 @@
 (function () {
   if (document.contentType === "application/pdf") return location.href;
   var meta = document.querySelector('meta[name="citation_pdf_url" i]');
-  if (meta && meta.content) { try { return new URL(meta.content, location.href).href; } catch (e) { /* not an address */ } }
+  if (meta && meta.content) {
+    try {
+      return new URL(meta.content, location.href).href;
+    } catch (e) {
+      /* not an address */
+    }
+  }
   var frames = document.querySelectorAll("iframe[src],embed[src]");
   for (var i = 0; i < frames.length; i++) if (/pdf/i.test(frames[i].getAttribute("src"))) return frames[i].src;
   return null;
-})()
+})();

@@ -25,6 +25,22 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint and format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: Ruff (settings in pyproject.toml)
+        run: |
+          pip install ruff==0.16.8
+          ruff check .
+          ruff format --check .
+      - name: Prettier (settings in .prettierrc.json)
+        run: npx --yes prettier@3.9.10 --check "**/*.{js,mjs}"
+
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
@@ -203,7 +219,7 @@ jobs:
     if: >-
       startsWith(github.ref, 'refs/tags/v') ||
       (github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main')
-    needs: [build, android, e2e] # only when every build and check passed
+    needs: [lint, build, android, e2e] # only when every build and check passed
     runs-on: ubuntu-latest
     permissions:
       contents: write

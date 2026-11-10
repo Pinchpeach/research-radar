@@ -1,14 +1,40 @@
 "use strict";
 
 const $ = (id) => document.getElementById(id);
-const PAPER_FIELDS = ["id", "title", "abstract", "year", "doi", "url", "open_access_url", "venue", "venue_id", "authors", "author_ids", "citations",
-  "referenced_works", "keywords", "topic"];
+const PAPER_FIELDS = [
+  "id",
+  "title",
+  "abstract",
+  "year",
+  "doi",
+  "url",
+  "open_access_url",
+  "venue",
+  "venue_id",
+  "authors",
+  "author_ids",
+  "citations",
+  "referenced_works",
+  "keywords",
+  "topic",
+];
 const MAX_SEEDS = 10;
-const KEY_PAPER = 0.5;  // flow-importance score from which a paper is badged as a key paper
-const PERSONAL_CHIP = 0.7;  // closeness to the person's bookmarks from which a paper says so
+const KEY_PAPER = 0.5; // flow-importance score from which a paper is badged as a key paper
+const PERSONAL_CHIP = 0.7; // closeness to the person's bookmarks from which a paper says so
 
-const state = { run: null, bookmarks: [], flow: null, flowRun: null, poster: null, posterTitle: "", evalMode: false, judgments: {},
-  version: null, changelog: null, follows: [] };
+const state = {
+  run: null,
+  bookmarks: [],
+  flow: null,
+  flowRun: null,
+  poster: null,
+  posterTitle: "",
+  evalMode: false,
+  judgments: {},
+  version: null,
+  changelog: null,
+  follows: [],
+};
 
 // ───────────── helpers ─────────────
 
@@ -73,7 +99,8 @@ function authorLine(authors) {
 
 function metaLine(paper) {
   return [paper.year || "—", paper.venue, t("paper.citations", { n: Number(paper.citations || 0).toLocaleString() })]
-    .filter(Boolean).join(" · ");
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** Bytes as base64, in chunks (a whole PDF at once would overflow the call stack). */
@@ -90,9 +117,10 @@ async function saveFile(name, content, mime) {
   if (window.radarSaveFile) return window.radarSaveFile(name, content, mime);
   const desktop = window.pywebview && window.pywebview.api;
   if (desktop && desktop.save_file) {
-    const saved = content instanceof Uint8Array
-      ? await desktop.save_bytes(name, toBase64(content))
-      : await desktop.save_file(name, content);
+    const saved =
+      content instanceof Uint8Array
+        ? await desktop.save_bytes(name, toBase64(content))
+        : await desktop.save_file(name, content);
     return saved ? t("file.saved", { path: saved }) : t("file.cancelled");
   }
   const url = URL.createObjectURL(new Blob([content], { type: mime }));
@@ -106,7 +134,15 @@ async function saveFile(name, content, mime) {
 
 // ───────────── navigation: the ☰ drawer and pages ─────────────
 
-const PAGE_TITLES = { home: "", discover: "tab.discover", bookmarks: "tab.bookmarks", reading: "tab.reading", map: "tab.flow", news: "tab.news", settings: "tab.settings" };
+const PAGE_TITLES = {
+  home: "",
+  discover: "tab.discover",
+  bookmarks: "tab.bookmarks",
+  reading: "tab.reading",
+  map: "tab.flow",
+  news: "tab.news",
+  settings: "tab.settings",
+};
 let currentTab = "home";
 
 function setDrawer(open) {
@@ -131,13 +167,18 @@ function showTab(name) {
   if (name === "bookmarks") renderBookmarks();
   if (name === "map") autoDrawFlow();
   if (name === "news") renderNews();
-  if (name === "reading") { renderReading(); renderDocs(); }
+  if (name === "reading") {
+    renderReading();
+    renderDocs();
+  }
   if (name === "settings") loadSettings(); // e.g. signed in to the library since
 }
 document.querySelectorAll(".tab").forEach((t) => t.addEventListener("click", () => showTab(t.dataset.tab)));
 $("menu-button").addEventListener("click", () => setDrawer(!$("drawer").classList.contains("open")));
 $("drawer-backdrop").addEventListener("click", () => setDrawer(false));
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && $("drawer").classList.contains("open")) setDrawer(false); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && $("drawer").classList.contains("open")) setDrawer(false);
+});
 $("home-logo").addEventListener("click", () => showTab("home"));
 $("key-pill").addEventListener("click", () => showTab("settings"));
 
@@ -151,34 +192,60 @@ $("banner-go").addEventListener("click", () => showTab("settings"));
 // ───────────── home ─────────────
 
 const GREETINGS = 8;
-const EXAMPLE_TOPICS = ["graph neural networks", "CRISPR gene editing", "optical observations of isolated neutron stars",
-  "microplastics in freshwater", "protein structure prediction"];
+const EXAMPLE_TOPICS = [
+  "graph neural networks",
+  "CRISPR gene editing",
+  "optical observations of isolated neutron stars",
+  "microplastics in freshwater",
+  "protein structure prediction",
+];
 const greeting = Math.floor(Math.random() * GREETINGS); // one per app start, so it doesn't change under you
 
 async function renderHome() {
   $("greeting").textContent = t(`greet.${greeting}`);
   let recent = [];
-  try { recent = (await api("GET", "/history?limit=5")).map((e) => e.query); } catch { /* shown as suggestions */ }
+  try {
+    recent = (await api("GET", "/history?limit=5")).map((e) => e.query);
+  } catch {
+    /* shown as suggestions */
+  }
   const topics = recent.length ? recent : EXAMPLE_TOPICS.slice(0, 3);
   $("recent-label").textContent = t(recent.length ? "home.recent" : "home.try");
-  $("recent-topics").replaceChildren(...topics.map((query, i) => {
-    const chip = el("button", { type: "button", class: recent.length ? "topic recent" : "topic", text: query, title: query });
-    chip.style.setProperty("--i", i);
-    chip.addEventListener("click", () => searchFor(query));
-    return el("li", {}, chip);
-  }));
+  $("recent-topics").replaceChildren(
+    ...topics.map((query, i) => {
+      const chip = el("button", {
+        type: "button",
+        class: recent.length ? "topic recent" : "topic",
+        text: query,
+        title: query,
+      });
+      chip.style.setProperty("--i", i);
+      chip.addEventListener("click", () => searchFor(query));
+      return el("li", {}, chip);
+    }),
+  );
   if (recent.length) markNewPapers();
 }
 
 /** "새 논문 N편" on recent topics with papers published since they were last searched. */
 async function markNewPapers() {
   let counts = [];
-  try { counts = await api("GET", "/history/new?limit=3"); } catch { return; }
+  try {
+    counts = await api("GET", "/history/new?limit=3");
+  } catch {
+    return;
+  }
   const chips = [...$("recent-topics").querySelectorAll(".topic")];
   for (const { query, since, new_papers: n } of counts) {
     const chip = chips.find((c) => c.title === query);
     if (!chip || !n || chip.querySelector(".new")) continue;
-    chip.append(el("span", { class: "new", text: t("home.new", { n: n > 99 ? "99+" : n }), title: t("home.newTitle", { since }) }));
+    chip.append(
+      el("span", {
+        class: "new",
+        text: t("home.new", { n: n > 99 ? "99+" : n }),
+        title: t("home.newTitle", { since }),
+      }),
+    );
   }
 }
 
@@ -196,7 +263,11 @@ function startFrom(paper, query) {
  */
 function paperIdentifier(text) {
   let value = String(text || "").trim();
-  try { value = decodeURIComponent(value); } catch { /* not encoded */ }
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    /* not encoded */
+  }
   const openalex = /(?:openalex\.org\/(?:works\/)?|^)(W\d{3,})(?![\w])/i.exec(value);
   if (openalex) return openalex[1].toUpperCase();
   const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}|[a-z-]+(?:\.[A-Z]{2})?\/\d{7})(?:v\d+)?/i.exec(value);
@@ -204,7 +275,8 @@ function paperIdentifier(text) {
   const doi = /\b(10\.\d{4,9}\/[^\s"'<>]+)/i.exec(value);
   if (!doi) return null;
   let found = doi[1].replace(/[.,;:]+$/, "");
-  while (found.endsWith(")") && (found.match(/\(/g) || []).length < (found.match(/\)/g) || []).length) found = found.slice(0, -1);
+  while (found.endsWith(")") && (found.match(/\(/g) || []).length < (found.match(/\)/g) || []).length)
+    found = found.slice(0, -1);
   return found.replace(/\/(?:full|abstract|pdf|epdf)$/i, "");
 }
 
@@ -240,7 +312,8 @@ $("home-form").addEventListener("submit", (event) => {
   const query = $("home-query").value.trim();
   if (query.length < 2) return;
   $("home-query").value = "";
-  if (paperIdentifier(query)) openLink(query); else searchFor(query);
+  if (paperIdentifier(query)) openLink(query);
+  else searchFor(query);
 });
 
 // ───────────── paper cards ─────────────
@@ -252,7 +325,8 @@ function paperCard(paper, { rank, query, extra } = {}) {
   const title = node.querySelector(".title");
   title.textContent = paper.title || t("paper.noTitle");
   const link = webUrl(paper.url) || webUrl(paper.doi);
-  if (link) title.href = link; else title.removeAttribute("href");
+  if (link) title.href = link;
+  else title.removeAttribute("href");
   node.querySelector(".authors").textContent = authorLine(paper.authors);
   node.querySelector(".meta").textContent = metaLine(paper);
 
@@ -260,18 +334,36 @@ function paperCard(paper, { rank, query, extra } = {}) {
   const influence = paper.scores && paper.scores.influence;
   if (influence >= KEY_PAPER) {
     const why = paper.cited_by_results ? t("chip.keyCitedBy", { n: paper.cited_by_results }) : t("chip.keyGeneric");
-    chips.append(el("span", { class: "chip key", text: t("chip.key"), title: t("chip.keyTitle", { score: influence.toFixed(2), why }) }));
+    chips.append(
+      el("span", {
+        class: "chip key",
+        text: t("chip.key"),
+        title: t("chip.keyTitle", { score: influence.toFixed(2), why }),
+      }),
+    );
   }
   if (paper.group === "recent") {
     const links = paper.builds_on_key_papers ? t("chip.recentLinks", { n: paper.builds_on_key_papers }) : "";
-    chips.append(el("span", { class: "chip recent", text: t("chip.recent") + links, title: t("chip.recentTitle", { score: (paper.scores.frontier || 0).toFixed(2) }) }));
+    chips.append(
+      el("span", {
+        class: "chip recent",
+        text: t("chip.recent") + links,
+        title: t("chip.recentTitle", { score: (paper.scores.frontier || 0).toFixed(2) }),
+      }),
+    );
   }
   if (paper.core_reference) {
     chips.append(el("span", { class: "chip", text: t("chip.coreRef"), title: t("chip.coreRefTitle") }));
   }
   if (paper.seed_link) chips.append(el("span", { class: "chip seed", text: t("chip.seed") }));
   if (paper.scores && paper.scores.personal >= PERSONAL_CHIP) {
-    chips.append(el("span", { class: "chip personal", text: t("chip.personal"), title: t("chip.personalTitle", { score: paper.scores.personal.toFixed(2) }) }));
+    chips.append(
+      el("span", {
+        class: "chip personal",
+        text: t("chip.personal"),
+        title: t("chip.personalTitle", { score: paper.scores.personal.toFixed(2) }),
+      }),
+    );
   }
   for (const kw of (paper.keywords || []).slice(0, 4)) chips.append(el("span", { class: "chip", text: kw }));
 
@@ -308,12 +400,15 @@ function paperCard(paper, { rank, query, extra } = {}) {
   const judge = node.querySelector(".judge");
   if (rank && state.evalMode) {
     judge.hidden = false;
-    const paint = () => judge.querySelectorAll("button").forEach((b) => b.classList.toggle("on", state.judgments[paper.id] === b.dataset.j));
+    const paint = () =>
+      judge
+        .querySelectorAll("button")
+        .forEach((b) => b.classList.toggle("on", state.judgments[paper.id] === b.dataset.j));
     paint();
     judge.addEventListener("click", (event) => {
       const value = event.target.dataset && event.target.dataset.j;
       if (!value) return;
-      state.judgments[paper.id] = state.judgments[paper.id] === value ? undefined : value;  // click again to clear
+      state.judgments[paper.id] = state.judgments[paper.id] === value ? undefined : value; // click again to clear
       paint();
       updateMetrics();
     });
@@ -329,60 +424,109 @@ function paperCard(paper, { rank, query, extra } = {}) {
 const isFollowed = (kind, id) => state.follows.some((f) => f.kind === kind && f.id === id);
 
 async function loadFollows() {
-  try { state.follows = await api("GET", "/follows"); } catch { state.follows = []; }
+  try {
+    state.follows = await api("GET", "/follows");
+  } catch {
+    state.follows = [];
+  }
 }
 
 /** The paper card's 팔로우 menu: its authors (up to 5) and its journal, each followed with a tap. */
 function followMenu(details, paper) {
   const ids = paper.author_ids || [];
-  const options = (paper.authors || []).slice(0, 5).map((name, i) => ({ kind: "author", id: ids[i], name }))
+  const options = (paper.authors || [])
+    .slice(0, 5)
+    .map((name, i) => ({ kind: "author", id: ids[i], name }))
     .concat(paper.venue_id && paper.venue ? [{ kind: "source", id: paper.venue_id, name: paper.venue }] : [])
     .filter((o) => o.id);
   if (!options.length) return details.remove();
   details.hidden = false;
   const menu = details.querySelector(".follow-menu");
-  const paint = () => menu.replaceChildren(...options.map((o) => {
-    const on = isFollowed(o.kind, o.id);
-    const button = el("button", { type: "button", class: on ? "on" : "", text: `${on ? "✓ " : "+ "}${o.name}`,
-      title: t(o.kind === "author" ? "follow.author" : "follow.source") });
-    button.addEventListener("click", async () => {
-      button.disabled = true;
-      try {
-        if (isFollowed(o.kind, o.id)) await api("DELETE", `/follows/${o.kind}/${o.id}`);
-        else await api("PUT", "/follows", { kind: o.kind, id: o.id, name: o.name });
-        await loadFollows();
-        updateNewsBadge();
-      } catch (e) { alert(t("follow.failed", { error: e.message })); }
-      paint();
-    });
-    return button;
-  }));
+  const paint = () =>
+    menu.replaceChildren(
+      ...options.map((o) => {
+        const on = isFollowed(o.kind, o.id);
+        const button = el("button", {
+          type: "button",
+          class: on ? "on" : "",
+          text: `${on ? "✓ " : "+ "}${o.name}`,
+          title: t(o.kind === "author" ? "follow.author" : "follow.source"),
+        });
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            if (isFollowed(o.kind, o.id)) await api("DELETE", `/follows/${o.kind}/${o.id}`);
+            else await api("PUT", "/follows", { kind: o.kind, id: o.id, name: o.name });
+            await loadFollows();
+            updateNewsBadge();
+          } catch (e) {
+            alert(t("follow.failed", { error: e.message }));
+          }
+          paint();
+        });
+        return button;
+      }),
+    );
   details.addEventListener("toggle", () => details.open && paint());
 }
 
 /** News: what the followed authors and journals published since the person last looked. */
 async function renderFollowNews() {
   let items = [];
-  try { items = await api("GET", "/follows/new"); } catch { /* offline: shown as empty */ }
+  try {
+    items = await api("GET", "/follows/new");
+  } catch {
+    /* offline: shown as empty */
+  }
   $("follow-empty").hidden = items.length > 0;
-  $("follow-news").replaceChildren(...items.map((item) => {
-    const seen = el("button", { type: "button", class: "small-button", text: t("follow.seen") });
-    seen.addEventListener("click", async () => { await api("POST", `/follows/${item.kind}/${item.id}/seen`); renderFollowNews(); updateNewsBadge(); });
-    const stop = el("button", { type: "button", class: "link-button small", text: t("follow.stop") });
-    stop.addEventListener("click", async () => { await api("DELETE", `/follows/${item.kind}/${item.id}`); await loadFollows(); renderFollowNews(); updateNewsBadge(); });
-    const count = item.count == null ? t("follow.offline") : item.count ? t("follow.count", { n: item.count, since: item.since }) : t("follow.none", { since: item.since });
-    return el("div", { class: "follow-item" },
-      el("h3", {}, el("span", { class: "chip", text: t(item.kind === "author" ? "follow.authorChip" : "follow.sourceChip") }), ` ${item.name} `,
-        el("small", { text: count }), item.count ? seen : null, stop),
-      item.papers.length ? el("ol", { class: "papers" }, ...item.papers.map((p) => paperCard(p))) : null);
-  }));
+  $("follow-news").replaceChildren(
+    ...items.map((item) => {
+      const seen = el("button", { type: "button", class: "small-button", text: t("follow.seen") });
+      seen.addEventListener("click", async () => {
+        await api("POST", `/follows/${item.kind}/${item.id}/seen`);
+        renderFollowNews();
+        updateNewsBadge();
+      });
+      const stop = el("button", { type: "button", class: "link-button small", text: t("follow.stop") });
+      stop.addEventListener("click", async () => {
+        await api("DELETE", `/follows/${item.kind}/${item.id}`);
+        await loadFollows();
+        renderFollowNews();
+        updateNewsBadge();
+      });
+      const count =
+        item.count == null
+          ? t("follow.offline")
+          : item.count
+            ? t("follow.count", { n: item.count, since: item.since })
+            : t("follow.none", { since: item.since });
+      return el(
+        "div",
+        { class: "follow-item" },
+        el(
+          "h3",
+          {},
+          el("span", { class: "chip", text: t(item.kind === "author" ? "follow.authorChip" : "follow.sourceChip") }),
+          ` ${item.name} `,
+          el("small", { text: count }),
+          item.count ? seen : null,
+          stop,
+        ),
+        item.papers.length ? el("ol", { class: "papers" }, ...item.papers.map((p) => paperCard(p))) : null,
+      );
+    }),
+  );
 }
 
 /** The menu's News badge: a new version, or new papers from followed authors and journals. */
 async function updateNewsBadge() {
   let papers = 0;
   if (state.follows.length) {
-    try { papers = (await api("GET", "/follows/new")).reduce((n, f) => n + (f.count || 0), 0); } catch { /* offline */ }
+    try {
+      papers = (await api("GET", "/follows/new")).reduce((n, f) => n + (f.count || 0), 0);
+    } catch {
+      /* offline */
+    }
   }
   const update = newRelease(state.version);
   $("menu-dot").hidden = !update && !papers;
@@ -396,7 +540,10 @@ document.querySelectorAll("[data-weight]").forEach((range) => {
   const out = range.nextElementSibling;
   range.addEventListener("input", () => (out.value = Number(range.value).toFixed(2)));
 });
-$("recent-share").addEventListener("input", (e) => ($("recent-share-out").value = `${Math.round(e.target.value * 100)}%`));
+$("recent-share").addEventListener(
+  "input",
+  (e) => ($("recent-share-out").value = `${Math.round(e.target.value * 100)}%`),
+);
 $("reset-weights").addEventListener("click", () => {
   document.querySelectorAll("[data-weight]").forEach((range) => {
     range.value = range.defaultValue;
@@ -409,15 +556,27 @@ $("search-form").addEventListener("submit", async (event) => {
   const query = $("query").value.trim();
   if (query.length < 2) return;
   if (paperIdentifier(query)) return openLink(query); // a DOI or a paper's link: start from that paper
-  let seeds = $("seeds").value.split("\n").map((s) => s.trim()).filter(Boolean);
-  if ($("bookmark-seeds").checked) seeds = [...seeds, ...state.bookmarks.map((b) => b.id).filter((id) => !seeds.includes(id))];
-  const weights = Object.fromEntries([...document.querySelectorAll("[data-weight]")].map((r) => [r.dataset.weight, Number(r.value)]));
+  let seeds = $("seeds")
+    .value.split("\n")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if ($("bookmark-seeds").checked)
+    seeds = [...seeds, ...state.bookmarks.map((b) => b.id).filter((id) => !seeds.includes(id))];
+  const weights = Object.fromEntries(
+    [...document.querySelectorAll("[data-weight]")].map((r) => [r.dataset.weight, Number(r.value)]),
+  );
   const yearFrom = Number($("year-from").value) || null;
   const yearTo = Number($("year-to").value) || null;
   const payload = {
-    query, limit: Number($("limit").value), year_from: yearFrom, year_to: yearTo,
-    seed_ids: seeds.slice(0, MAX_SEEDS), require_abstract: $("require-abstract").checked, weights,
-    recent_share: Number($("recent-share").value), recent_years: Number($("recent-years").value),
+    query,
+    limit: Number($("limit").value),
+    year_from: yearFrom,
+    year_to: yearTo,
+    seed_ids: seeds.slice(0, MAX_SEEDS),
+    require_abstract: $("require-abstract").checked,
+    weights,
+    recent_share: Number($("recent-share").value),
+    recent_years: Number($("recent-years").value),
   };
   setStatus("search-status", t("search.running"));
   $("results").replaceChildren();
@@ -443,12 +602,26 @@ function renderResults() {
   const cards = run.papers.map((p, i) => paperCard(p, { rank: i + 1, query: run.query }));
   const items = [];
   if (recent.length) {
-    items.push(el("li", { class: "group-head" }, t("group.core"), el("small", { text: t("group.coreHint", { n: core.length }) })));
+    items.push(
+      el(
+        "li",
+        { class: "group-head" },
+        t("group.core"),
+        el("small", { text: t("group.coreHint", { n: core.length }) }),
+      ),
+    );
   }
   items.push(...cards.slice(0, core.length));
   if (recent.length) {
     const years = run.settings.recent_years;
-    items.push(el("li", { class: "group-head" }, t("group.recent"), el("small", { text: t("group.recentHint", { n: recent.length, years }) })));
+    items.push(
+      el(
+        "li",
+        { class: "group-head" },
+        t("group.recent"),
+        el("small", { text: t("group.recentHint", { n: recent.length, years }) }),
+      ),
+    );
     items.push(...cards.slice(core.length));
   }
   $("results").replaceChildren(...items);
@@ -470,7 +643,11 @@ function ndcgAt(labels, k) {
   const top = labels.slice(0, k);
   if (!top.some(Boolean)) return null;
   const dcg = top.reduce((sum, j, i) => sum + (j ? GAIN[j] : 0) / Math.log2(i + 2), 0);
-  const ideal = labels.filter(Boolean).map((j) => GAIN[j]).sort((a, b) => b - a).slice(0, k);
+  const ideal = labels
+    .filter(Boolean)
+    .map((j) => GAIN[j])
+    .sort((a, b) => b - a)
+    .slice(0, k);
   const idcg = ideal.reduce((sum, g, i) => sum + g / Math.log2(i + 2), 0);
   return idcg ? dcg / idcg : 0;
 }
@@ -499,8 +676,11 @@ $("eval-save").addEventListener("click", async () => {
   const judgments = Object.fromEntries(Object.entries(state.judgments).filter(([, v]) => v));
   try {
     const res = await api("POST", "/evaluations", {
-      run_id: run.runId, query: run.query, settings: run.settings,
-      papers: run.papers.map((p) => ({ id: p.id, title: p.title, score: p.score })), judgments,
+      run_id: run.runId,
+      query: run.query,
+      settings: run.settings,
+      papers: run.papers.map((p) => ({ id: p.id, title: p.title, score: p.score })),
+      judgments,
     });
     setStatus("search-status", t("eval.saved", { n: res.written }));
     $("eval-history").open = true;
@@ -512,24 +692,42 @@ $("eval-save").addEventListener("click", async () => {
 
 async function loadEvaluations() {
   let runs = [];
-  try { runs = await api("GET", "/evaluations"); } catch { /* shown as empty */ }
+  try {
+    runs = await api("GET", "/evaluations");
+  } catch {
+    /* shown as empty */
+  }
   $("eval-empty").hidden = runs.length > 0;
   $("eval-table").hidden = runs.length === 0;
-  $("eval-table").querySelector("tbody").replaceChildren(...runs.map((r) => {
-    const w = (r.settings && r.settings.weights) || {};
-    const weights = ["relevance", "influence", "impact", "recency", "seed"].map((k) => (w[k] ?? 0).toFixed(2)).join(" · ");
-    const when = r.saved_at ? new Date(r.saved_at).toLocaleString() : "—";
-    const remove = el("button", { text: t("eval.delete"), title: t("eval.deleteTitle") });
-    remove.addEventListener("click", async () => {
-      if (!confirm(t("eval.deleteConfirm", { query: r.query }))) return;
-      await api("DELETE", `/evaluations/${encodeURIComponent(r.run_id)}`);
-      loadEvaluations();
-    });
-    return el("tr", {},
-      el("td", { text: when }), el("td", { text: r.query }), el("td", { class: "num", text: String(r.judged) }),
-      el("td", { class: "num", text: fmt(r["p@10"]) }), el("td", { class: "num", text: fmt(r["p@20"]) }),
-      el("td", { class: "num", text: fmt(r["ndcg@20"]) }), el("td", { class: "num", text: weights }), el("td", {}, remove));
-  }));
+  $("eval-table")
+    .querySelector("tbody")
+    .replaceChildren(
+      ...runs.map((r) => {
+        const w = (r.settings && r.settings.weights) || {};
+        const weights = ["relevance", "influence", "impact", "recency", "seed"]
+          .map((k) => (w[k] ?? 0).toFixed(2))
+          .join(" · ");
+        const when = r.saved_at ? new Date(r.saved_at).toLocaleString() : "—";
+        const remove = el("button", { text: t("eval.delete"), title: t("eval.deleteTitle") });
+        remove.addEventListener("click", async () => {
+          if (!confirm(t("eval.deleteConfirm", { query: r.query }))) return;
+          await api("DELETE", `/evaluations/${encodeURIComponent(r.run_id)}`);
+          loadEvaluations();
+        });
+        return el(
+          "tr",
+          {},
+          el("td", { text: when }),
+          el("td", { text: r.query }),
+          el("td", { class: "num", text: String(r.judged) }),
+          el("td", { class: "num", text: fmt(r["p@10"]) }),
+          el("td", { class: "num", text: fmt(r["p@20"]) }),
+          el("td", { class: "num", text: fmt(r["ndcg@20"]) }),
+          el("td", { class: "num", text: weights }),
+          el("td", {}, remove),
+        );
+      }),
+    );
 }
 
 // ───────────── bookmarks ─────────────
@@ -554,8 +752,13 @@ const STATUSES = ["to_read", "reading", "read"];
 function statusControl(bookmark, done) {
   const group = el("div", { class: "status-control", role: "group", "aria-label": t("bm.status") });
   for (const status of STATUSES) {
-    const button = el("button", { type: "button", "data-status": status, text: t(`status.${status}`),
-      class: bookmark.status === status ? "on" : null, "aria-pressed": String(bookmark.status === status) });
+    const button = el("button", {
+      type: "button",
+      "data-status": status,
+      text: t(`status.${status}`),
+      class: bookmark.status === status ? "on" : null,
+      "aria-pressed": String(bookmark.status === status),
+    });
     button.addEventListener("click", async () => {
       if (bookmark.status === status) return;
       group.querySelectorAll("button").forEach((b) => (b.disabled = true));
@@ -577,39 +780,59 @@ function renderBookmarks() {
   const select = $("tag-filter");
   const current = select.value;
   const tags = [...new Set(state.bookmarks.flatMap((b) => b.tags))].sort();
-  select.replaceChildren(el("option", { value: "", text: t("bm.all") }), ...tags.map((t) => el("option", { value: t, text: t })));
+  select.replaceChildren(
+    el("option", { value: "", text: t("bm.all") }),
+    ...tags.map((t) => el("option", { value: t, text: t })),
+  );
   select.value = tags.includes(current) ? current : "";
 
   const status = $("status-filter").value;
-  const shown = state.bookmarks.filter((b) => (!select.value || b.tags.includes(select.value)) && (!status || b.status === status));
+  const shown = state.bookmarks.filter(
+    (b) => (!select.value || b.tags.includes(select.value)) && (!status || b.status === status),
+  );
   $("bm-empty").hidden = state.bookmarks.length > 0;
-  $("bookmarks").replaceChildren(...shown.map((b) => {
-    const note = el("textarea", { rows: 2, placeholder: t("bm.note") });
-    note.value = b.note;
-    const tagInput = el("input", { type: "text", placeholder: t("bm.tags") });
-    tagInput.value = b.tags.join(", ");
-    const save = el("button", { text: t("bm.save") });
-    const remove = el("button", { class: "danger", text: t("bm.delete") });
-    save.addEventListener("click", async () => {
-      save.disabled = true;
-      try {
-        await api("PATCH", `/bookmarks/${b.id}`, { note: note.value, tags: tagInput.value.split(",").map((t) => t.trim()).filter(Boolean) });
+  $("bookmarks").replaceChildren(
+    ...shown.map((b) => {
+      const note = el("textarea", { rows: 2, placeholder: t("bm.note") });
+      note.value = b.note;
+      const tagInput = el("input", { type: "text", placeholder: t("bm.tags") });
+      tagInput.value = b.tags.join(", ");
+      const save = el("button", { text: t("bm.save") });
+      const remove = el("button", { class: "danger", text: t("bm.delete") });
+      save.addEventListener("click", async () => {
+        save.disabled = true;
+        try {
+          await api("PATCH", `/bookmarks/${b.id}`, {
+            note: note.value,
+            tags: tagInput.value
+              .split(",")
+              .map((t) => t.trim())
+              .filter(Boolean),
+          });
+          await loadBookmarks();
+          renderBookmarks();
+        } catch (e) {
+          alert(t("bm.saveFailed", { error: e.message }));
+        } finally {
+          save.disabled = false;
+        }
+      });
+      remove.addEventListener("click", async () => {
+        if (!confirm(t("bm.deleteConfirm", { title: b.paper.title }))) return;
+        await api("DELETE", `/bookmarks/${b.id}`);
         await loadBookmarks();
         renderBookmarks();
-      } catch (e) { alert(t("bm.saveFailed", { error: e.message })); } finally { save.disabled = false; }
-    });
-    remove.addEventListener("click", async () => {
-      if (!confirm(t("bm.deleteConfirm", { title: b.paper.title }))) return;
-      await api("DELETE", `/bookmarks/${b.id}`);
-      await loadBookmarks();
-      renderBookmarks();
-    });
-    const edit = el("div", { class: "bm-edit" }, note, tagInput, el("div", { class: "buttons" }, save, remove));
-    const card = paperCard(b.paper, { query: b.query, extra: edit });
-    card.querySelector(".paper-actions").prepend(statusControl(b, renderBookmarks));
-    if (b.query) card.querySelector(".meta").append(el("span", { class: "found-via", text: t("bm.foundVia", { query: b.query }) }));
-    return card;
-  }));
+      });
+      const edit = el("div", { class: "bm-edit" }, note, tagInput, el("div", { class: "buttons" }, save, remove));
+      const card = paperCard(b.paper, { query: b.query, extra: edit });
+      card.querySelector(".paper-actions").prepend(statusControl(b, renderBookmarks));
+      if (b.query)
+        card
+          .querySelector(".meta")
+          .append(el("span", { class: "found-via", text: t("bm.foundVia", { query: b.query }) }));
+      return card;
+    }),
+  );
 }
 $("tag-filter").addEventListener("change", renderBookmarks);
 $("status-filter").addEventListener("change", renderBookmarks);
@@ -619,32 +842,28 @@ $("status-filter").addEventListener("change", renderBookmarks);
 let readerModule = null;
 async function openReader(options) {
   readerModule ??= await import(new URL("reader/reader.js", document.querySelector("link[rel=stylesheet]").href).href);
-  return readerModule.openReader({ api, saveFile, onOpened: readingStarted, onFinished: readingFinished,
+  return readerModule.openReader({
+    api,
+    saveFile,
+    onOpened: readingStarted,
+    onFinished: readingFinished,
     onAttachNote: attachToNote,
-    onClose: () => { loadBookmarks(); if (currentTab === "reading") renderDocs(); }, ...options });
+    onClose: () => {
+      loadBookmarks();
+      if (currentTab === "reading") renderDocs();
+    },
+    ...options,
+  });
 }
 
 // Android: a PDF opened with the app (mobile.js), on the paper it was fetched for, if any.
 window.radarOpenFile = (file, paper) => openReader({ paper: paper ? pick(paper) : null, file });
 
-/** Ask for a PDF file; resolves to the File, or null if the person cancels. */
-function pickPdf() {
-  const input = $("pick-pdf");
-  input.value = "";
-  return new Promise((resolve) => {
-    input.onchange = () => resolve(input.files[0] || null);
-    input.click();
-  });
-}
-
-/** Read a paper: its free PDF when there is one, else a PDF file the person picks. */
-async function readPaper(paper, { askFile = false } = {}) {
-  const url = webUrl(paper.open_access_url);
-  // the reader also asks Unpaywall and the person's library (reader.js findPdf)
-  if ((url || paper.doi) && !askFile) return openReader({ paper: pick(paper), url });
-  const file = await pickPdf();
-  if (file) openReader({ paper: pick(paper), file });
-}
+/**
+ * Open a paper. The reader takes it from there (reader.js start): the note kept for it if there
+ * is one, else a free copy, else the person's library, else it asks for the file.
+ */
+const readPaper = (paper) => openReader({ paper: pick(paper), url: webUrl(paper.open_access_url) });
 
 const bookmarkOf = (paper) => state.bookmarks.find((b) => b.id === shortId(paper.id));
 
@@ -652,7 +871,12 @@ const bookmarkOf = (paper) => state.bookmarks.find((b) => b.id === shortId(paper
 async function readingStarted(paper) {
   const b = bookmarkOf(paper);
   if (b && b.status === "to_read") {
-    try { await api("PATCH", `/bookmarks/${b.id}`, { status: "reading" }); await loadBookmarks(); } catch { /* not important */ }
+    try {
+      await api("PATCH", `/bookmarks/${b.id}`, { status: "reading" });
+      await loadBookmarks();
+    } catch {
+      /* not important */
+    }
   }
 }
 
@@ -686,30 +910,42 @@ async function attachToNote(paper, text) {
 
 async function renderDocs() {
   let docs = [];
-  try { docs = await api("GET", "/annotations"); } catch { /* shown as empty */ }
+  try {
+    docs = await api("GET", "/annotations");
+  } catch {
+    /* shown as empty */
+  }
   $("docs-empty").hidden = docs.length > 0;
-  const when = (iso) => (iso ? new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" }) : "");
-  $("doc-list").replaceChildren(...docs.map((d) => {
-    const open = el("button", { type: "button", class: "title link-like", text: d.title || d.id });
-    open.addEventListener("click", async () => {
-      const paper = d.paper_id ? (bookmarkOf({ id: d.paper_id }) || {}).paper || { id: `https://openalex.org/${d.paper_id}`, title: d.title } : null;
-      if (d.id.startsWith("notes-")) return openReader({ paper, docId: d.id });
-      // a kept PDF opens as it is (reader.js keptPdf); else the paper is looked for again, or the file asked for
-      if (paper) return openReader({ paper, url: webUrl(d.source) || null });
-      openReader({ docId: d.id });
-    });
-    const remove = el("button", { type: "button", class: "danger small-button", text: t("bm.delete") });
-    remove.addEventListener("click", async () => {
-      if (!confirm(t("read.deleteDoc", { title: d.title || d.id }))) return;
-      await api("DELETE", `/annotations/${encodeURIComponent(d.id)}`);
-      renderDocs();
-    });
-    const meta = t("read.docMeta", { items: d.items, notes: d.note_pages, date: when(d.updated_at) });
-    return el("li", { class: "read-row" }, open, el("span", { class: "meta", text: meta }), remove);
-  }));
+  const when = (iso) =>
+    iso ? new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" }) : "";
+  $("doc-list").replaceChildren(
+    ...docs.map((d) => {
+      const open = el("button", { type: "button", class: "title link-like", text: d.title || d.id });
+      open.addEventListener("click", async () => {
+        const paper = d.paper_id
+          ? (bookmarkOf({ id: d.paper_id }) || {}).paper || { id: `https://openalex.org/${d.paper_id}`, title: d.title }
+          : null;
+        // a kept PDF opens as it is (reader.js keptPdf); else the paper is looked for again, or the file asked for
+        if (paper) openReader({ paper, url: webUrl(d.source) || null });
+        else openReader({ docId: d.id });
+      });
+      const remove = el("button", { type: "button", class: "danger small-button", text: t("bm.delete") });
+      remove.addEventListener("click", async () => {
+        if (!confirm(t("read.deleteDoc", { title: d.title || d.id }))) return;
+        await api("DELETE", `/annotations/${encodeURIComponent(d.id)}`);
+        renderDocs();
+      });
+      const meta = t("read.docMeta", { items: d.items, notes: d.note_pages, date: when(d.updated_at) });
+      return el("li", { class: "read-row" }, open, el("span", { class: "meta", text: meta }), remove);
+    }),
+  );
 }
 
-$("open-pdf").addEventListener("change", (e) => { const file = e.target.files[0]; e.target.value = ""; if (file) openReader({ file }); });
+$("open-pdf").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (file) openReader({ file });
+});
 $("new-notes").addEventListener("click", () => openReader({}));
 
 // ───────────── reading: this month's papers as a thermometer ─────────────
@@ -719,22 +955,41 @@ const DEFAULT_GOAL = 10;
 function readThisMonth(now = new Date()) {
   return state.bookmarks
     .filter((b) => b.status === "read" && b.read_at)
-    .filter((b) => { const d = new Date(b.read_at); return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth(); })
+    .filter((b) => {
+      const d = new Date(b.read_at);
+      return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
+    })
     .sort((a, b) => (a.read_at < b.read_at ? 1 : -1));
 }
 
 function readRow(bookmark, when) {
   const link = webUrl(bookmark.paper.url) || webUrl(bookmark.paper.doi);
-  const title = el(link ? "a" : "span", { class: "title", href: link, target: link ? "_blank" : null, rel: link ? "noopener" : null,
-    text: bookmark.paper.title || t("paper.noTitle") });
-  return el("li", { class: "read-row" }, title,
-    el("span", { class: "meta", text: when }), statusControl(bookmark, renderReading));
+  const title = el(link ? "a" : "span", {
+    class: "title",
+    href: link,
+    target: link ? "_blank" : null,
+    rel: link ? "noopener" : null,
+    text: bookmark.paper.title || t("paper.noTitle"),
+  });
+  return el(
+    "li",
+    { class: "read-row" },
+    title,
+    el("span", { class: "meta", text: when }),
+    statusControl(bookmark, renderReading),
+  );
 }
 
 function renderReading() {
-  const now = new Date(), goal = state.readingGoal || DEFAULT_GOAL;
-  const reads = readThisMonth(now), n = reads.length, full = Math.min(1, n / goal);
-  $("reading-month").textContent = now.toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { year: "numeric", month: "long" });
+  const now = new Date(),
+    goal = state.readingGoal || DEFAULT_GOAL;
+  const reads = readThisMonth(now),
+    n = reads.length,
+    full = Math.min(1, n / goal);
+  $("reading-month").textContent = now.toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", {
+    year: "numeric",
+    month: "long",
+  });
   $("reading-cheer").textContent = t(n === 0 ? "read.cheerZero" : n >= goal ? "read.cheerGoal" : "read.cheer");
   $("reading-count").textContent = String(n);
   $("reading-of").textContent = t("read.of", { goal });
@@ -742,15 +997,21 @@ function renderReading() {
   $("thermo").classList.toggle("done", n >= goal);
   $("mercury").style.height = "0%";
   requestAnimationFrame(() => requestAnimationFrame(() => ($("mercury").style.height = `${(full * 100).toFixed(1)}%`)));
-  $("ticks").replaceChildren(...[goal, Math.round(goal / 2), 0].map((v) =>
-    el("span", { style: `bottom:${((v / goal) * 100).toFixed(1)}%`, text: String(v) })));
+  $("ticks").replaceChildren(
+    ...[goal, Math.round(goal / 2), 0].map((v) =>
+      el("span", { style: `bottom:${((v / goal) * 100).toFixed(1)}%`, text: String(v) }),
+    ),
+  );
   if (document.activeElement !== $("reading-goal")) $("reading-goal").value = String(goal);
-  const date = (iso) => new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
+  const date = (iso) =>
+    new Date(iso).toLocaleDateString(LANG === "ko" ? "ko-KR" : "en-US", { month: "short", day: "numeric" });
   $("read-empty").hidden = n > 0;
   $("read-list").replaceChildren(...reads.map((b) => readRow(b, t("read.readOn", { date: date(b.read_at) }))));
   const reading = state.bookmarks.filter((b) => b.status === "reading");
   $("reading-empty").hidden = reading.length > 0;
-  $("reading-list").replaceChildren(...reading.map((b) => readRow(b, b.query ? t("bm.foundVia", { query: b.query }).replace(/^\s*·\s*/, "") : "")));
+  $("reading-list").replaceChildren(
+    ...reading.map((b) => readRow(b, b.query ? t("bm.foundVia", { query: b.query }).replace(/^\s*·\s*/, "") : "")),
+  );
 }
 
 $("goal-form").addEventListener("submit", async (event) => {
@@ -773,7 +1034,9 @@ $("export-ris").addEventListener("click", async () => {
     const ris = await api("GET", `/bookmarks/export.ris${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`);
     if (!ris.trim()) return alert(t("bm.nothing"));
     alert(await saveFile("research-radar.ris", ris, "application/x-research-info-systems"));
-  } catch (e) { alert(t("bm.exportFailed", { error: e.message })); }
+  } catch (e) {
+    alert(t("bm.exportFailed", { error: e.message }));
+  }
 });
 
 // A Zotero (or Mendeley, EndNote, Papers) export: each reference found on OpenAlex and bookmarked
@@ -781,7 +1044,9 @@ $("import-refs").addEventListener("change", async (event) => {
   const file = event.target.files[0];
   event.target.value = "";
   if (!file) return;
-  const { parseCitations } = await import(new URL("core/citations.js", document.querySelector("link[rel=stylesheet]").href).href);
+  const { parseCitations } = await import(
+    new URL("core/citations.js", document.querySelector("link[rel=stylesheet]").href).href
+  );
   const entries = parseCitations(await file.text());
   if (!entries.length) return setStatus("bm-status", t("bm.importNone", { name: file.name }), true);
   setStatus("bm-status", t("bm.importing", { n: entries.length }));
@@ -789,7 +1054,9 @@ $("import-refs").addEventListener("change", async (event) => {
     const done = await api("POST", "/bookmarks/import", { entries });
     await loadBookmarks();
     renderBookmarks();
-    const missing = done.not_found.length ? t("bm.importMissing", { n: done.not_found.length, titles: done.not_found.slice(0, 3).join("; ") }) : "";
+    const missing = done.not_found.length
+      ? t("bm.importMissing", { n: done.not_found.length, titles: done.not_found.slice(0, 3).join("; ") })
+      : "";
     setStatus("bm-status", t("bm.imported", { imported: done.imported, existing: done.existing }) + missing);
   } catch (e) {
     setStatus("bm-status", t("bm.importFailed", { error: e.message }), true);
@@ -802,7 +1069,9 @@ $("export-bib").addEventListener("click", async () => {
     const bib = await api("GET", `/bookmarks/export.bib${tag ? `?tag=${encodeURIComponent(tag)}` : ""}`);
     if (!bib.trim()) return alert(t("bm.nothing"));
     alert(await saveFile("research-radar.bib", bib, "application/x-bibtex"));
-  } catch (e) { alert(t("bm.exportFailed", { error: e.message })); }
+  } catch (e) {
+    alert(t("bm.exportFailed", { error: e.message }));
+  }
 });
 
 // ───────────── research map ─────────────
@@ -824,7 +1093,11 @@ async function drawFlow() {
   setStatus("map-status", t("flow.running"));
   try {
     const flow = await api("POST", "/flow", payload);
-    Object.assign(state, { flow, posterTitle: useResults ? state.run.query : null, flowRun: state.run && state.run.runId });
+    Object.assign(state, {
+      flow,
+      posterTitle: useResults ? state.run.query : null,
+      flowRun: state.run && state.run.runId,
+    });
     await showFlow();
   } catch (e) {
     setStatus("map-status", t("flow.failed", { error: e.message }), true);
@@ -845,17 +1118,25 @@ function autoDrawFlow() {
  * cannot load the app's files (and a saved poster keeps its look offline). Loaded once. */
 let mapFonts = null;
 function mapFontFaces() {
-  mapFonts ??= Promise.all([["L", 300], ["R", 400], ["B", 700]].map(async ([file, weight]) => {
-    const url = new URL(`fonts/NanumSquareRound${file}.woff2`, document.querySelector("link[rel=stylesheet]").href);
-    const blob = await (await fetch(url)).blob();
-    const data = await new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = reject;
-      reader.readAsDataURL(new Blob([blob], { type: "font/woff2" }));
-    });
-    return `@font-face{font-family:NanumSquareRound;font-weight:${weight};src:url("${data}") format("woff2")}`;
-  })).then((faces) => faces.join("")).catch(() => ""); // without them the map uses the system font
+  mapFonts ??= Promise.all(
+    [
+      ["L", 300],
+      ["R", 400],
+      ["B", 700],
+    ].map(async ([file, weight]) => {
+      const url = new URL(`fonts/NanumSquareRound${file}.woff2`, document.querySelector("link[rel=stylesheet]").href);
+      const blob = await (await fetch(url)).blob();
+      const data = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(new Blob([blob], { type: "font/woff2" }));
+      });
+      return `@font-face{font-family:NanumSquareRound;font-weight:${weight};src:url("${data}") format("woff2")}`;
+    }),
+  )
+    .then((faces) => faces.join(""))
+    .catch(() => ""); // without them the map uses the system font
   return mapFonts;
 }
 
@@ -867,18 +1148,32 @@ async function showFlow() {
   // on the app's light background the map is light too (and saved the way it is shown)
   const light = !matchMedia("(prefers-color-scheme: dark)").matches;
   const fonts = await mapFontFaces();
-  state.poster = (light ? poster.replace("<html ", '<html class="light" ') : poster).replace("<style>", () => `<style>${fonts}`);
+  state.poster = (light ? poster.replace("<html ", '<html class="light" ') : poster).replace(
+    "<style>",
+    () => `<style>${fonts}`,
+  );
   $("poster").srcdoc = state.poster;
   $("poster").hidden = false;
   $("save-poster").disabled = false;
   const touch = matchMedia("(pointer: coarse)").matches;
-  setStatus("map-status", t(touch ? "flow.doneTouch" : "flow.done", { nodes: flow.nodes.length, edges: flow.edges.length, topics: flow.clusters.length }));
+  setStatus(
+    "map-status",
+    t(touch ? "flow.doneTouch" : "flow.done", {
+      nodes: flow.nodes.length,
+      edges: flow.edges.length,
+      topics: flow.clusters.length,
+    }),
+  );
   renderStory(flow);
 }
 
 $("save-poster").addEventListener("click", async () => {
   if (!state.poster) return;
-  const safe = (state.posterTitle || t("flow.myBookmarks")).replace(/[^\w가-힣 -]+/g, "").trim().replace(/\s+/g, "-") || "research-map";
+  const safe =
+    (state.posterTitle || t("flow.myBookmarks"))
+      .replace(/[^\w가-힣 -]+/g, "")
+      .trim()
+      .replace(/\s+/g, "-") || "research-map";
   setStatus("map-status", await saveFile(`${safe}.html`, state.poster, "text/html"));
 });
 
@@ -889,21 +1184,47 @@ function renderStory(flow) {
   const label = (id) => (nodes[id] ? `${nodes[id].title} (${nodes[id].year ?? "—"})` : "—");
   const lanes = [...flow.clusters].sort((a, b) => a.lane - b.lane);
   const cards = lanes.map((c) => {
-    const card = el("article", { class: "story-card" },
+    const card = el(
+      "article",
+      { class: "story-card" },
       el("h3", { text: c.label }),
-      el("dl", {},
-        el("dt", { text: t("story.papers") }), el("dd", { text: t("story.papersValue", { n: c.size, from: c.year_min ?? "—", to: c.year_max ?? "—" }) }),
-        el("dt", { text: t("story.origin") }), el("dd", { text: label(c.origin) }),
-        el("dt", { text: t("story.hub") }), el("dd", { text: label(c.hub) }),
-        el("dt", { text: t("story.latest") }), el("dd", {}, el("ol", {}, c.frontier.map((id) => el("li", { text: label(id) })))),
-      ));
+      el(
+        "dl",
+        {},
+        el("dt", { text: t("story.papers") }),
+        el("dd", { text: t("story.papersValue", { n: c.size, from: c.year_min ?? "—", to: c.year_max ?? "—" }) }),
+        el("dt", { text: t("story.origin") }),
+        el("dd", { text: label(c.origin) }),
+        el("dt", { text: t("story.hub") }),
+        el("dd", { text: label(c.hub) }),
+        el("dt", { text: t("story.latest") }),
+        el(
+          "dd",
+          {},
+          el(
+            "ol",
+            {},
+            c.frontier.map((id) => el("li", { text: label(id) })),
+          ),
+        ),
+      ),
+    );
     card.style.setProperty("--lane", LANE_COLORS[c.lane % LANE_COLORS.length]);
     return card;
   });
   if (flow.chain && flow.chain.length) {
-    cards.push(el("article", { class: "story-card" },
-      el("h3", { text: t("story.chain") }),
-      el("ol", {}, flow.chain.map((id) => el("li", { text: label(id) })))));
+    cards.push(
+      el(
+        "article",
+        { class: "story-card" },
+        el("h3", { text: t("story.chain") }),
+        el(
+          "ol",
+          {},
+          flow.chain.map((id) => el("li", { text: label(id) })),
+        ),
+      ),
+    );
   }
   $("story").replaceChildren(...cards);
 }
@@ -912,7 +1233,11 @@ function renderStory(flow) {
 
 async function loadSettings({ applyLanguage = false } = {}) {
   let s;
-  try { s = await api("GET", "/settings"); } catch { return; }
+  try {
+    s = await api("GET", "/settings");
+  } catch {
+    return;
+  }
   state.readingGoal = Number(s.reading_goal && s.reading_goal.value) || null;
   if (!$("tab-reading").hidden) renderReading();
   const key = s.openalex_api_key;
@@ -925,11 +1250,16 @@ async function loadSettings({ applyLanguage = false } = {}) {
   $("library-proxy").value = (s.library_proxy && s.library_proxy.value) || "";
   $("school-state").textContent = "";
   state.librarySignInUrl = s.library_sign_in_url || null;
-  $("library-state").textContent = !(s.library_proxy && s.library_proxy.value) ? ""
-    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") + (window.radarLocalApi && s.library_signed_in ? " " + t("set.libraryMobile") : "");
-  $("library-sign-in").hidden = !state.librarySignInUrl || !(window.radarLibrarySignIn || (window.pywebview && window.pywebview.api && window.pywebview.api.library_sign_in));
+  $("library-state").textContent = !(s.library_proxy && s.library_proxy.value)
+    ? ""
+    : t(s.library_signed_in ? "set.librarySignedIn" : "set.libraryNotSignedIn") +
+      (window.radarLocalApi && s.library_signed_in ? " " + t("set.libraryMobile") : "");
+  $("library-sign-in").hidden =
+    !state.librarySignInUrl ||
+    !(window.radarLibrarySignIn || (window.pywebview && window.pywebview.api && window.pywebview.api.library_sign_in));
   $("library-sign-out").hidden = !s.library_signed_in;
-  if (window.radarLocalApi) $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
+  if (window.radarLocalApi)
+    $("data-hint").textContent = t("set.dataDirMobile"); // no data folder on a phone
   else $("data-dir").textContent = s.data_dir;
   $("key-pill").textContent = key.set ? t("pill.ok") : t("pill.missing");
   $("key-pill").className = `pill ${key.set ? "ok" : "warn"}`;
@@ -957,14 +1287,20 @@ function refreshText() {
   if (currentTab === "news") renderNews();
 }
 
-document.querySelectorAll("input[name=language]").forEach((radio) => radio.addEventListener("change", async () => {
-  if (!setLanguage(radio.value)) return;
-  let error = null;
-  try { await api("PUT", "/settings", { language: LANG }); } catch (e) { error = e; }
-  refreshText();
-  if (error) setStatus("language-status", t("set.saveFailed", { error: error.message }), true);
-  else setStatus("language-status", t("set.languageSaved"));
-}));
+document.querySelectorAll("input[name=language]").forEach((radio) =>
+  radio.addEventListener("change", async () => {
+    if (!setLanguage(radio.value)) return;
+    let error = null;
+    try {
+      await api("PUT", "/settings", { language: LANG });
+    } catch (e) {
+      error = e;
+    }
+    refreshText();
+    if (error) setStatus("language-status", t("set.saveFailed", { error: error.message }), true);
+    else setStatus("language-status", t("set.languageSaved"));
+  }),
+);
 
 for (const [button, field, label] of [["clear-openalex-key", "openalex_api_key", "OpenAlex"]]) {
   $(button).addEventListener("click", async () => {
@@ -998,7 +1334,10 @@ $("test-key").addEventListener("click", async () => {
   result.textContent = t("set.testing");
   try {
     const r = await api("POST", "/settings/test-openalex", { api_key: $("openalex-key").value.trim() || null });
-    const budget = r.remaining_usd != null && r.limit_usd ? t("set.budget", { remaining: r.remaining_usd.toFixed(3), limit: r.limit_usd }) : "";
+    const budget =
+      r.remaining_usd != null && r.limit_usd
+        ? t("set.budget", { remaining: r.remaining_usd.toFixed(3), limit: r.limit_usd })
+        : "";
     const message = r.code ? t(`key.${r.code}`, { status: r.status ?? "" }) : r.message;
     result.textContent = (r.ok ? "✓ " : "✗ ") + message + budget;
     result.classList.add(r.ok ? "ok" : "bad");
@@ -1026,15 +1365,27 @@ $("settings-form").addEventListener("submit", async (event) => {
 $("openalex-email").addEventListener("change", async () => {
   let school = null;
   const email = $("openalex-email").value.trim();
-  if (email.includes("@")) try { school = await api("GET", `/library/school?email=${encodeURIComponent(email)}`); } catch { /* offline: type it */ }
+  if (email.includes("@"))
+    try {
+      school = await api("GET", `/library/school?email=${encodeURIComponent(email)}`);
+    } catch {
+      /* offline: type it */
+    }
   if (school && !$("library-proxy").value.trim()) $("library-proxy").value = school.proxy;
-  $("school-state").textContent = !email.includes("@") ? "" : school ? t("set.school", { name: LANG === "ko" ? school.name_ko : school.name_en }) : t("set.schoolUnknown");
+  $("school-state").textContent = !email.includes("@")
+    ? ""
+    : school
+      ? t("set.school", { name: LANG === "ko" ? school.name_ko : school.name_en })
+      : t("set.schoolUnknown");
 });
 
 $("library-form").addEventListener("submit", async (event) => {
   event.preventDefault();
   try {
-    await api("PUT", "/settings", { openalex_email: $("openalex-email").value.trim(), library_proxy: $("library-proxy").value.trim() });
+    await api("PUT", "/settings", {
+      openalex_email: $("openalex-email").value.trim(),
+      library_proxy: $("library-proxy").value.trim(),
+    });
     setStatus("library-status", t("set.saved"));
     await loadSettings();
   } catch (e) {
@@ -1046,9 +1397,12 @@ $("library-form").addEventListener("submit", async (event) => {
 $("library-sign-in").addEventListener("click", async () => {
   setStatus("library-status", t("set.librarySigningIn"));
   let ok = false;
-  try { // Android: a web view inside the app (mobile.js); the desktop app: a window of its own
+  try {
+    // Android: a web view inside the app (mobile.js); the desktop app: a window of its own
     ok = window.radarLibrarySignIn ? await window.radarLibrarySignIn() : await window.pywebview.api.library_sign_in();
-  } catch { /* the window failed to open */ }
+  } catch {
+    /* the window failed to open */
+  }
   setStatus("library-status", t(ok ? "set.librarySignInDone" : "set.librarySignInClosed"), !ok);
   await loadSettings();
 });
@@ -1062,17 +1416,30 @@ $("library-sign-out").addEventListener("click", async () => {
 // ───────────── version & updates ─────────────
 
 /** A newer release, announced only with a link to GitHub (the link comes from GitHub's API). */
-const newRelease = (info) => Boolean(info && info.update_available && /^https:\/\/github\.com\//.test(info.latest.url || ""));
+const newRelease = (info) =>
+  Boolean(info && info.update_available && /^https:\/\/github\.com\//.test(info.latest.url || ""));
 
 async function checkVersion() {
   let info;
-  try { info = await api("GET", "/version"); } catch { return; }
+  try {
+    info = await api("GET", "/version");
+  } catch {
+    return;
+  }
   state.version = info;
   $("app-version").textContent = `v${info.version}`;
   const update = newRelease(info);
   updateNewsBadge();
   if (update) {
-    $("update-state").replaceChildren("· ", el("a", { href: info.latest.url, target: "_blank", rel: "noopener", text: t("set.newVersion", { version: info.latest.version }) }));
+    $("update-state").replaceChildren(
+      "· ",
+      el("a", {
+        href: info.latest.url,
+        target: "_blank",
+        rel: "noopener",
+        text: t("set.newVersion", { version: info.latest.version }),
+      }),
+    );
   } else {
     $("update-state").textContent = info.latest ? t("set.latest") : "";
   }
@@ -1091,13 +1458,33 @@ async function renderNews() {
     card.textContent = t("news.update", { version: info.latest.version });
   }
   if (!state.changelog) {
-    try { state.changelog = await api("GET", "/changelog"); } catch { return; }
+    try {
+      state.changelog = await api("GET", "/changelog");
+    } catch {
+      return;
+    }
   }
   const current = info ? info.version : null;
-  $("changelog").replaceChildren(...state.changelog.map((release) => el("li", { class: "release" },
-    el("h3", {}, `v${release.version}`, release.version === current ? el("span", { class: "chip", text: t("news.current") }) : null,
-      el("small", { text: release.date || "" })),
-    el("ul", {}, (release[LANG] || release.ko).map((line) => el("li", { text: line }))))));
+  $("changelog").replaceChildren(
+    ...state.changelog.map((release) =>
+      el(
+        "li",
+        { class: "release" },
+        el(
+          "h3",
+          {},
+          `v${release.version}`,
+          release.version === current ? el("span", { class: "chip", text: t("news.current") }) : null,
+          el("small", { text: release.date || "" }),
+        ),
+        el(
+          "ul",
+          {},
+          (release[LANG] || release.ko).map((line) => el("li", { text: line })),
+        ),
+      ),
+    ),
+  );
 }
 
 // ───────────── start ─────────────

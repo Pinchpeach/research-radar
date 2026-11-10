@@ -25,14 +25,52 @@ async function stroke(page, target, points) {
 
 /** Pointer events as a stylus or a finger would send them. */
 async function synthetic(target, pointerType, points, pressure = 0.7) {
-  await target.evaluate((svg, { pointerType, points, pressure }) => {
-    const r = svg.getBoundingClientRect(), id = pointerType === "pen" ? 7 : 8;
-    const fire = (type, [x, y]) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: id, pointerType,
-      clientX: r.left + x, clientY: r.top + y, pressure, button: 0, buttons: type === "pointerup" ? 0 : 1, isPrimary: true }));
-    fire("pointerdown", points[0]);
-    for (const p of points.slice(1)) fire("pointermove", p);
-    fire("pointerup", points[points.length - 1]);
-  }, { pointerType, points, pressure });
+  await target.evaluate(
+    (svg, { pointerType, points, pressure }) => {
+      const r = svg.getBoundingClientRect(),
+        id = pointerType === "pen" ? 7 : 8;
+      const fire = (type, [x, y]) =>
+        svg.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: id,
+            pointerType,
+            clientX: r.left + x,
+            clientY: r.top + y,
+            pressure,
+            button: 0,
+            buttons: type === "pointerup" ? 0 : 1,
+            isPrimary: true,
+          }),
+        );
+      fire("pointerdown", points[0]);
+      for (const p of points.slice(1)) fire("pointermove", p);
+      fire("pointerup", points[points.length - 1]);
+    },
+    { pointerType, points, pressure },
+  );
+}
+
+/** Several pointers at once, as [type, pointerType, pointerId, x, y] in CSS pixels from the page's top-left. */
+async function pointers(target, events) {
+  await target.evaluate((svg, events) => {
+    const r = svg.getBoundingClientRect();
+    for (const [type, pointerType, pointerId, x, y] of events)
+      svg.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId,
+          pointerType,
+          clientX: r.left + x,
+          clientY: r.top + y,
+          pressure: 0.6,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+        }),
+      );
+  }, events);
 }
 
 const wave = Array.from({ length: 12 }, (_, i) => [60 + i * 14, 300 + Math.sin(i / 2) * 12]);
@@ -42,11 +80,18 @@ test("pen, colours, highlighter and text boxes", async ({ page }) => {
   await stroke(page, page1(page), wave);
   await expect(items(page)).toHaveCount(1);
   await page.locator(".rd-colour[data-colour='#e5484d']").click();
-  await stroke(page, page1(page), wave.map(([x, y]) => [x, y + 60]));
+  await stroke(
+    page,
+    page1(page),
+    wave.map(([x, y]) => [x, y + 60]),
+  );
   await expect(items(page).nth(1)).toHaveAttribute("fill", "#e5484d");
 
   await page.locator(".rd-tool[data-tool=highlighter]").click();
-  await stroke(page, page1(page), [[60, 400], [300, 402]]);
+  await stroke(page, page1(page), [
+    [60, 400],
+    [300, 402],
+  ]);
   await expect(items(page).nth(2)).toHaveAttribute("stroke", "#ffd400");
   await expect(items(page).nth(2)).toHaveAttribute("opacity", "0.35");
 
@@ -64,11 +109,20 @@ test("a stylus writes with pressure; fingers then only scroll (palm rejection)",
   await synthetic(page1(page), "pen", wave, 0.9);
   await expect(items(page)).toHaveCount(1);
   await expect(page.locator(".rd-penonly")).toHaveClass(/on/);
-  await synthetic(page1(page), "pen", wave.map(([x, y]) => [x, y + 80]), 0.1);
+  await synthetic(
+    page1(page),
+    "pen",
+    wave.map(([x, y]) => [x, y + 80]),
+    0.1,
+  );
   const widths = await items(page).evaluateAll((nodes) => nodes.map((n) => n.getBBox().height));
   expect(widths[0], "a firm stroke is thicker than a light one").toBeGreaterThan(widths[1]);
   const before = await page.locator(".rd-pages").evaluate((e) => e.scrollTop);
-  await synthetic(page1(page), "touch", [[200, 600], [200, 450], [200, 300]]);
+  await synthetic(page1(page), "touch", [
+    [200, 600],
+    [200, 450],
+    [200, 300],
+  ]);
   await expect(items(page)).toHaveCount(2); // the finger drew nothing
   expect(await page.locator(".rd-pages").evaluate((e) => e.scrollTop)).toBeGreaterThan(before);
 });
@@ -76,16 +130,30 @@ test("a stylus writes with pressure; fingers then only scroll (palm rejection)",
 test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   await openSample(page);
   await stroke(page, page1(page), wave);
-  await stroke(page, page1(page), wave.map(([x, y]) => [x, y + 50]));
+  await stroke(
+    page,
+    page1(page),
+    wave.map(([x, y]) => [x, y + 50]),
+  );
   await expect(items(page)).toHaveCount(2);
   const pathOf = (i) => items(page).nth(i).getAttribute("d");
   const first = await pathOf(0);
 
   await page.locator(".rd-tool[data-tool=select]").click();
-  await stroke(page, page1(page), [[40, 270], [260, 270], [260, 390], [40, 390], [40, 272]]); // lasso both
+  await stroke(page, page1(page), [
+    [40, 270],
+    [260, 270],
+    [260, 390],
+    [40, 390],
+    [40, 272],
+  ]); // lasso both
   await expect(page.locator(".rd-selbox")).toHaveCount(1);
   await expect(page.locator(".rd-delete")).toBeVisible();
-  await stroke(page, page1(page), [[120, 300], [180, 360], [220, 420]]); // drag the selection
+  await stroke(page, page1(page), [
+    [120, 300],
+    [180, 360],
+    [220, 420],
+  ]); // drag the selection
   expect(await pathOf(0)).not.toBe(first);
   await page.locator(".rd-undo").click();
   expect(await pathOf(0)).toBe(first);
@@ -93,7 +161,13 @@ test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   expect(await pathOf(0)).not.toBe(first);
 
   // undo and redo drop the selection: lasso the (moved) strokes again, then delete them
-  await stroke(page, page1(page), [[20, 250], [400, 250], [400, 560], [20, 560], [20, 252]]);
+  await stroke(page, page1(page), [
+    [20, 250],
+    [400, 250],
+    [400, 560],
+    [20, 560],
+    [20, 252],
+  ]);
   await page.locator(".rd-delete").click();
   await expect(items(page)).toHaveCount(0);
   await page.keyboard.press("Control+z");
@@ -103,7 +177,10 @@ test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   await page.locator(".rd-opt[data-opt=stroke]").click(); // whole strokes
   const at = await page.locator(".rd-page[data-page='1'] .rd-items > *").first().boundingBox();
   const pageBox = await page1(page).boundingBox();
-  const across = (box) => [[box.x - pageBox.x + box.width / 2, box.y - pageBox.y - 10], [box.x - pageBox.x + box.width / 2, box.y - pageBox.y + box.height + 10]];
+  const across = (box) => [
+    [box.x - pageBox.x + box.width / 2, box.y - pageBox.y - 10],
+    [box.x - pageBox.x + box.width / 2, box.y - pageBox.y + box.height + 10],
+  ];
   await stroke(page, page1(page), across(at));
   await expect(items(page)).toHaveCount(1);
 
@@ -113,7 +190,9 @@ test("select, lasso, move, delete, erase, undo and redo", async ({ page }) => {
   await expect(items(page)).toHaveCount(2);
 });
 
-test("pen types, draw and hold, a straight highlighter, two-finger undo, the stylus eraser, duplicate and resize", async ({ page }) => {
+test("pen types, draw and hold, a straight highlighter, two-finger undo, the stylus eraser, duplicate and resize", async ({
+  page,
+}) => {
   await openSample(page);
   // a pen type is kept with the stroke
   await page.locator(".rd-opt[data-opt=brush]").click();
@@ -134,30 +213,70 @@ test("pen types, draw and hold, a straight highlighter, two-finger undo, the sty
   // the highlighter's straight option draws from end to end
   await page.locator(".rd-tool[data-tool=highlighter]").click();
   await page.locator(".rd-opt[data-opt=straight]").click();
-  await stroke(page, page1(page), [[60, 480], [140, 470], [220, 490], [300, 480]]);
+  await stroke(page, page1(page), [
+    [60, 480],
+    [140, 470],
+    [220, 490],
+    [300, 480],
+  ]);
   await expect(items(page)).toHaveCount(3);
   expect(await items(page).nth(2).getAttribute("d")).toMatch(/^M[\d. ]+L[\d. ]+$/);
 
   // two fingers tapped together undo
   await page1(page).evaluate((svg) => {
-    const r = svg.getBoundingClientRect(), fire = (type, id, x) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true,
-      pointerId: id, pointerType: "touch", clientX: r.left + x, clientY: r.top + 200, isPrimary: id === 21 }));
-    fire("pointerdown", 21, 100); fire("pointerdown", 22, 160); fire("pointerup", 21, 100); fire("pointerup", 22, 160);
+    const r = svg.getBoundingClientRect(),
+      fire = (type, id, x) =>
+        svg.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: id,
+            pointerType: "touch",
+            clientX: r.left + x,
+            clientY: r.top + 200,
+            isPrimary: id === 21,
+          }),
+        );
+    fire("pointerdown", 21, 100);
+    fire("pointerdown", 22, 160);
+    fire("pointerup", 21, 100);
+    fire("pointerup", 22, 160);
   });
   await expect(items(page)).toHaveCount(2);
 
   // the stylus's eraser end erases whatever the tool
   await page.locator(".rd-tool[data-tool=pen]").click();
   await page1(page).evaluate((svg) => {
-    const r = svg.getBoundingClientRect(), fire = (type, x, y) => svg.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true,
-      pointerId: 9, pointerType: "pen", button: type === "pointerdown" ? 5 : -1, buttons: type === "pointerup" ? 0 : 32, clientX: r.left + x, clientY: r.top + y, pressure: 0.5 }));
-    fire("pointerdown", 30, 300); for (let y = 300; y <= 560; y += 4) fire("pointermove", 150, y); fire("pointerup", 150, 560);
+    const r = svg.getBoundingClientRect(),
+      fire = (type, x, y) =>
+        svg.dispatchEvent(
+          new PointerEvent(type, {
+            bubbles: true,
+            cancelable: true,
+            pointerId: 9,
+            pointerType: "pen",
+            button: type === "pointerdown" ? 5 : -1,
+            buttons: type === "pointerup" ? 0 : 32,
+            clientX: r.left + x,
+            clientY: r.top + y,
+            pressure: 0.5,
+          }),
+        );
+    fire("pointerdown", 30, 300);
+    for (let y = 300; y <= 560; y += 4) fire("pointermove", 150, y);
+    fire("pointerup", 150, 560);
   });
   await expect(items(page)).not.toHaveCount(2);
 
   // select everything, duplicate it, and drag the corner handle to make the copies bigger
   await page.locator(".rd-tool[data-tool=select]").click();
-  await stroke(page, page1(page), [[10, 200], [560, 200], [560, 700], [10, 700], [10, 202]]);
+  await stroke(page, page1(page), [
+    [10, 200],
+    [560, 200],
+    [560, 700],
+    [10, 700],
+    [10, 202],
+  ]);
   const before = await items(page).count();
   await page.locator(".rd-duplicate").click();
   await expect(items(page)).toHaveCount(before * 2);
@@ -169,8 +288,100 @@ test("pen types, draw and hold, a straight highlighter, two-finger undo, the sty
   await page.mouse.up();
   expect((await page.locator(".rd-selbox").boundingBox()).width).toBeGreaterThan(widthBefore * 1.05);
   await page.waitForTimeout(1000); // autosave
-  const saved = await page.evaluate(() => Object.entries(localStorage).filter(([k]) => k.startsWith("radar.annotations.")).map(([, v]) => JSON.parse(v)));
+  const saved = await page.evaluate(() =>
+    Object.entries(localStorage)
+      .filter(([k]) => k.startsWith("radar.annotations."))
+      .map(([, v]) => JSON.parse(v)),
+  );
   expect(saved[0].pages["1"].some((i) => i.pen === "brush")).toBe(true);
+});
+
+const line = [
+  [60, 300],
+  [120, 300],
+  [200, 300],
+];
+
+test("the pen writes on while a palm rests on the screen", async ({ page }) => {
+  await openSample(page);
+  await synthetic(page1(page), "pen", line); // a stylus: fingers now only move the page
+  const before = await page.locator(".rd-pages").evaluate((e) => e.scrollTop);
+  await pointers(page1(page), [
+    ["pointerdown", "touch", 1, 300, 600],
+    ["pointerdown", "pen", 7, 60, 380],
+    ["pointermove", "pen", 7, 120, 420],
+    ["pointermove", "pen", 7, 200, 460],
+    ["pointerup", "pen", 7, 200, 460],
+    ["pointerup", "touch", 1, 300, 600],
+  ]);
+  await expect(items(page)).toHaveCount(2);
+  expect(await page.locator(".rd-pages").evaluate((e) => e.scrollTop)).toBe(before);
+});
+
+test("two fingers with the eraser move the page: nothing is erased, and the tools still work", async ({ page }) => {
+  await openSample(page);
+  await stroke(page, page1(page), line);
+  await page.locator(".rd-tool[data-tool=eraser]").click();
+  await page.locator(".rd-opt[data-opt=stroke]").click();
+  await pointers(page1(page), [
+    ["pointerdown", "touch", 1, 120, 300], // on the stroke
+    ["pointerdown", "touch", 2, 220, 300],
+    ["pointermove", "touch", 1, 120, 200],
+    ["pointermove", "touch", 2, 220, 200],
+    ["pointerup", "touch", 1, 120, 200],
+    ["pointerup", "touch", 2, 220, 200],
+  ]);
+  await expect(items(page)).toHaveCount(1);
+  await page.locator(".rd-tool[data-tool=pen]").click();
+  await stroke(
+    page,
+    page1(page),
+    line.map(([x, y]) => [x, y + 80]),
+  );
+  await expect(items(page)).toHaveCount(2);
+
+  // an erase the system interrupts (a call, a gesture) is taken back too
+  await page.locator(".rd-tool[data-tool=eraser]").click();
+  await pointers(page1(page), [
+    ["pointerdown", "mouse", 1, 120, 300],
+    ["pointercancel", "mouse", 1, 120, 300],
+  ]);
+  await expect(items(page)).toHaveCount(2);
+  await expect(page.locator(".rd-undo")).toBeEnabled();
+});
+
+test("the hand tool lets go when the mouse is released off the page", async ({ page, isMobile }) => {
+  test.skip(isMobile, "a mouse");
+  await openSample(page);
+  await page.locator(".rd-tool[data-tool=hand]").click();
+  const box = await page1(page).boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 400);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, box.y + 300, { steps: 3 });
+  await page.mouse.move(box.x - 60, box.y + 300, { steps: 3 }); // off the page
+  await page.mouse.up();
+  const before = await page.locator(".rd-pages").evaluate((e) => e.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await page.mouse.move(box.x + 100, box.y + 300, { steps: 3 });
+  await page.mouse.move(box.x + 100, box.y + 100, { steps: 3 });
+  expect(await page.locator(".rd-pages").evaluate((e) => e.scrollTop)).toBe(before);
+});
+
+test("the reading list keeps only what there is to come back to", async ({ page }) => {
+  await page.goto("./");
+  await go(page, "reading");
+  await page.locator("#new-notes").click();
+  await expect(page.locator(".rd-note")).toHaveCount(1);
+  await expect(page.locator(".rd-undo")).toBeDisabled(); // the first page is not a change
+  await page.locator(".rd-close").click();
+  await expect(page.locator(".reader")).toHaveCount(0);
+  await expect(page.locator("#docs-empty")).toBeVisible();
+  await expect(page.locator("#doc-list .read-row")).toHaveCount(0); // nothing written: nothing listed
+
+  await page.locator("#new-notes").click();
+  await stroke(page, page.locator(".rd-note .rd-ink").first(), line);
+  await page.locator(".rd-close").click();
+  await expect(page.locator("#doc-list .read-row")).toHaveCount(1); // listed as soon as the reader closes
 });
 
 test("note pages beside the PDF, hiding handwriting, search and page list", async ({ page }) => {
@@ -179,7 +390,11 @@ test("note pages beside the PDF, hiding handwriting, search and page list", asyn
   await page.locator(".rd-notes-btn").click();
   const note = page.locator(".rd-note .rd-ink").first();
   await expect(note).toBeVisible();
-  await stroke(page, note, [[40, 80], [120, 90], [200, 70]]);
+  await stroke(page, note, [
+    [40, 80],
+    [120, 90],
+    [200, 70],
+  ]);
   await expect(page.locator(".rd-note .rd-items > *")).toHaveCount(1);
   await page.locator(".rd-add-note").click();
   await expect(page.locator(".rd-note")).toHaveCount(2);
@@ -216,7 +431,9 @@ test("handwriting comes back when the same file is opened again", async ({ page 
 
 test("saving: the PDF with handwriting merged, and the note pages on their own", async ({ page }) => {
   // in English: headless Chromium names downloads with non-ASCII names just "download"
-  await page.addInitScript(() => { if (window === window.top) localStorage.setItem("radar-lang", "en"); });
+  await page.addInitScript(() => {
+    if (window === window.top) localStorage.setItem("radar-lang", "en");
+  });
   await openSample(page);
   await stroke(page, page1(page), wave);
   await page.locator(".rd-tool[data-tool=text]").click();
@@ -226,7 +443,10 @@ test("saving: the PDF with handwriting merged, and the note pages on their own",
   await page.keyboard.type("한글 메모"); // Hangul survives: text boxes go into the PDF as images
   await page.locator(".rd-tool[data-tool=pen]").click();
   await page.locator(".rd-notes-btn").click();
-  await stroke(page, page.locator(".rd-note .rd-ink").first(), [[40, 80], [200, 90]]);
+  await stroke(page, page.locator(".rd-note .rd-ink").first(), [
+    [40, 80],
+    [200, 90],
+  ]);
 
   await page.locator(".rd-save").click();
   const [merged] = await Promise.all([page.waitForEvent("download"), page.locator(".rd-save-pdf").click()]);
@@ -245,12 +465,25 @@ test("saving: the PDF with handwriting merged, and the note pages on their own",
 
 test.describe("reading a paper's free PDF", () => {
   const PDF_URL = "https://repository.example.org/gnn-model.pdf";
-  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
-    (w.id.endsWith("/W2116341502") ? { ...w, best_oa_location: { pdf_url: PDF_URL } } : w)) }) } });
+  test.use({
+    tamper: {
+      edit: (url, body) => ({
+        ...body,
+        results: (body.results || []).map((w) =>
+          w.id.endsWith("/W2116341502") ? { ...w, best_oa_location: { pdf_url: PDF_URL } } : w,
+        ),
+      }),
+    },
+  });
 
   test("opens from the card, marks the paper read at the end, collects highlights into the note", async ({ page }) => {
-    await page.route(PDF_URL, async (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" },
-      contentType: "application/pdf", body: await samplePdf(3) }));
+    await page.route(PDF_URL, async (route) =>
+      route.fulfill({
+        headers: { "access-control-allow-origin": "*" },
+        contentType: "application/pdf",
+        body: await samplePdf(3),
+      }),
+    );
     await search(page);
     const card = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first();
     await card.locator(".read-pdf").click();
@@ -259,9 +492,13 @@ test.describe("reading a paper's free PDF", () => {
 
     // highlight the sentence on page 1, then collect it
     await page.locator(".rd-tool[data-tool=highlighter]").click();
-    const box = await page1(page).boundingBox(), scale = box.width / 595;
+    const box = await page1(page).boundingBox(),
+      scale = box.width / 595;
     const y = (842 - 720 - 5) * scale; // the sentence's baseline is 720pt up from the bottom
-    await stroke(page, page1(page), [[55 * scale, y], [380 * scale, y]]);
+    await stroke(page, page1(page), [
+      [55 * scale, y],
+      [380 * scale, y],
+    ]);
     await page.locator(".rd-annots-btn").click();
     await expect(page.locator(".rd-annot")).toContainText("Graph neural networks pass messages along edges.");
     await page.locator(".rd-to-note").click();
@@ -274,34 +511,63 @@ test.describe("reading a paper's free PDF", () => {
     await go(page, "reading");
     await expect(page.locator("#reading-count")).toHaveText("1");
     await go(page, "bookmarks");
-    await expect(page.locator("#bookmarks textarea").first()).toHaveValue(/Graph neural networks pass messages along edges\./);
+    await expect(page.locator("#bookmarks textarea").first()).toHaveValue(
+      /Graph neural networks pass messages along edges\./,
+    );
   });
 
   test("a site that won't hand over the PDF: open it in the browser or pick the file", async ({ page }) => {
-    await page.route(PDF_URL, (route) => route.fulfill({ status: 403, headers: { "access-control-allow-origin": "*" }, body: "no" }));
+    await page.route(PDF_URL, (route) =>
+      route.fulfill({ status: 403, headers: { "access-control-allow-origin": "*" }, body: "no" }),
+    );
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-unavailable")).toBeVisible();
     await expect(page.locator(".rd-unavailable a")).toHaveAttribute("href", PDF_URL);
-    await page.locator(".rd-unavailable input[type=file]").setInputFiles({ name: "downloaded.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
+    await page
+      .locator(".rd-unavailable input[type=file]")
+      .setInputFiles({ name: "downloaded.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
   });
 });
 
 test.describe("no free copy on OpenAlex", () => {
-  const DOI = "10.1109/TNN.2008.2005605", PDF_URL = "https://authors.example.org/gnn-preprint.pdf";
-  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
-    (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
+  const DOI = "10.1109/TNN.2008.2005605",
+    PDF_URL = "https://authors.example.org/gnn-preprint.pdf";
+  test.use({
+    tamper: {
+      edit: (url, body) => ({
+        ...body,
+        results: (body.results || []).map((w) =>
+          w.id.endsWith("/W2116341502")
+            ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } }
+            : w,
+        ),
+      }),
+    },
+  });
 
   test("the school e-mail finds the library; Unpaywall's copy opens", async ({ page }) => {
     let asked = null;
     await page.context().route("https://api.unpaywall.org/**", (route) => {
       asked = route.request().url();
-      return route.fulfill({ headers: { "access-control-allow-origin": "*" }, contentType: "application/json",
-        body: JSON.stringify({ best_oa_location: { url_for_pdf: PDF_URL }, oa_locations: [] }) });
+      return route.fulfill({
+        headers: { "access-control-allow-origin": "*" },
+        contentType: "application/json",
+        body: JSON.stringify({ best_oa_location: { url_for_pdf: PDF_URL }, oa_locations: [] }),
+      });
     });
-    await page.route(PDF_URL, async (route) => route.fulfill({ headers: { "access-control-allow-origin": "*" },
-      contentType: "application/pdf", body: await samplePdf(3) }));
+    await page.route(PDF_URL, async (route) =>
+      route.fulfill({
+        headers: { "access-control-allow-origin": "*" },
+        contentType: "application/pdf",
+        body: await samplePdf(3),
+      }),
+    );
 
     await page.goto("./");
     await go(page, "settings");
@@ -314,7 +580,11 @@ test.describe("no free copy on OpenAlex", () => {
     await expect(page.locator("#library-status")).not.toBeEmpty();
 
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     expect(asked).toBe(`https://api.unpaywall.org/v2/${DOI}?email=student%40yonsei.ac.kr`);
   });
@@ -322,11 +592,21 @@ test.describe("no free copy on OpenAlex", () => {
   test("nowhere to get it: says how to add the library, or pick the file, which is kept", async ({ page }) => {
     await fakeFiles(page);
     await search(page);
-    const read = page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf");
+    const read = page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf");
     await read.click();
     await expect(page.locator(".rd-unavailable h3")).toHaveText("무료로 받을 수 있는 PDF를 찾지 못했어요");
     await expect(page.locator(".rd-unavailable")).toContainText("설정 › 도서관");
-    await page.locator(".rd-unavailable input[type=file]").setInputFiles({ name: "mine.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
+    await page.locator(".rd-close").click();
+    await go(page, "reading");
+    await expect(page.locator("#doc-list .read-row")).toHaveCount(0); // a paper that didn't open isn't listed
+    await go(page, "discover");
+    await read.click();
+    await page
+      .locator(".rd-unavailable input[type=file]")
+      .setInputFiles({ name: "mine.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     await page.locator(".rd-close").click();
 
@@ -346,32 +626,55 @@ test.describe("no free copy on OpenAlex", () => {
  * `links` the PDF link each page has (findPdf), sharing the page's cookie store as the real one does.
  */
 async function fakeWebView(page, walk, links = {}) {
-  await page.addInitScript(({ walk, links }) => {
-    if (window !== window.top) return;
-    const listeners = {};
-    const fire = (name, data) => (listeners[name] || []).forEach((f) => f(data || {}));
-    window.webViewOpened = [];
-    let here = null;
-    const visit = (url) => {
-      window.webViewOpened.push(url);
-      (walk[url] || []).forEach((step, i) => setTimeout(async () => {
-        if (step === "SIGNED-IN") return window.signInAtLibrary();
-        if (step === "DOWNLOAD") return fire("downloaded", { url, path: "/data/cache/library-paper.pdf" });
-        here = step;
-        fire("navigated", { url: step });
-      }, 20 * (i + 1)));
-    };
-    window.Capacitor = { convertFileSrc: (u) => "https://handed.example/" + encodeURIComponent(u), Plugins: {
-      LibraryWeb: {
-        addListener: async (name, f) => { (listeners[name] ||= []).push(f); return { remove: () => { listeners[name] = listeners[name].filter((g) => g !== f); } }; },
-        open: async ({ url }) => visit(url),
-        navigate: async ({ url }) => visit(url),
-        findPdf: async () => (links[here] ? { link: links[here] } : {}),
-        close: async () => setTimeout(() => fire("closed"), 10),
-      },
-      App: { addListener: (name, f) => { window.handPdf = (uri) => f({ url: uri }); }, getLaunchUrl: async () => null },
-    } };
-  }, { walk, links });
+  await page.addInitScript(
+    ({ walk, links }) => {
+      if (window !== window.top) return;
+      const listeners = {};
+      const fire = (name, data) => (listeners[name] || []).forEach((f) => f(data || {}));
+      window.webViewOpened = [];
+      let here = null;
+      const visit = (url) => {
+        window.webViewOpened.push(url);
+        (walk[url] || []).forEach((step, i) =>
+          setTimeout(
+            async () => {
+              if (step === "SIGNED-IN") return window.signInAtLibrary();
+              if (step === "DOWNLOAD") return fire("downloaded", { url, path: "/data/cache/library-paper.pdf" });
+              here = step;
+              fire("navigated", { url: step });
+            },
+            20 * (i + 1),
+          ),
+        );
+      };
+      window.Capacitor = {
+        convertFileSrc: (u) => "https://handed.example/" + encodeURIComponent(u),
+        Plugins: {
+          LibraryWeb: {
+            addListener: async (name, f) => {
+              (listeners[name] ||= []).push(f);
+              return {
+                remove: () => {
+                  listeners[name] = listeners[name].filter((g) => g !== f);
+                },
+              };
+            },
+            open: async ({ url }) => visit(url),
+            navigate: async ({ url }) => visit(url),
+            findPdf: async () => (links[here] ? { link: links[here] } : {}),
+            close: async () => setTimeout(() => fire("closed"), 10),
+          },
+          App: {
+            addListener: (name, f) => {
+              window.handPdf = (uri) => f({ url: uri });
+            },
+            getLaunchUrl: async () => null,
+          },
+        },
+      };
+    },
+    { walk, links },
+  );
 }
 
 /** A stand-in for the app's storage (Capacitor's Filesystem), where picked PDFs are kept. */
@@ -383,40 +686,80 @@ async function fakeFiles(page) {
     const handed = window.Capacitor.convertFileSrc;
     window.Capacitor.convertFileSrc = (uri) => (uri.startsWith("kept://") ? files[uri.slice(7)] : handed(uri));
     window.Capacitor.Plugins.Filesystem = {
-      stat: async ({ path }) => { if (!files[path]) throw new Error("no file"); return {}; },
+      stat: async ({ path }) => {
+        if (!files[path]) throw new Error("no file");
+        return {};
+      },
       getUri: async ({ path }) => ({ uri: "kept://" + path }),
       writeFile: async ({ path, data }) => {
         const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
         files[path] = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
         return { uri: "kept://" + path };
       },
-      deleteFile: async ({ path }) => { if (!files[path]) throw new Error("no file"); delete files[path]; },
+      deleteFile: async ({ path }) => {
+        if (!files[path]) throw new Error("no file");
+        delete files[path];
+      },
     };
   });
 }
 
 test.describe("through the university library on Android, signed in inside the app", () => {
-  const DOI = "10.1109/TNN.2008.2005605", YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
-  const LINK = `${YONSEI}https://doi.org/${DOI}`, PDF = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/stamp/gnn.pdf";
+  const DOI = "10.1109/TNN.2008.2005605",
+    YONSEI = "https://access.yonsei.ac.kr/link.n2s?url=";
+  const LINK = `${YONSEI}https://doi.org/${DOI}`,
+    PDF = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/stamp/gnn.pdf";
   const PAPER = "https://www-ieeexplore-ieee-org-ssl.access.yonsei.ac.kr/document/4700287"; // the paper's page through the proxy
   // the library's sign-in page, signing in, back on the library's homepage; then the proxy, onto a publisher's page
   const WALK = {
-    "https://library.yonsei.ac.kr/login": ["https://library.yonsei.ac.kr/login", "SIGNED-IN", "https://library.yonsei.ac.kr/"],
+    "https://library.yonsei.ac.kr/login": [
+      "https://library.yonsei.ac.kr/login",
+      "SIGNED-IN",
+      "https://library.yonsei.ac.kr/",
+    ],
     [`${YONSEI}https://www.nature.com/`]: ["https://www-nature-com-ssl.access.yonsei.ac.kr/"],
   };
-  test.use({ tamper: { edit: (url, body) => ({ ...body, results: (body.results || []).map((w) =>
-    (w.id.endsWith("/W2116341502") ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } } : w)) }) } });
+  test.use({
+    tamper: {
+      edit: (url, body) => ({
+        ...body,
+        results: (body.results || []).map((w) =>
+          w.id.endsWith("/W2116341502")
+            ? { ...w, doi: `https://doi.org/${DOI}`, best_oa_location: null, open_access: { oa_url: null } }
+            : w,
+        ),
+      }),
+    },
+  });
 
   async function library(page, { skipFake = false } = {}) {
     let signedIn = false;
-    await page.exposeFunction("signInAtLibrary", () => { signedIn = true; });
+    await page.exposeFunction("signInAtLibrary", () => {
+      signedIn = true;
+    });
     if (!skipFake) await fakeWebView(page, WALK);
     const cors = { "access-control-allow-origin": "*" };
     // not signed in: Yonsei's link page stays blank; signed in: the paper's page, then its PDF
-    await page.context().route((url) => url.href.startsWith(YONSEI), (route) => route.fulfill({ headers: cors, contentType: "text/html",
-      body: signedIn && route.request().url() === LINK ? `<meta name="citation_pdf_url" content="${PDF}">` : "<html></html>" }));
-    await page.context().route(PDF, async (route) => route.fulfill({ headers: cors, contentType: "application/pdf", body: await samplePdf(3) }));
-    await page.context().route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: cors, body: "{}" }));
+    await page.context().route(
+      (url) => url.href.startsWith(YONSEI),
+      (route) =>
+        route.fulfill({
+          headers: cors,
+          contentType: "text/html",
+          body:
+            signedIn && route.request().url() === LINK
+              ? `<meta name="citation_pdf_url" content="${PDF}">`
+              : "<html></html>",
+        }),
+    );
+    await page
+      .context()
+      .route(PDF, async (route) =>
+        route.fulfill({ headers: cors, contentType: "application/pdf", body: await samplePdf(3) }),
+      );
+    await page
+      .context()
+      .route("https://doi.org/api/handles/**", (route) => route.fulfill({ status: 404, headers: cors, body: "{}" }));
     await page.goto("./");
     await go(page, "settings");
     await page.locator(".subtab[data-pane=library]").click();
@@ -430,19 +773,36 @@ test.describe("through the university library on Android, signed in inside the a
     await page.locator("#library-sign-in").click();
     await expect(page.locator("#library-status")).toContainText("도서관에 로그인했어요");
     await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
-    expect(await page.evaluate(() => window.webViewOpened)).toEqual(["https://library.yonsei.ac.kr/login", `${YONSEI}https://www.nature.com/`]);
+    expect(await page.evaluate(() => window.webViewOpened)).toEqual([
+      "https://library.yonsei.ac.kr/login",
+      `${YONSEI}https://www.nature.com/`,
+    ]);
 
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 }); // no sign-in screen, no download to hand over
   });
 
-  test("not signed in yet: the reader signs in the same way, and the paper comes through its screen", async ({ page }) => {
+  test("not signed in yet: the reader signs in the same way, and the paper comes through its screen", async ({
+    page,
+  }) => {
     await fakeWebView(page, { ...WALK, [LINK]: [PAPER], [PDF]: ["DOWNLOAD"] }, { [PAPER]: PDF });
     await library(page, { skipFake: true });
-    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+    await page
+      .context()
+      .route("https://handed.example/**", async (route) =>
+        route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }),
+      );
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-unavailable .rd-error")).toHaveText("학교 도서관 로그인이 필요해요");
     await page.locator(".rd-login").click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
@@ -450,30 +810,52 @@ test.describe("through the university library on Android, signed in inside the a
     expect(await page.evaluate(() => window.webViewOpened)).toEqual(["https://library.yonsei.ac.kr/login", LINK, PDF]);
   });
 
-  test("a publisher that turns the app's own request away: the PDF comes through the library's screen", async ({ page }) => {
+  test("a publisher that turns the app's own request away: the PDF comes through the library's screen", async ({
+    page,
+  }) => {
     await fakeWebView(page, { ...WALK, [LINK]: [PAPER], [PDF]: ["DOWNLOAD"] }, { [PAPER]: PDF });
     await fakeFiles(page);
     await library(page, { skipFake: true });
     await page.locator("#library-sign-in").click();
     await expect(page.locator("#library-state")).toContainText("로그인되어 있어요");
     // a bot check: the page's PDF link answers the app's request with 403
-    await page.context().route(PDF, (route) => route.fulfill({ status: 403, headers: { "access-control-allow-origin": "*" }, body: "Access denied" }));
-    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+    await page
+      .context()
+      .route(PDF, (route) =>
+        route.fulfill({ status: 403, headers: { "access-control-allow-origin": "*" }, body: "Access denied" }),
+      );
+    await page
+      .context()
+      .route("https://handed.example/**", async (route) =>
+        route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }),
+      );
 
     await search(page);
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
     expect(await page.evaluate(() => window.webViewOpened)).toEqual([LINK, PDF]); // straight to the paper's page, then its PDF
 
     await page.locator(".rd-close").click();
-    await page.locator("#results .paper", { hasText: "The Graph Neural Network Model" }).first().locator(".read-pdf").click();
+    await page
+      .locator("#results .paper", { hasText: "The Graph Neural Network Model" })
+      .first()
+      .locator(".read-pdf")
+      .click();
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 }); // kept: no library, no screen
     expect(await page.evaluate(() => window.webViewOpened)).toEqual([LINK, PDF]);
   });
 
   test("a PDF opened with the app from elsewhere opens in the reader", async ({ page }) => {
     await fakeWebView(page, {});
-    await page.context().route("https://handed.example/**", async (route) => route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }));
+    await page
+      .context()
+      .route("https://handed.example/**", async (route) =>
+        route.fulfill({ contentType: "application/pdf", body: await samplePdf(3) }),
+      );
     await page.goto("./");
     await page.evaluate(() => window.handPdf("content://downloads/42"));
     await expect(page.locator(".rd-page")).toHaveCount(3, { timeout: 30_000 });
@@ -488,6 +870,7 @@ async function readAll(download) {
 
 function contentLength(pdfPage) {
   const contents = pdfPage.node.Contents();
-  const streams = contents instanceof PDFLib.PDFArray ? contents.asArray().map((r) => pdfPage.doc.context.lookup(r)) : [contents];
+  const streams =
+    contents instanceof PDFLib.PDFArray ? contents.asArray().map((r) => pdfPage.doc.context.lookup(r)) : [contents];
   return streams.reduce((n, s) => n + (s.getContents ? s.getContents().length : 0), 0);
 }

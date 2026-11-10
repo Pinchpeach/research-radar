@@ -1,5 +1,23 @@
 [
   {
+    "version": "0.14.1",
+    "date": "2026-11-10",
+    "ko": [
+      "손바닥을 화면에 올린 채로도 펜으로 쓸 수 있어요. 전에는 손바닥이 닿아 있으면 펜이 글씨 대신 화면을 움직였어요.",
+      "지우개나 선택 도구에서 두 손가락으로 화면을 움직인 뒤 필기가 먹통이 되던 문제를 고쳤어요. 이때 첫 손가락이 지운 것도 되돌려요.",
+      "PC에서 손 도구로 끌다가 페이지 밖에서 마우스를 놓으면 화면이 계속 따라 움직이던 문제를 고쳤어요.",
+      "읽기 목록에는 PDF가 있거나 뭔가 적은 문서만 남아요. 열지 못한 논문이나 빈 노트는 목록에 쌓이지 않아요.",
+      "DOI가 없는 논문도 '열기'를 누르면 저장된 노트부터 열어요."
+    ],
+    "en": [
+      "The pen writes while your palm rests on the screen. Before, a resting palm made the pen move the page instead of writing.",
+      "Fixed handwriting freezing after moving the page with two fingers while the eraser or the selection tool was on. What the first finger erased comes back, too.",
+      "On a PC, the hand tool lets go when the mouse is released off the page; it used to keep dragging.",
+      "The reading list keeps only documents with a PDF or something written. Papers that didn't open and empty notes no longer pile up there.",
+      "Open on a paper without a DOI opens its saved note first, like any other paper."
+    ]
+  },
+  {
     "version": "0.14.0",
     "date": "2026-11-09",
     "ko": [

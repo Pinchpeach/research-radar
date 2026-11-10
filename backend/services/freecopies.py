@@ -9,6 +9,7 @@ All free and keyless, so no paid service is involved; CORE needs a key and is le
 """
 
 import re
+from contextlib import suppress
 from urllib.parse import quote
 
 import requests
@@ -53,7 +54,12 @@ def europe_pmc_links(doi: str, session=None) -> list[str]:
     record, links = results[0], []
     for entry in ((record.get("fullTextUrlList") or {}).get("fullTextUrl")) or []:
         url = web_url(entry.get("url"))
-        if url and entry.get("documentStyle") == "pdf" and entry.get("availabilityCode") in ("OA", "F") and url not in links:
+        if (
+            url
+            and entry.get("documentStyle") == "pdf"
+            and entry.get("availabilityCode") in ("OA", "F")
+            and url not in links
+        ):
             links.append(url)
     pmcid = record.get("pmcid")
     if pmcid and record.get("isOpenAccess") == "Y":
@@ -68,19 +74,16 @@ def pdf_links(doi: str, email: str | None = None, session=None) -> list[str]:
     def add(links):
         found.extend(link for link in links if link not in found)
 
-    if email:
-        try:
-            add(unpaywall.pdf_links(doi, email, session))
-        except (requests.RequestException, ValueError):
-            pass
-    try:
-        add(openalex_links(openalex._get(f"{openalex.OPENALEX_URL}/doi:{quote(doi, safe='/')}", openalex._params())))
-    except (requests.RequestException, ValueError):
-        pass
-    try:
-        add(europe_pmc_links(doi, session))
-    except (requests.RequestException, ValueError, AttributeError):
-        pass
+    sources = [
+        (lambda: unpaywall.pdf_links(doi, email, session)) if email else None,
+        lambda: openalex_links(
+            openalex._get(f"{openalex.OPENALEX_URL}/doi:{quote(doi, safe='/')}", openalex._params())
+        ),
+        lambda: europe_pmc_links(doi, session),
+    ]
+    for source in filter(None, sources):
+        with suppress(requests.RequestException, ValueError, AttributeError):
+            add(source())
     if match := ARXIV_DOI.match(doi):
         add([arxiv_pdf(match.group(1))])
     return found

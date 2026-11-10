@@ -1,7 +1,7 @@
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import main
+from backend import deps, main
 from backend.services import flow, openalex
 from backend.storage import BookmarkStore, to_bibtex
 
@@ -23,14 +23,62 @@ def p(wid, title, abstract="", year=2020, cites=0, refs=()):
 
 # Two topics: neutron-star optics (W1-W4) and gravitational-wave detection (W5-W8).
 CORPUS = [
-    p("W1", "Optical counterpart of isolated neutron star", "optical photometry isolated neutron star faint counterpart", 1998, 300),
-    p("W2", "Deep optical imaging of neutron stars", "optical imaging isolated neutron star spectrum", 2005, 120, ["W1", "W90"]),
-    p("W3", "Optical excess in neutron star spectra", "optical excess isolated neutron star spectrum blackbody", 2012, 80, ["W2", "W1", "W90"]),
-    p("W4", "New optical neutron star survey", "optical survey isolated neutron star photometry", 2022, 5, ["W3", "W91"]),
+    p(
+        "W1",
+        "Optical counterpart of isolated neutron star",
+        "optical photometry isolated neutron star faint counterpart",
+        1998,
+        300,
+    ),
+    p(
+        "W2",
+        "Deep optical imaging of neutron stars",
+        "optical imaging isolated neutron star spectrum",
+        2005,
+        120,
+        ["W1", "W90"],
+    ),
+    p(
+        "W3",
+        "Optical excess in neutron star spectra",
+        "optical excess isolated neutron star spectrum blackbody",
+        2012,
+        80,
+        ["W2", "W1", "W90"],
+    ),
+    p(
+        "W4",
+        "New optical neutron star survey",
+        "optical survey isolated neutron star photometry",
+        2022,
+        5,
+        ["W3", "W91"],
+    ),
     p("W5", "Gravitational wave detector design", "gravitational wave interferometer detector noise", 2000, 500),
-    p("W6", "Gravitational wave burst search", "gravitational wave burst search interferometer", 2010, 200, ["W5", "W91"]),
-    p("W7", "Gravitational waves from binary mergers", "gravitational wave binary merger detection interferometer", 2017, 900, ["W6", "W5", "W90"]),
-    p("W8", "Neutron star merger optical follow-up", "gravitational wave neutron star merger optical counterpart", 2018, 400, ["W7", "W3"]),
+    p(
+        "W6",
+        "Gravitational wave burst search",
+        "gravitational wave burst search interferometer",
+        2010,
+        200,
+        ["W5", "W91"],
+    ),
+    p(
+        "W7",
+        "Gravitational waves from binary mergers",
+        "gravitational wave binary merger detection interferometer",
+        2017,
+        900,
+        ["W6", "W5", "W90"],
+    ),
+    p(
+        "W8",
+        "Neutron star merger optical follow-up",
+        "gravitational wave neutron star merger optical counterpart",
+        2018,
+        400,
+        ["W7", "W3"],
+    ),
 ]
 
 
@@ -111,7 +159,10 @@ def test_build_flow_clusters_edges_and_chain():
 
 
 def test_build_flow_with_foundations_and_tiny_sets():
-    foundation = {**p("W90", "Neutron star atmospheres", "neutron star atmosphere model", 1990, 1000), "cited_by_in_set": 3}
+    foundation = {
+        **p("W90", "Neutron star atmospheres", "neutron star atmosphere model", 1990, 1000),
+        "cited_by_in_set": 3,
+    }
     result = flow.build_flow(CORPUS, foundations=[foundation])
     w90 = next(n for n in result["nodes"] if n["id"] == "W90")
     assert w90["role"] == "foundation" and w90["cited_by_in_set"] == 3
@@ -136,7 +187,7 @@ def test_longest_chain_ignores_cycles():
 
 @pytest.fixture
 def api(store, monkeypatch):
-    main.app.dependency_overrides[main.get_store] = lambda: store
+    main.app.dependency_overrides[deps.get_store] = lambda: store
     fetched = []
 
     def fake_by_ids(ids, **_):
@@ -241,7 +292,12 @@ def test_labels_skip_generic_and_short_tokens():
         p(f"W{i}", f"RX J{i} gives new results", "this paper gives results using rx data on magnetar bursts", 2000 + i)
         for i in range(4)
     ] + [
-        p(f"W{i + 10}", f"Gravitational wave search {i}", "we present interferometer gravitational wave searches", 2000 + i)
+        p(
+            f"W{i + 10}",
+            f"Gravitational wave search {i}",
+            "we present interferometer gravitational wave searches",
+            2000 + i,
+        )
         for i in range(4)
     ]
     labels = " ".join(c["label"] for c in flow.build_flow(papers)["clusters"]).lower()
@@ -270,17 +326,33 @@ def test_credible_foundations_recounts_citers():
 
 def test_topic_names_come_from_distinctive_openalex_keywords():
     def kp(wid, kws, topic, year=2020):
-        return {**p(wid, f"Graph neural networks paper {wid}", "graph neural networks", year), "keywords": kws, "topic": topic}
+        return {
+            **p(wid, f"Graph neural networks paper {wid}", "graph neural networks", year),
+            "keywords": kws,
+            "topic": topic,
+        }
 
-    drug = [kp(f"W{i}", ["graph neural networks", "drug discovery", "molecular generation"], "Advanced Graph Neural Networks")
-            for i in range(4)]
-    rec = [kp(f"W{i + 10}", ["graph neural networks", "social recommendation", "user-item interaction graph"],
-              "Recommender Systems and Techniques") for i in range(4)]
+    drug = [
+        kp(
+            f"W{i}",
+            ["graph neural networks", "drug discovery", "molecular generation"],
+            "Advanced Graph Neural Networks",
+        )
+        for i in range(4)
+    ]
+    rec = [
+        kp(
+            f"W{i + 10}",
+            ["graph neural networks", "social recommendation", "user-item interaction graph"],
+            "Recommender Systems and Techniques",
+        )
+        for i in range(4)
+    ]
     assignment = [0] * 4 + [1] * 4
     names = flow.name_clusters(drug + rec, assignment, ["fallback a", "fallback b"], query="graph neural networks")
     assert names[0] == "Drug Discovery & Molecular Generation"
     assert "Recommend" in names[1] or "Social Recommendation" in names[1]
-    assert not any("Graph Neural Networks" == part for name in names for part in name.split(" & "))
+    assert not any(part == "Graph Neural Networks" for name in names for part in name.split(" & "))
     assert names[0] != names[1]
 
 
@@ -297,8 +369,10 @@ def test_title_case_keeps_acronyms_and_small_words():
 def test_topic_names_keep_acronyms_and_trim_filler():
     assert flow.tidy_phrase("Pulsars and Gravitational Waves Research") == "Pulsars and Gravitational Waves"
     assert flow.tidy_phrase("Recommender Systems and Techniques") == "Recommender Systems"
-    papers = [{**p(f"W{i}", "t", "x"), "keywords": ["off-target effects"], "topic": "CRISPR and Genetic Engineering"}
-              for i in range(3)]
+    papers = [
+        {**p(f"W{i}", "t", "x"), "keywords": ["off-target effects"], "topic": "CRISPR and Genetic Engineering"}
+        for i in range(3)
+    ]
     other = [{**p(f"W{i + 5}", "t", "x"), "keywords": ["tomato"], "topic": "Plant Breeding"} for i in range(3)]
     names = flow.name_clusters(papers + other, [0] * 3 + [1] * 3, ["a", "b"])
     assert names[0] == "Off-target Effects"  # keyword beats the broad topic; second phrase only if short
@@ -330,8 +404,10 @@ def test_old_databases_get_the_reading_columns(tmp_path):
 
     path = tmp_path / "old.db"
     with sqlite3.connect(path) as db:
-        db.execute("CREATE TABLE bookmarks (id TEXT PRIMARY KEY, paper TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', "
-                   "tags TEXT NOT NULL DEFAULT '[]', query TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)")
+        db.execute(
+            "CREATE TABLE bookmarks (id TEXT PRIMARY KEY, paper TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', "
+            "tags TEXT NOT NULL DEFAULT '[]', query TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL)"
+        )
         db.execute("INSERT INTO bookmarks VALUES ('W1', '{\"id\": \"W1\"}', '', '[]', NULL, 'x', 'x')")
     item = BookmarkStore(path).get("W1")
     assert item["status"] == "to_read" and item["read_at"] is None
@@ -339,7 +415,7 @@ def test_old_databases_get_the_reading_columns(tmp_path):
 
 def test_status_over_the_api(tmp_path):
     store = BookmarkStore(tmp_path / "api.db")
-    main.app.dependency_overrides[main.get_store] = lambda: store
+    main.app.dependency_overrides[deps.get_store] = lambda: store
     try:
         client = TestClient(main.app, base_url="http://127.0.0.1")
         client.put("/bookmarks", json={"paper": {"id": "https://openalex.org/W7", "title": "T"}})

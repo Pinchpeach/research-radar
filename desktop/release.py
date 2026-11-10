@@ -1,9 +1,9 @@
 """Release helpers used by the GitHub Actions workflow.
 
-    python desktop/release.py version          # print the app version
-    python desktop/release.py check-tag v0.4.0 # fail unless the tag matches the app version
-    python desktop/release.py notes v0.4.0     # print the release notes (terminal download commands)
-    python desktop/release.py notes v0.6.0 --android   # ... with the Android APK
+python desktop/release.py version          # print the app version
+python desktop/release.py check-tag v0.4.0 # fail unless the tag matches the app version
+python desktop/release.py notes v0.4.0     # print the release notes (terminal download commands)
+python desktop/release.py notes v0.6.0 --android   # ... with the Android APK
 """
 
 import re
@@ -51,10 +51,19 @@ def notes(tag: str, android: bool = False) -> str:
         f"curl -LO {base}/ResearchRadar-{version}-linux.tar.gz",
     ]
     if android:
-        lines += ["", "# Android (USB로 연결한 휴대폰에 설치)",
-                  f"curl -LO {base}/ResearchRadar-{version}-android.apk",
-                  f"adb install -r ResearchRadar-{version}-android.apk"]
-    lines += ["", "# 확인 (선택)", f"curl -LO {base}/SHA256SUMS.txt", "sha256sum -c SHA256SUMS.txt --ignore-missing", "```"]
+        lines += [
+            "",
+            "# Android (USB로 연결한 휴대폰에 설치)",
+            f"curl -LO {base}/ResearchRadar-{version}-android.apk",
+            f"adb install -r ResearchRadar-{version}-android.apk",
+        ]
+    lines += [
+        "",
+        "# 확인 (선택)",
+        f"curl -LO {base}/SHA256SUMS.txt",
+        "sha256sum -c SHA256SUMS.txt --ignore-missing",
+        "```",
+    ]
     return "\n".join(lines) + "\n"
 
 

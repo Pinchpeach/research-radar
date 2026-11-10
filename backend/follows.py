@@ -8,7 +8,7 @@ person has looked; see seen()).
 
 import json
 import re
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from backend import settings
@@ -30,7 +30,11 @@ def load() -> list[dict]:
         data = json.loads(path().read_text(encoding="utf-8"))
     except (FileNotFoundError, ValueError):
         return []
-    return [f for f in data if isinstance(f, dict) and valid(f.get("kind", ""), f.get("id", ""))] if isinstance(data, list) else []
+    return (
+        [f for f in data if isinstance(f, dict) and valid(f.get("kind", ""), f.get("id", ""))]
+        if isinstance(data, list)
+        else []
+    )
 
 
 def _save(items: list[dict]) -> None:
@@ -49,8 +53,13 @@ def add(kind: str, follow_id: str, name: str, today: date | None = None) -> dict
     if len(items) >= MAX_FOLLOWS:
         raise OverflowError(f"follow at most {MAX_FOLLOWS}")
     today = today or date.today()
-    item = {"kind": kind, "id": follow_id, "name": (name or follow_id).strip()[:200], "since": today.isoformat(),
-            "added_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}
+    item = {
+        "kind": kind,
+        "id": follow_id,
+        "name": (name or follow_id).strip()[:200],
+        "since": today.isoformat(),
+        "added_at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
     _save([item, *items])
     return item
 

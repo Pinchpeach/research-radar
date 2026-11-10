@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.14.0**:
+최신 버전 **v0.14.1**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.14.0-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.0/ResearchRadar-0.14.0-windows.zip) | [ResearchRadar-0.14.0-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.0/ResearchRadar-0.14.0-macos.zip) | [ResearchRadar-0.14.0-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.0/ResearchRadar-0.14.0-linux.tar.gz) | [ResearchRadar-0.14.0-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.0/ResearchRadar-0.14.0-android.apk) |
+| [ResearchRadar-0.14.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-windows.zip) | [ResearchRadar-0.14.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-macos.zip) | [ResearchRadar-0.14.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-linux.tar.gz) | [ResearchRadar-0.14.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.0/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -166,6 +166,8 @@ cd tests/e2e && npm ci && npx playwright install chromium && npx playwright test
 
 브라우저 테스트(`tests/e2e/`)는 휴대폰 화면과 PC 창 크기에서 앱을 직접 눌러 봅니다: 홈 → 검색, ☰ 메뉴, 북마크 저장과 재시작, 연구 흐름 그리기(제목 겹침 없음), 새소식, 언어 유지. OpenAlex와 GitHub는 녹화된 응답으로 대신하므로 네트워크나 API 키가 필요 없습니다.
 
+코드 모양은 파이썬은 [ruff](https://docs.astral.sh/ruff/)(`pyproject.toml`), JavaScript는 [Prettier](https://prettier.io)(`.prettierrc.json`)로 맞춥니다. CI가 확인하므로 커밋 전에 `ruff check . && ruff format .`과 `npx prettier --write "**/*.{js,mjs}"`를 실행하세요.
+
 `python -m pytest`에는 `tests/test_js_core.py`도 들어 있습니다. 실제 OpenAlex 검색을 녹화한 `tests/fixtures/`를 파이썬 백엔드와 JavaScript 백엔드에 똑같이 넣고, 결과(검색 순서와 점수, 인용 연결, 핵심 계보, 주제 이름, 포스터)가 같은지 비교합니다. Node.js가 없으면 이 테스트는 건너뜁니다. 녹화는 `python tests/fixtures/record_openalex.py "<검색어>"`로 다시 만들 수 있습니다.
 
 실제 OpenAlex 데이터로 전체 과정(검색 → 연구 흐름 → 포스터)을 점검하려면 다음을 실행합니다. 결과 포스터는 `data/live-map.html`에 저장됩니다.
@@ -241,7 +243,6 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
 | `POST/GET /evaluations`, `DELETE /evaluations/{run_id}` | 정렬 평가(관련도 판정) 저장, 실행별 Precision@k·nDCG 목록, 삭제 |
 | `GET/PUT/DELETE /annotations/{id}`, `GET /annotations` | PDF 리더의 필기(페이지별 필기와 노트 페이지) 저장·불러오기와 필기한 문서 목록 |
 | `GET/PUT /annotations/{id}/pdf` | 직접 고른 PDF 보관·불러오기(문서를 지우면 함께 지워짐) |
-| `GET /unpaywall?doi=` | Unpaywall이 아는 무료 PDF 주소(설정의 이메일 필요) |
 | `GET /free-pdfs?doi=` | 찾을 수 있는 모든 무료 PDF 주소: Unpaywall, OpenAlex의 다른 위치, Europe PMC, arXiv |
 | `GET /works/lookup?id=` | DOI나 OpenAlex ID로 논문 한 편 |
 | `GET/PUT /follows`, `DELETE /follows/{kind}/{id}`, `POST /follows/{kind}/{id}/seen`, `GET /follows/new` | 저자·저널 팔로우와, 지난번 확인 이후 새 논문 |
@@ -255,7 +256,9 @@ GitHub 저장소의 **Settings → Secrets and variables → Actions**에 네 �
 ```text
 research-radar/
 ├── backend/
-│   ├── main.py              # FastAPI 앱: API + 화면 제공
+│   ├── main.py              # FastAPI 앱: 라우터를 모으고 화면 제공
+│   ├── deps.py              # 라우터가 함께 쓰는 것 (북마크 저장소, OpenAlex 오류 처리)
+│   ├── routes/              # 영역별 API: search, bookmarks, reader, library, news, settings, evaluations
 │   ├── settings.py          # API 키 등 사용자 설정
 │   ├── version.py           # 앱 버전 (릴리스 태그와 일치해야 함)
 │   ├── updates.py           # 새 버전 확인
@@ -263,6 +266,7 @@ research-radar/
 │   ├── models.py
 │   └── services/
 │       ├── openalex.py      # OpenAlex 검색, 시드, 키 확인
+│       ├── candidates.py    # 정렬할 후보 논문 모으기
 │       ├── dedupe.py        # 같은 논문의 여러 버전 합치기
 │       ├── ranking.py       # 정렬 점수
 │       ├── context.py       # 인용 맥락 (관련도 보정)

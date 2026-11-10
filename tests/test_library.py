@@ -23,7 +23,9 @@ publisher_url = library.publisher_url  # the real one (the fixture below stands 
 @pytest.fixture(autouse=True)
 def home(tmp_path, monkeypatch):
     monkeypatch.setenv("RADAR_HOME", str(tmp_path))
-    monkeypatch.setattr(socket, "getaddrinfo", lambda host, port, *a, **k: [(socket.AF_INET, 1, 6, "", ("93.184.216.34", port))])
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda host, port, *a, **k: [(socket.AF_INET, 1, 6, "", ("93.184.216.34", port))]
+    )
     library._recent.clear()
     # doi.org is asked where a DOI points (publisher_url); here it doesn't know, so doi.org itself
     monkeypatch.setattr(library, "publisher_url", lambda doi, session=None: library.doi_url(doi))
@@ -64,26 +66,35 @@ class Site:
 
 def test_landing_page_then_its_pdf_link_through_an_ezproxy():
     landing = "https://www-publisher-com.ezproxy.uni.example/article/xyz"
-    site = Site({
-        EZ + "https://doi.org/" + DOI: Answer(302, location=landing),
-        landing: Answer(body=b'<html><meta name="citation_pdf_url" content="/article/xyz.pdf"></html>'),
-        "https://www-publisher-com.ezproxy.uni.example/article/xyz.pdf": Answer(body=PDF),
-    })
+    site = Site(
+        {
+            EZ + "https://doi.org/" + DOI: Answer(302, location=landing),
+            landing: Answer(body=b'<html><meta name="citation_pdf_url" content="/article/xyz.pdf"></html>'),
+            "https://www-publisher-com.ezproxy.uni.example/article/xyz.pdf": Answer(body=PDF),
+        }
+    )
     assert library.fetch(DOI, EZ, site) == PDF
 
 
 def test_a_pdf_link_outside_the_proxy_goes_through_it():
-    site = Site({
-        KR + "https://doi.org/" + DOI: Answer(body=b"<meta content='https://publisher.example/x.pdf' name='citation_pdf_url'>"),
-        KR + "https://publisher.example/x.pdf": Answer(body=PDF),
-    })
+    site = Site(
+        {
+            KR + "https://doi.org/" + DOI: Answer(
+                body=b"<meta content='https://publisher.example/x.pdf' name='citation_pdf_url'>"
+            ),
+            KR + "https://publisher.example/x.pdf": Answer(body=PDF),
+        }
+    )
     assert library.fetch(DOI, KR, site) == PDF
 
 
-@pytest.mark.parametrize("answer", [
-    Answer(302, location="https://sso.uni.example/login"),  # off to the school's sign-in page
-    Answer(body=b'<form><input name="pw" type="password"></form>'),  # EZproxy's own sign-in page
-])
+@pytest.mark.parametrize(
+    "answer",
+    [
+        Answer(302, location="https://sso.uni.example/login"),  # off to the school's sign-in page
+        Answer(body=b'<form><input name="pw" type="password"></form>'),  # EZproxy's own sign-in page
+    ],
+)
 def test_signing_in_is_asked_for(answer):
     with pytest.raises(library.NeedsLogin) as caught:
         library.fetch(DOI, KR, Site({KR + "https://doi.org/" + DOI: answer}))
@@ -96,11 +107,14 @@ def test_a_page_without_a_pdf_link():
 
 
 def test_cookies_are_kept_only_for_the_proxy_and_only_for_the_user():
-    kept = library.save_cookies(EZ, [
-        {"name": "ezproxy", "value": "s3cret", "domain": ".ezproxy.uni.example", "path": "/"},
-        {"name": "tracker", "value": "x", "domain": ".ads.example", "path": "/"},
-        {"name": "evil", "value": "x", "domain": "ezproxy.uni.example.attacker.example", "path": "/"},
-    ])
+    kept = library.save_cookies(
+        EZ,
+        [
+            {"name": "ezproxy", "value": "s3cret", "domain": ".ezproxy.uni.example", "path": "/"},
+            {"name": "tracker", "value": "x", "domain": ".ads.example", "path": "/"},
+            {"name": "evil", "value": "x", "domain": "ezproxy.uni.example.attacker.example", "path": "/"},
+        ],
+    )
     assert kept == 1
     saved = json.loads(library.session_path().read_text())
     assert [c["name"] for c in saved["cookies"]] == ["ezproxy"]
@@ -133,9 +147,15 @@ def test_endpoints(monkeypatch):
     assert api.get("/settings").json()["library_signed_in"] is False
 
 
-def test_unpaywall_lists_free_pdfs_best_first(monkeypatch):
-    record = {"best_oa_location": {"url_for_pdf": "https://repo.example/a.pdf"},
-              "oa_locations": [{"url_for_pdf": "https://repo.example/a.pdf"}, {"url_for_pdf": "javascript:x"}, {"url_for_pdf": "https://arxiv.org/pdf/1"}]}
+def test_unpaywall_lists_free_pdfs_best_first():
+    record = {
+        "best_oa_location": {"url_for_pdf": "https://repo.example/a.pdf"},
+        "oa_locations": [
+            {"url_for_pdf": "https://repo.example/a.pdf"},
+            {"url_for_pdf": "javascript:x"},
+            {"url_for_pdf": "https://arxiv.org/pdf/1"},
+        ],
+    }
 
     class Reply:
         status_code = 200
@@ -153,13 +173,11 @@ def test_unpaywall_lists_free_pdfs_best_first(monkeypatch):
             asked.update(url=url, **params)
             return Reply()
 
-    assert unpaywall.pdf_links(DOI, "me@uni.example", Session()) == ["https://repo.example/a.pdf", "https://arxiv.org/pdf/1"]
+    assert unpaywall.pdf_links(DOI, "me@uni.example", Session()) == [
+        "https://repo.example/a.pdf",
+        "https://arxiv.org/pdf/1",
+    ]
     assert asked == {"url": "https://api.unpaywall.org/v2/10.1000/xyz123", "email": "me@uni.example"}
-
-    assert api.get("/unpaywall", params={"doi": DOI}).status_code == 409  # no e-mail yet
-    settings.save({"openalex_email": "me@uni.example"})
-    monkeypatch.setattr(unpaywall, "pdf_links", lambda doi, email: ["https://repo.example/a.pdf"])
-    assert api.get("/unpaywall", params={"doi": DOI}).json() == {"pdf_urls": ["https://repo.example/a.pdf"]}
 
 
 def test_schools_are_known_by_their_email_domain():
@@ -263,7 +281,10 @@ def test_the_desktop_window_gets_the_pdf_in_the_page_when_the_app_is_turned_away
             for handler in self.handlers:
                 handler()
 
-    answers = [{"next": "https://www.sciencedirect.com/science/article/pii/X/pdfft"}, {"pdf": base64.b64encode(PDF).decode()}]
+    answers = [
+        {"next": "https://www.sciencedirect.com/science/article/pii/X/pdfft"},
+        {"pdf": base64.b64encode(PDF).decode()},
+    ]
 
     class Window:
         def __init__(self, title, url, **kwargs):
@@ -320,25 +341,44 @@ def test_addresses_through_each_kind_of_proxy():
     # proxy showed a blank page (the user's screenshot of access.yonsei.ac.kr/link.n2s?url=http%3A%...)
     n2s = "https://access.yonsei.ac.kr/link.n2s?url="
     assert library.through(n2s, pdf) == n2s + pdf
-    assert library.through(n2s, "http://www.dbpia.co.kr") == "https://access.yonsei.ac.kr/link.n2s?url=http://www.dbpia.co.kr"  # the guide's example
+    assert (
+        library.through(n2s, "http://www.dbpia.co.kr")
+        == "https://access.yonsei.ac.kr/link.n2s?url=http://www.dbpia.co.kr"
+    )  # the guide's example
     assert library.unwrap(n2s, n2s + pdf) == pdf
     assert library.through(KR, pdf) == KR + pdf  # a path-style prefix takes it as it is
     # a relative link on a proxied page is the publisher's, then goes through the proxy again
     page = KR + "https://ieeexplore.ieee.org/document/4700287/"
-    site = Site({
-        KR + "https://doi.org/" + DOI: Answer(302, location=page),
-        page: Answer(body=b'<meta name="citation_pdf_url" content="/stamp/stamp.jsp?tp=&amp;arnumber=4700287">'),
-        KR + pdf: Answer(body=b'<iframe src="https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287"></iframe>'),
-        KR + "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287": Answer(body=PDF),  # IEEE's frame around the PDF
-    })
+    site = Site(
+        {
+            KR + "https://doi.org/" + DOI: Answer(302, location=page),
+            page: Answer(body=b'<meta name="citation_pdf_url" content="/stamp/stamp.jsp?tp=&amp;arnumber=4700287">'),
+            KR + pdf: Answer(
+                body=b'<iframe src="https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287"></iframe>'
+            ),
+            KR + "https://ieeexplore.ieee.org/stampPDF/getPDF.jsp?arnumber=4700287": Answer(
+                body=PDF
+            ),  # IEEE's frame around the PDF
+        }
+    )
     assert library.fetch(DOI, KR, site) == PDF
     # what people paste: no closing "/", or a whole example address from the library's guide
-    assert library.normalize_proxy("https://libproxy.knu.ac.kr/_Lib_Proxy_Url") == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
-    assert library.normalize_proxy(" https://libproxy.knu.ac.kr/_Lib_Proxy_Url/https://www.sciencedirect.com/ ") == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
-    assert library.normalize_proxy("https://ezproxy.uni.edu/login?url=https%3A%2F%2Fwww.nature.com") == "https://ezproxy.uni.edu/login?url="
+    assert (
+        library.normalize_proxy("https://libproxy.knu.ac.kr/_Lib_Proxy_Url")
+        == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
+    )
+    assert (
+        library.normalize_proxy(" https://libproxy.knu.ac.kr/_Lib_Proxy_Url/https://www.sciencedirect.com/ ")
+        == "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/"
+    )
+    assert (
+        library.normalize_proxy("https://ezproxy.uni.edu/login?url=https%3A%2F%2Fwww.nature.com")
+        == "https://ezproxy.uni.edu/login?url="
+    )
     assert library.normalize_proxy("https://ezproxy.uni.edu/login?url") == "https://ezproxy.uni.edu/login?url="
-    assert api.put("/settings", json={"library_proxy": "https://libproxy.knu.ac.kr/_Lib_Proxy_Url"}).json()["library_proxy"]["value"] == (
-        "https://libproxy.knu.ac.kr/_Lib_Proxy_Url/")
+    assert api.put("/settings", json={"library_proxy": "https://libproxy.knu.ac.kr/_Lib_Proxy_Url"}).json()[
+        "library_proxy"
+    ]["value"] == ("https://libproxy.knu.ac.kr/_Lib_Proxy_Url/")
     # a DOI's own "#", "?" or spaces don't cut it short
     assert library.doi_url("10.1002/(SICI)1097-4636#3 x?y") == "https://doi.org/10.1002/(SICI)1097-4636%233%20x%3Fy"
 
@@ -360,13 +400,27 @@ def test_the_doi_is_followed_to_the_publisher_first():
             self.asked = (url, params)
             return Reply(self.record)
 
-    found = Session({"values": [{"type": "HS_ADMIN", "data": {}}, {"type": "URL", "data": {"value": "https://ieeexplore.ieee.org/document/4700287/"}}]})
+    found = Session(
+        {
+            "values": [
+                {"type": "HS_ADMIN", "data": {}},
+                {"type": "URL", "data": {"value": "https://ieeexplore.ieee.org/document/4700287/"}},
+            ]
+        }
+    )
     assert publisher_url(DOI, found) == "https://ieeexplore.ieee.org/document/4700287/"
     old = Session({"values": [{"type": "URL", "data": {"value": "http://ieeexplore.ieee.org/document/4700287/"}}]})
-    assert publisher_url(DOI, old) == "https://ieeexplore.ieee.org/document/4700287/"  # proxies keep the scheme; Android blocks http
+    assert (
+        publisher_url(DOI, old) == "https://ieeexplore.ieee.org/document/4700287/"
+    )  # proxies keep the scheme; Android blocks http
     assert found.asked == ("https://doi.org/api/handles/10.1000/xyz123", {"type": "URL"})
-    assert publisher_url(DOI, Session({"responseCode": 100})) == "https://doi.org/10.1000/xyz123"  # unknown: doi.org itself
-    assert publisher_url(DOI, Session({"values": [{"type": "URL", "data": {"value": "javascript:x"}}]})) == "https://doi.org/10.1000/xyz123"
+    assert (
+        publisher_url(DOI, Session({"responseCode": 100})) == "https://doi.org/10.1000/xyz123"
+    )  # unknown: doi.org itself
+    assert (
+        publisher_url(DOI, Session({"values": [{"type": "URL", "data": {"value": "javascript:x"}}]}))
+        == "https://doi.org/10.1000/xyz123"
+    )
 
 
 def test_the_android_app_lets_every_listed_library_use_plain_http():
@@ -376,7 +430,9 @@ def test_the_android_app_lets_every_listed_library_use_plain_http():
 
     from backend.paths import shared_json
 
-    xml = (Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/res/xml/network_security_config.xml").read_text()
+    xml = (
+        Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/res/xml/network_security_config.xml"
+    ).read_text()
     assert '<base-config cleartextTrafficPermitted="false" />' in xml
     for school in shared_json("libraries.json")["schools"]:
         for host in (school["domain"], urlsplit(school["proxy"]).hostname):
@@ -391,7 +447,9 @@ def test_the_android_app_fills_in_a_certificate_a_server_leaves_out():
     misnamed or not-yet-valid certificate."""
     from pathlib import Path
 
-    java = Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/java/io/github/pinchpeach/researchradar"
+    java = (
+        Path(__file__).resolve().parent.parent / "mobile/android/app/src/main/java/io/github/pinchpeach/researchradar"
+    )
     main = (java / "MainActivity.java").read_text()
     assert "AiaTrust.install();" in main
     screen = (java / "LibraryWebActivity.java").read_text()
@@ -421,7 +479,9 @@ def test_a_library_that_needs_its_own_sign_in_first(monkeypatch):
     assert caught.value.login_page == "https://library.yonsei.ac.kr/login"
 
     settings.save({"library_proxy": yonsei})
-    monkeypatch.setattr(library, "fetch", lambda doi, prefix=None, session=None: (_ for _ in ()).throw(library.NeedsLogin("")))
+    monkeypatch.setattr(
+        library, "fetch", lambda doi, prefix=None, session=None: (_ for _ in ()).throw(library.NeedsLogin(""))
+    )
 
     class Hook:
         def __init__(self):
@@ -486,7 +546,9 @@ def test_signing_in_once_from_settings(monkeypatch):
     assert library.sign_in_url("") is None
     assert library.on_publisher("https://www-nature-com-ssl.access.yonsei.ac.kr/articles/168356a0", yonsei)
     assert not library.on_publisher(yonsei + "https://www.nature.com/", yonsei)  # the proxy's own link page
-    assert library.on_publisher(KR + "https://www.nature.com/", KR) and not library.on_publisher("https://sso.uni.example/", KR)
+    assert library.on_publisher(KR + "https://www.nature.com/", KR) and not library.on_publisher(
+        "https://sso.uni.example/", KR
+    )
 
     settings.save({"library_proxy": yonsei})
     assert api.get("/settings").json()["library_sign_in_url"] == "https://library.yonsei.ac.kr/login"

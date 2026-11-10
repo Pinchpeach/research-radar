@@ -13,7 +13,14 @@ INK = {"id": "a1", "type": "ink", "color": "#1b1b1a", "outline": [[10, 10], [20,
 
 
 def test_handwriting_round_trip_and_list():
-    doc = {"title": "GNN", "paper_id": "W1", "page_count": 3, "last_page": 2, "pages": {"1": [INK]}, "notes": [[INK, INK]]}
+    doc = {
+        "title": "GNN",
+        "paper_id": "W1",
+        "page_count": 3,
+        "last_page": 2,
+        "pages": {"1": [INK]},
+        "notes": [[INK, INK]],
+    }
     saved = api.put("/annotations/W1", json=doc).json()
     assert saved["items"] == 3 and saved["note_pages"] == 1 and saved["last_page"] == 2
     assert api.get("/annotations/W1").json()["pages"]["1"][0]["outline"] == INK["outline"]
@@ -24,7 +31,9 @@ def test_handwriting_round_trip_and_list():
 
 def test_document_ids_stay_inside_the_folder():
     for bad in ["..", ".hidden", "a b", "x" * 81, "%2e%2e%2fsettings"]:
-        assert api.put(f"/annotations/{bad}", json={}).status_code in (404, 405, 422), bad  # 405: ".." collapses the path
+        assert api.put(f"/annotations/{bad}", json={}).status_code in (404, 405, 422), (
+            bad
+        )  # 405: ".." collapses the path
     with pytest.raises(ValueError):
         annotations.load("../settings")
 
@@ -37,7 +46,10 @@ def test_handwriting_size_is_capped(monkeypatch):
 def test_a_picked_pdf_is_kept_with_its_handwriting(monkeypatch):
     pdf = b"%PDF-1.7\n" + b"x" * 100
     assert api.get("/annotations/file-ab12/pdf").status_code == 404
-    assert api.put("/annotations/file-ab12/pdf", content=pdf, headers={"content-type": "application/pdf"}).status_code == 204
+    assert (
+        api.put("/annotations/file-ab12/pdf", content=pdf, headers={"content-type": "application/pdf"}).status_code
+        == 204
+    )
     got = api.get("/annotations/file-ab12/pdf")
     assert got.status_code == 200 and got.content == pdf and got.headers["content-type"] == "application/pdf"
     api.put("/annotations/file-ab12", json={"title": "mine.pdf"})
@@ -99,7 +111,9 @@ def test_only_web_links_and_only_pdfs(monkeypatch):
 
 def test_a_redirect_to_the_local_network_is_refused(monkeypatch):
     addresses = {"publisher.example": "93.184.216.34", "router.local": "192.168.0.1"}
-    monkeypatch.setattr(socket, "getaddrinfo", lambda host, port, *a, **k: [(socket.AF_INET, 1, 6, "", (addresses[host], port))])
+    monkeypatch.setattr(
+        socket, "getaddrinfo", lambda host, port, *a, **k: [(socket.AF_INET, 1, 6, "", (addresses[host], port))]
+    )
 
     class Redirect:
         status_code, is_redirect, headers = 302, True, {"location": "http://router.local/admin"}

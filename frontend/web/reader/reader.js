@@ -6,8 +6,23 @@
 // PDF when saved (export.js).
 
 import {
-  bbox, eraseFrom, hits, HIGHLIGHT_OPACITY, lassoed, linePath, moved, newId, PEN_TYPES, polygonPath, recognizeShape, safeColour,
-  scaled, simplify, strokeOutline, TEXT_LINE, textLines,
+  bbox,
+  eraseFrom,
+  hits,
+  HIGHLIGHT_OPACITY,
+  lassoed,
+  linePath,
+  moved,
+  newId,
+  PEN_TYPES,
+  polygonPath,
+  recognizeShape,
+  safeColour,
+  scaled,
+  simplify,
+  strokeOutline,
+  TEXT_LINE,
+  textLines,
 } from "./ink.js";
 import { annotatedPdf, NOTE_PAGE, notesPdf } from "./export.js";
 
@@ -17,10 +32,12 @@ const PDFLIB = new URL("../vendor/pdf-lib/pdf-lib.esm.min.js", import.meta.url);
 const PEN_COLOURS = ["#1b1b1a", "#e5484d", "#2a78d6", "#1a7f4b", "#c98500", "#8e4ec6"];
 const HIGHLIGHT_COLOURS = ["#ffd400", "#7ee081", "#ff8fb1", "#8ecbff"];
 const SIZES = { pen: [0.8, 6, 1.6], highlighter: [6, 28, 12], text: [8, 32, 12] }; // min, max, default
-const MAX_ZOOM = 4, MIN_ZOOM = 0.5;
+const MAX_ZOOM = 4,
+  MIN_ZOOM = 0.5;
 const ERASER_MODES = ["area", "stroke", "highlight"]; // part of a stroke, whole strokes, highlighter only
 const HOLD_MS = 500; // draw and hold this still: the stroke snaps to a clean line or shape
 const TAP_MS = 300; // two or three fingers down and up this quickly: undo or redo
+const MAX_UNDO = 200;
 
 let pdfjsLib = null;
 async function loadPdfjs() {
@@ -49,6 +66,25 @@ const svgEl = (tag, attrs = {}) => {
   return node;
 };
 const clone = (v) => JSON.parse(JSON.stringify(v));
+/** Keep getting this pointer's events, wherever it goes, until it lifts. */
+const capture = (node, e) => {
+  try {
+    node.setPointerCapture(e.pointerId);
+  } catch {
+    /* not a live pointer (synthetic events) */
+  }
+};
+
+const isPdf = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF");
+
+/** What the app's server said went wrong (`detail` of its JSON answer), or null. */
+async function errorDetail(response) {
+  try {
+    return (await response.json()).detail || null;
+  } catch {
+    return null; // not JSON
+  }
+}
 
 /** A document id for a PDF opened from a file: the start of its SHA-256. */
 async function fileId(bytes) {
@@ -57,7 +93,8 @@ async function fileId(bytes) {
     return "file-" + [...digest.slice(0, 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
   } catch {
     let h = 2166136261; // no WebCrypto (not a secure context): FNV-1a of a sample is enough to recognise the file again
-    for (let i = 0; i < bytes.length; i += Math.max(1, Math.floor(bytes.length / 65536))) h = Math.imul(h ^ bytes[i], 16777619);
+    for (let i = 0; i < bytes.length; i += Math.max(1, Math.floor(bytes.length / 65536)))
+      h = Math.imul(h ^ bytes[i], 16777619);
     return `file-${(h >>> 0).toString(16)}-${bytes.length}`;
   }
 }
@@ -76,24 +113,62 @@ async function fileId(bytes) {
 let current = null; // one reader at a time: a PDF handed to the app replaces the one waiting for it
 export async function openReader(options) {
   if (current && current.root && current.root.isConnected) current.close(false);
-  const reader = current = new Reader(options);
+  const reader = (current = new Reader(options));
   await reader.start();
   return reader;
 }
 
 class Reader {
-  constructor({ paper = null, url = null, file = null, pdfBytes = null, docId = null, libraryOnly = false, api, saveFile, onOpened, onFinished, onAttachNote, onClose }) {
-    Object.assign(this, { paper, url, file, pdfBytes, libraryOnly, api, saveFile, onOpened, onFinished, onAttachNote, onClose });
-    this.givenId = docId; // a notes-only document opened again
+  constructor({
+    paper = null,
+    url = null,
+    file = null,
+    pdfBytes = null,
+    docId = null,
+    libraryOnly = false,
+    api,
+    saveFile,
+    onOpened,
+    onFinished,
+    onAttachNote,
+    onClose,
+  }) {
+    Object.assign(this, {
+      paper,
+      url,
+      file,
+      pdfBytes,
+      libraryOnly,
+      api,
+      saveFile,
+      onOpened,
+      onFinished,
+      onAttachNote,
+      onClose,
+    });
+    this.givenId = docId; // a document opened again from the reading list
     this.tool = "pen";
     this.colours = { pen: PEN_COLOURS[0], highlighter: HIGHLIGHT_COLOURS[0], text: PEN_COLOURS[0] };
     this.sizes = { pen: SIZES.pen[2], highlighter: SIZES.highlighter[2], text: SIZES.text[2] };
-    this.penOnly = false; this.penOnlyChosen = false;
-    this.penType = "fountain"; this.eraserMode = "area"; this.straightHighlight = false;
-    this.zoom = 1; this.undo = []; this.redo = []; this.selection = null;
-    this.surfaces = new Map(); this.viewports = new Map(); this.textCache = new Map();
-    this.doc = null; this.docId = null; this.bytes = null; this.pdf = null;
-    this.finished = false; this.saveTimer = null; this.touches = new Map();
+    this.penOnly = false;
+    this.penOnlyChosen = false;
+    this.penType = "fountain";
+    this.eraserMode = "area";
+    this.straightHighlight = false;
+    this.zoom = 1;
+    this.undo = [];
+    this.redo = [];
+    this.selection = null;
+    this.surfaces = new Map();
+    this.viewports = new Map();
+    this.textCache = new Map();
+    this.doc = null;
+    this.docId = null;
+    this.bytes = null;
+    this.pdf = null;
+    this.finished = false;
+    this.saveTimer = null;
+    this.touches = new Map();
   }
 
   // ───────────── opening ─────────────
@@ -101,32 +176,55 @@ class Reader {
   async start() {
     this.build();
     document.body.classList.add("reader-open");
+    const paperId = this.paper ? shortId(this.paper.id) : null;
+    // a PDF is expected (to look for, or a file's document opened again), not only note pages
+    const wantsPdf = Boolean(
+      this.paper || this.url || this.file || (this.givenId && !this.givenId.startsWith("notes-")),
+    );
     let error = null;
-    const known = this.paper ? shortId(this.paper.id) : this.givenId; // a document that may have its PDF kept
-    const filed = Boolean(this.givenId && !this.givenId.startsWith("notes-")); // a file's document opened again from the reading list
     try {
-      if (this.pdfBytes) this.bytes = this.pdfBytes;
-      else if (this.file) this.bytes = new Uint8Array(await this.file.arrayBuffer());
-      else if (known && (this.bytes = await this.keptPdf(known))) this.kept = true;
-      else if (this.url || (this.paper && !this.givenId)) this.bytes = await this.findPdf();
-    } catch (e) { error = e; }
-    if (this.bytes) this.docId = this.paper ? shortId(this.paper.id) : await fileId(this.bytes);
-    else if (this.paper) this.docId = shortId(this.paper.id);
-    else this.docId = this.givenId || `notes-${newId()}`;
+      this.bytes = await this.source(paperId || this.givenId);
+    } catch (e) {
+      error = e;
+    }
+    this.docId = paperId || this.givenId || (this.bytes ? await fileId(this.bytes) : `notes-${newId()}`);
     this.doc = await this.loadDoc();
     if (this.bytes) {
-      try { await this.loadPdf(); } catch (e) { error = e; this.bytes = null; }
+      try {
+        await this.loadPdf();
+      } catch (e) {
+        error = e;
+        this.bytes = null;
+      }
     }
-    // kept with its document: opens again as it is, with no new download or sign-in (keptPdf)
-    if (this.bytes && !this.kept && (this.file || this.paper)) this.keep();
-    else if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
-    const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
-    if (!this.bytes && (wanted || error)) this.showUnavailable(error);
-    else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
-    const notesOnly = !this.bytes && !wanted && !error;
-    if (this.doc.notes.length || notesOnly) this.toggleNotes(true);
+    if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
+    else if (this.bytes) this.keep();
+    else if (wantsPdf || error) this.showUnavailable(error);
+    else this.pagesEl.hidden = true; // just note pages
+    if (this.doc.notes.length || this.pagesEl.hidden) this.toggleNotes(true);
     this.renderNotes();
     if (this.onOpened && this.paper) this.onOpened(this.paper);
+  }
+
+  /**
+   * The PDF to show, or null: the one handed over; else the one kept with this document when it
+   * was opened before, as it is, with no new download or sign-in; else one found for the paper.
+   */
+  async source(id) {
+    if (this.pdfBytes) return this.pdfBytes;
+    if (this.file) return new Uint8Array(await this.file.arrayBuffer());
+    const kept = id ? await this.keptPdf(id) : null;
+    if (kept) {
+      this.kept = true;
+      return kept;
+    }
+    return this.paper || this.url ? this.findPdf() : null;
+  }
+
+  showFinding(message) {
+    this.pagesEl.replaceChildren(
+      el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: message })),
+    );
   }
 
   /**
@@ -138,8 +236,13 @@ class Reader {
     const doi = bareDoi(this.paper && this.paper.doi);
     let lastError = null;
     const attempt = async (message, get) => {
-      this.pagesEl.replaceChildren(el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: message })));
-      try { return await get(); } catch (e) { lastError = e; return null; }
+      this.showFinding(message);
+      try {
+        return await get();
+      } catch (e) {
+        lastError = e;
+        return null;
+      }
     };
     if (!this.libraryOnly) {
       if (this.url) {
@@ -148,10 +251,18 @@ class Reader {
       }
       let links = [];
       // Unpaywall, OpenAlex's other locations, Europe PMC, arXiv (backend/services/freecopies.py)
-      if (doi) try { links = (await this.api("GET", `/free-pdfs?doi=${encodeURIComponent(doi)}`)).pdf_urls || []; } catch { /* offline */ }
+      if (doi)
+        try {
+          links = (await this.api("GET", `/free-pdfs?doi=${encodeURIComponent(doi)}`)).pdf_urls || [];
+        } catch {
+          /* offline */
+        }
       for (const link of links.filter((l) => l !== this.url)) {
         const bytes = await attempt(t("rd.findingFree"), () => this.fetchPdf(link));
-        if (bytes) { this.url = link; return bytes; }
+        if (bytes) {
+          this.url = link;
+          return bytes;
+        }
       }
     }
     if (doi) {
@@ -169,7 +280,9 @@ class Reader {
       if (window.radarLocalApi) return await window.radarLocalApi("GET", path);
       const response = await fetch(path);
       return response.ok ? new Uint8Array(await response.arrayBuffer()) : null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   /** Keep the PDF with its document (picked, or fetched for a paper), so it opens again as it is. */
@@ -178,31 +291,42 @@ class Reader {
     try {
       if (window.radarLocalApi) await window.radarLocalApi("PUT", path, this.bytes);
       else {
-        const response = await fetch(path, { method: "PUT", headers: { "Content-Type": "application/pdf" }, body: this.bytes });
+        const response = await fetch(path, {
+          method: "PUT",
+          headers: { "Content-Type": "application/pdf" },
+          body: this.bytes,
+        });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
       }
       await this.flush(); // listed under Reading, where it opens again (and can be removed)
       this.toast(t("rd.keptNote"));
-    } catch { /* still open now; found again next time */ }
+    } catch {
+      /* still open now; found again next time */
+    }
   }
 
   /** The PDF through the library: the desktop server (backend/library.py) or, on Android, mobile.js. */
   async libraryPdf(doi) {
     const path = `/library/pdf?doi=${encodeURIComponent(doi)}`;
-    let status, detail = null;
+    let status,
+      detail = null;
     if (window.radarLocalApi) {
-      try { return await (window.radarLibraryPdf ? window.radarLibraryPdf(doi) : window.radarLocalApi("GET", path)); }
-      catch (e) { status = e.status || 502; detail = e.detail || e.message; }
+      try {
+        return await (window.radarLibraryPdf ? window.radarLibraryPdf(doi) : window.radarLocalApi("GET", path));
+      } catch (e) {
+        status = e.status || 502;
+        detail = e.detail || e.message;
+      }
     } else {
       const get = async () => {
         const response = await fetch(path);
         if (response.ok) {
           const bytes = new Uint8Array(await response.arrayBuffer());
-          if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
+          if (isPdf(bytes)) return bytes;
           throw new Error(t("rd.notPdf"));
         }
         status = response.status;
-        try { detail = (await response.json()).detail; } catch { /* not JSON */ }
+        detail = await errorDetail(response);
         return null;
       };
       let bytes = await get();
@@ -210,13 +334,18 @@ class Reader {
       // library's window gets it in the page (desktop/main.py library_login), then it's asked again
       const desktop = window.pywebview && window.pywebview.api;
       if (!bytes && (status === 404 || status === 502) && desktop && desktop.library_login) {
-        this.pagesEl.replaceChildren(el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: t("rd.findingLibrary") })));
-        try { if (await desktop.library_login(doi)) bytes = await get(); } catch { /* the window failed to open */ }
+        this.showFinding(t("rd.findingLibrary"));
+        try {
+          if (await desktop.library_login(doi)) bytes = await get();
+        } catch {
+          /* the window failed to open */
+        }
       }
       if (bytes) return bytes;
     }
     if (status === 422) return null; // no library set up: nothing to say
-    if (status === 401) this.libraryLogin = { doi, url: detail && detail.login_url, first: detail && detail.library_login };
+    if (status === 401)
+      this.libraryLogin = { doi, url: detail && detail.login_url, first: detail && detail.library_login };
     // the library's window can still try, where the app's own request failed (Android: mobile.js)
     else if (signIn()) this.libraryLogin = { doi, url: detail && (detail.page_url || detail.login_url) };
     if (status === 404 && detail && detail.page_url) this.libraryPage = detail.page_url;
@@ -228,24 +357,28 @@ class Reader {
     // Android: CapacitorHttp lets the page fetch any site; the desktop page goes through its server
     const target = window.radarLocalApi ? url : `/pdf?url=${encodeURIComponent(url)}`;
     const response = await fetch(target);
-    if (!response.ok) {
-      let detail = "";
-      try { detail = (await response.json()).detail || ""; } catch { /* not JSON */ }
-      throw new Error(detail || `HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error((await errorDetail(response)) || `HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) throw new Error(t("rd.notPdf"));
+    if (!isPdf(bytes)) throw new Error(t("rd.notPdf"));
     return bytes;
   }
 
   async loadDoc() {
     let doc = null;
-    try { doc = await this.api("GET", `/annotations/${encodeURIComponent(this.docId)}`); } catch { /* first time */ }
+    try {
+      doc = await this.api("GET", `/annotations/${encodeURIComponent(this.docId)}`);
+    } catch {
+      /* first time */
+    }
+    this.saved = Boolean(doc); // already in the reading list
     return {
       title: (this.paper && this.paper.title) || (this.file && this.file.name) || t("rd.untitled"),
       paper_id: this.paper ? shortId(this.paper.id) : null,
       source: this.url || (doc && doc.source) || null,
-      page_count: 0, last_page: 1, pages: {}, notes: [],
+      page_count: 0,
+      last_page: 1,
+      pages: {},
+      notes: [],
       ...(doc || {}),
     };
   }
@@ -254,8 +387,10 @@ class Reader {
     const lib = await loadPdfjs();
     this.loading = lib.getDocument({
       data: this.bytes.slice(), // pdf.js takes ownership of what it gets; keep our copy for saving
-      cMapUrl: new URL("cmaps/", PDFJS).href, cMapPacked: true,
-      standardFontDataUrl: new URL("standard_fonts/", PDFJS).href, wasmUrl: new URL("wasm/", PDFJS).href,
+      cMapUrl: new URL("cmaps/", PDFJS).href,
+      cMapPacked: true,
+      standardFontDataUrl: new URL("standard_fonts/", PDFJS).href,
+      wasmUrl: new URL("wasm/", PDFJS).href,
       isEvalSupported: false, // the PDF is third-party: no generated code
     });
     this.pdf = await this.loading.promise;
@@ -274,15 +409,34 @@ class Reader {
   showUnavailable(error) {
     const pick = el("input", { type: "file", accept: "application/pdf,.pdf", class: "rd-file" });
     pick.addEventListener("change", () => pick.files[0] && this.reopen({ file: pick.files[0] }));
-    const box = el("div", { class: "rd-unavailable" },
+    const box = el(
+      "div",
+      { class: "rd-unavailable" },
       el("h3", { text: this.url ? t("rd.cantOpen") : this.paper ? t("rd.noFree") : t("rd.noPdf") }),
       error ? el("p", { class: "rd-error", text: String(error.message || error) }) : null,
-      el("p", { text: this.libraryLogin ? t("rd.loginHint")
-        : this.paper && !this.url ? t("rd.libraryHint") : t("rd.cantOpenHint") }),
-      el("div", { class: "rd-row" },
+      el("p", {
+        text: this.libraryLogin
+          ? t("rd.loginHint")
+          : this.paper && !this.url
+            ? t("rd.libraryHint")
+            : t("rd.cantOpenHint"),
+      }),
+      el(
+        "div",
+        { class: "rd-row" },
         this.libraryLogin && signIn() ? this.loginButton() : null,
-        this.browserLink() ? el("a", { href: this.browserLink(), target: "_blank", rel: "noopener", class: "rd-btn", text: t("rd.openInBrowser") }) : null,
-        el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick)));
+        this.browserLink()
+          ? el("a", {
+              href: this.browserLink(),
+              target: "_blank",
+              rel: "noopener",
+              class: "rd-btn",
+              text: t("rd.openInBrowser"),
+            })
+          : null,
+        el("label", { class: "rd-btn primary" }, t("rd.pickFile"), pick),
+      ),
+    );
     this.pagesEl.replaceChildren(box);
   }
 
@@ -299,7 +453,11 @@ class Reader {
       button.disabled = true;
       button.textContent = t("rd.loggingIn");
       let ok = false;
-      try { ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url, this.paper); } catch { /* the window failed to open */ }
+      try {
+        ok = await signIn()(this.libraryLogin.doi, this.libraryLogin.url, this.paper);
+      } catch {
+        /* the window failed to open */
+      }
       if (ok instanceof Uint8Array) return this.reopen({ pdfBytes: ok }); // Android: got in the sign-in screen
       if (ok === true) return this.reopen({ libraryOnly: true });
       button.disabled = false;
@@ -312,73 +470,224 @@ class Reader {
   async reopen(options) {
     await this.flush();
     this.close(false);
-    await openReader({ paper: this.paper, api: this.api, saveFile: this.saveFile, onOpened: this.onOpened,
-      onFinished: this.onFinished, onAttachNote: this.onAttachNote, onClose: this.onClose, ...options });
+    await openReader({
+      paper: this.paper,
+      api: this.api,
+      saveFile: this.saveFile,
+      onOpened: this.onOpened,
+      onFinished: this.onFinished,
+      onAttachNote: this.onAttachNote,
+      onClose: this.onClose,
+      ...options,
+    });
   }
 
   // ───────────── the frame ─────────────
 
   build() {
-    const tool = (name, label, icon) => el("button", { type: "button", class: "rd-tool", "data-tool": name, title: label, "aria-label": label,
-      onclick: () => this.setTool(name) }, icon);
+    const tool = (name, label, icon) =>
+      el(
+        "button",
+        {
+          type: "button",
+          class: "rd-tool",
+          "data-tool": name,
+          title: label,
+          "aria-label": label,
+          onclick: () => this.setTool(name),
+        },
+        icon,
+      );
     this.colourRow = el("div", { class: "rd-colours" });
     this.optionsRow = el("div", { class: "rd-options" }); // the tool's own choices: pen type, eraser mode, straight highlighter
-    this.sizeInput = el("input", { type: "range", class: "rd-size", "aria-label": t("rd.size"), oninput: () => this.setSize(Number(this.sizeInput.value)) });
-    this.customColour = el("input", { type: "color", class: "rd-custom", title: t("rd.customColour"), "aria-label": t("rd.customColour"),
-      oninput: () => this.setColour(this.customColour.value) });
-    const action = (cls, label, icon, handler) => el("button", { type: "button", class: `rd-act ${cls}`, title: label, "aria-label": label, onclick: handler }, icon);
-    this.saveMenu = el("div", { class: "rd-menu", hidden: true },
+    this.sizeInput = el("input", {
+      type: "range",
+      class: "rd-size",
+      "aria-label": t("rd.size"),
+      oninput: () => this.setSize(Number(this.sizeInput.value)),
+    });
+    this.customColour = el("input", {
+      type: "color",
+      class: "rd-custom",
+      title: t("rd.customColour"),
+      "aria-label": t("rd.customColour"),
+      oninput: () => this.setColour(this.customColour.value),
+    });
+    const action = (cls, label, icon, handler) =>
+      el(
+        "button",
+        { type: "button", class: `rd-act ${cls}`, title: label, "aria-label": label, onclick: handler },
+        icon,
+      );
+    this.saveMenu = el(
+      "div",
+      { class: "rd-menu", hidden: true },
       el("button", { type: "button", class: "rd-save-pdf", text: t("rd.savePdf"), onclick: () => this.savePdf() }),
-      el("button", { type: "button", class: "rd-save-notes", text: t("rd.saveNotes"), onclick: () => this.saveNotes() }));
-    this.searchInput = el("input", { type: "search", class: "rd-search-input", placeholder: t("rd.searchPlaceholder"), enterkeyhint: "search" });
+      el("button", {
+        type: "button",
+        class: "rd-save-notes",
+        text: t("rd.saveNotes"),
+        onclick: () => this.saveNotes(),
+      }),
+    );
+    this.searchInput = el("input", {
+      type: "search",
+      class: "rd-search-input",
+      placeholder: t("rd.searchPlaceholder"),
+      enterkeyhint: "search",
+    });
     this.searchCount = el("span", { class: "rd-search-count" });
-    this.searchBar = el("form", { class: "rd-searchbar", hidden: true, onsubmit: (e) => { e.preventDefault(); this.search(this.searchInput.value, 1); } },
-      this.searchInput, this.searchCount,
-      el("button", { type: "button", text: "↑", "aria-label": t("rd.prev"), onclick: () => this.search(this.searchInput.value, -1) }),
-      el("button", { type: "submit", text: "↓", "aria-label": t("rd.next") }));
+    this.searchBar = el(
+      "form",
+      {
+        class: "rd-searchbar",
+        hidden: true,
+        onsubmit: (e) => {
+          e.preventDefault();
+          this.search(this.searchInput.value, 1);
+        },
+      },
+      this.searchInput,
+      this.searchCount,
+      el("button", {
+        type: "button",
+        text: "↑",
+        "aria-label": t("rd.prev"),
+        onclick: () => this.search(this.searchInput.value, -1),
+      }),
+      el("button", { type: "submit", text: "↓", "aria-label": t("rd.next") }),
+    );
     this.titleEl = el("span", { class: "rd-title" });
     this.pagesEl = el("div", { class: "rd-pages", tabindex: "0" });
     this.notesEl = el("div", { class: "rd-notes", hidden: true });
     this.thumbsEl = el("aside", { class: "rd-thumbs", hidden: true });
     this.annotsEl = el("aside", { class: "rd-annots", hidden: true });
     this.toastEl = el("div", { class: "rd-toast", role: "status" });
-    const I = (d) => { const s = svgEl("svg", { viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true" }); s.innerHTML = d; return s; }; // our own static icons
-    this.root = el("section", { class: "reader", role: "dialog", "aria-modal": "true", "aria-label": t("rd.reader") },
-      el("header", { class: "rd-top" },
-        el("div", { class: "rd-row rd-head" },
+    const I = (d) => {
+      const s = svgEl("svg", { viewBox: "0 0 24 24", class: "ic", "aria-hidden": "true" });
+      s.innerHTML = d;
+      return s;
+    }; // our own static icons
+    this.root = el(
+      "section",
+      { class: "reader", role: "dialog", "aria-modal": "true", "aria-label": t("rd.reader") },
+      el(
+        "header",
+        { class: "rd-top" },
+        el(
+          "div",
+          { class: "rd-row rd-head" },
           action("rd-close", t("rd.close"), I('<path d="M15 5l-7 7 7 7"/>'), () => this.close()),
           this.titleEl,
-          action("rd-undo", t("rd.undo"), I('<path d="M9 7H4v5"/><path d="M4 12a8 8 0 1 0 2.3-5.6L4 9"/>'), () => this.doUndo()),
-          action("rd-redo", t("rd.redo"), I('<path d="M15 7h5v5"/><path d="M20 12a8 8 0 1 1-2.3-5.6L20 9"/>'), () => this.doRedo()),
-          el("div", { class: "rd-save-wrap" }, action("rd-save", t("rd.save"), I('<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>'),
-            () => (this.saveMenu.hidden = !this.saveMenu.hidden)), this.saveMenu)),
-        el("div", { class: "rd-row rd-toolbar" },
-          tool("hand", t("rd.hand"), I('<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-8a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V5a1.5 1.5 0 0 1 3 0v8"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.5 14.5a1.5 1.5 0 0 1 2.3-1.9L8 14"/>')),
+          action("rd-undo", t("rd.undo"), I('<path d="M9 7H4v5"/><path d="M4 12a8 8 0 1 0 2.3-5.6L4 9"/>'), () =>
+            this.doUndo(),
+          ),
+          action("rd-redo", t("rd.redo"), I('<path d="M15 7h5v5"/><path d="M20 12a8 8 0 1 1-2.3-5.6L20 9"/>'), () =>
+            this.doRedo(),
+          ),
+          el(
+            "div",
+            { class: "rd-save-wrap" },
+            action(
+              "rd-save",
+              t("rd.save"),
+              I('<path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/>'),
+              () => (this.saveMenu.hidden = !this.saveMenu.hidden),
+            ),
+            this.saveMenu,
+          ),
+        ),
+        el(
+          "div",
+          { class: "rd-row rd-toolbar" },
+          tool(
+            "hand",
+            t("rd.hand"),
+            I(
+              '<path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V12"/><path d="M11 11.5v-8a1.5 1.5 0 0 1 3 0V12"/><path d="M14 11.5V5a1.5 1.5 0 0 1 3 0v8"/><path d="M17 9.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.5a6 6 0 0 1-4.6-2.2L4.5 14.5a1.5 1.5 0 0 1 2.3-1.9L8 14"/>',
+            ),
+          ),
           tool("pen", t("rd.pen"), I('<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M14 6l3 3"/>')),
-          tool("highlighter", t("rd.highlighter"), I('<path d="M5 19h6"/><path d="m9 15-2-2 8-8 4 4-8 8z"/><path d="m7 13-2 4 4-2"/>')),
+          tool(
+            "highlighter",
+            t("rd.highlighter"),
+            I('<path d="M5 19h6"/><path d="m9 15-2-2 8-8 4 4-8 8z"/><path d="m7 13-2 4 4-2"/>'),
+          ),
           tool("eraser", t("rd.eraser"), I('<path d="m4 15 9-9 7 7-6 6H8z"/><path d="M9 20h11"/>')),
           tool("text", t("rd.text"), I('<path d="M5 6V4h14v2"/><path d="M12 4v16"/><path d="M9 20h6"/>')),
-          tool("select", t("rd.select"), I('<path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="m10 9 6 3-3 1-1 3z"/>')),
-          el("span", { class: "rd-sep" }), this.optionsRow, this.colourRow, this.customColour, this.sizeInput,
+          tool(
+            "select",
+            t("rd.select"),
+            I('<path d="M4 7V4h3M17 4h3v3M20 17v3h-3M7 20H4v-3"/><path d="m10 9 6 3-3 1-1 3z"/>'),
+          ),
           el("span", { class: "rd-sep" }),
-          action("rd-duplicate", t("rd.duplicate"), I('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>'), () => this.duplicateSelection()),
-          action("rd-delete", t("rd.deleteSelection"), I('<path d="M5 7h14"/><path d="M10 7V5h4v2"/><path d="M7 7l1 13h8l1-13"/>'), () => this.deleteSelection())),
-        el("div", { class: "rd-row rd-views" },
-          action("rd-penonly", t("rd.penOnly"), I('<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M3 3l18 18"/>'), () => this.setPenOnly(!this.penOnly, true)),
-          action("rd-hide", t("rd.hide"), I('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'), () => this.toggleHidden()),
-          action("rd-find", t("rd.search"), I('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'), () => this.toggleSearch()),
-          action("rd-thumbs-btn", t("rd.thumbs"), I('<rect x="4" y="4" width="6" height="7"/><rect x="14" y="4" width="6" height="7"/><rect x="4" y="14" width="6" height="7"/><rect x="14" y="14" width="6" height="7"/>'), () => this.togglePanel(this.thumbsEl)),
-          action("rd-annots-btn", t("rd.annots"), I('<path d="M5 5h14v10H9l-4 4z"/><path d="M8 9h8M8 12h5"/>'), () => { this.togglePanel(this.annotsEl); this.renderAnnots(); }),
-          action("rd-notes-btn", t("rd.notes"), I('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>'), () => this.toggleNotes()),
+          this.optionsRow,
+          this.colourRow,
+          this.customColour,
+          this.sizeInput,
+          el("span", { class: "rd-sep" }),
+          action(
+            "rd-duplicate",
+            t("rd.duplicate"),
+            I(
+              '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+            ),
+            () => this.duplicateSelection(),
+          ),
+          action(
+            "rd-delete",
+            t("rd.deleteSelection"),
+            I('<path d="M5 7h14"/><path d="M10 7V5h4v2"/><path d="M7 7l1 13h8l1-13"/>'),
+            () => this.deleteSelection(),
+          ),
+        ),
+        el(
+          "div",
+          { class: "rd-row rd-views" },
+          action("rd-penonly", t("rd.penOnly"), I('<path d="M4 20l4-1 11-11-3-3L5 16z"/><path d="M3 3l18 18"/>'), () =>
+            this.setPenOnly(!this.penOnly, true),
+          ),
+          action(
+            "rd-hide",
+            t("rd.hide"),
+            I('<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>'),
+            () => this.toggleHidden(),
+          ),
+          action("rd-find", t("rd.search"), I('<circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/>'), () =>
+            this.toggleSearch(),
+          ),
+          action(
+            "rd-thumbs-btn",
+            t("rd.thumbs"),
+            I(
+              '<rect x="4" y="4" width="6" height="7"/><rect x="14" y="4" width="6" height="7"/><rect x="4" y="14" width="6" height="7"/><rect x="14" y="14" width="6" height="7"/>',
+            ),
+            () => this.togglePanel(this.thumbsEl),
+          ),
+          action("rd-annots-btn", t("rd.annots"), I('<path d="M5 5h14v10H9l-4 4z"/><path d="M8 9h8M8 12h5"/>'), () => {
+            this.togglePanel(this.annotsEl);
+            this.renderAnnots();
+          }),
+          action(
+            "rd-notes-btn",
+            t("rd.notes"),
+            I('<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6M9 16h4"/>'),
+            () => this.toggleNotes(),
+          ),
           el("span", { class: "rd-spacer" }),
           action("rd-zoom-out", t("rd.zoomOut"), I('<path d="M6 12h12"/>'), () => this.setZoom(this.zoom / 1.25)),
           el("span", { class: "rd-zoom-label" }),
-          action("rd-zoom-in", t("rd.zoomIn"), I('<path d="M6 12h12M12 6v12"/>'), () => this.setZoom(this.zoom * 1.25))),
-        this.searchBar),
+          action("rd-zoom-in", t("rd.zoomIn"), I('<path d="M6 12h12M12 6v12"/>'), () => this.setZoom(this.zoom * 1.25)),
+        ),
+        this.searchBar,
+      ),
       el("div", { class: "rd-body" }, this.thumbsEl, this.pagesEl, this.notesEl, this.annotsEl),
-      this.toastEl);
+      this.toastEl,
+    );
     if (!document.querySelector("link[data-reader-css]")) {
-      document.head.append(el("link", { rel: "stylesheet", href: new URL("reader.css", import.meta.url).href, "data-reader-css": "" }));
+      document.head.append(
+        el("link", { rel: "stylesheet", href: new URL("reader.css", import.meta.url).href, "data-reader-css": "" }),
+      );
     }
     document.body.append(this.root);
     this.root.querySelector(".rd-undo").disabled = this.root.querySelector(".rd-redo").disabled = true;
@@ -386,25 +695,31 @@ class Reader {
     this.setTool("pen");
     this.updateZoomLabel();
     this.pagesEl.addEventListener("scroll", () => this.onScroll(), { passive: true });
-    this.pagesEl.addEventListener("wheel", (e) => {
-      if (!(e.ctrlKey || e.metaKey)) return;
-      e.preventDefault();
-      this.setZoom(this.zoom * Math.exp(-e.deltaY * 0.002), e);
-    }, { passive: false });
+    this.pagesEl.addEventListener(
+      "wheel",
+      (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
+        e.preventDefault();
+        this.setZoom(this.zoom * Math.exp(-e.deltaY * 0.002), e);
+      },
+      { passive: false },
+    );
     this.keyHandler = (e) => this.onKey(e);
     document.addEventListener("keydown", this.keyHandler);
-    window.addEventListener("resize", this.resizeHandler = () => this.layoutPages());
+    window.addEventListener("resize", (this.resizeHandler = () => this.layoutPages()));
   }
 
   close(notify = true) {
-    this.flush();
+    clearTimeout(this.holdTimer);
+    clearTimeout(this.renderTimer);
+    // the reading list is read again once the last change is in
+    this.flush().finally(() => notify && this.onClose && this.onClose());
     document.removeEventListener("keydown", this.keyHandler);
     window.removeEventListener("resize", this.resizeHandler);
     if (this.observer) this.observer.disconnect();
     if (this.loading) this.loading.destroy().catch(() => {}); // frees the worker and the pages
     this.root.remove();
     document.body.classList.remove("reader-open");
-    if (notify && this.onClose) this.onClose();
   }
 
   toast(message) {
@@ -422,10 +737,21 @@ class Reader {
     this.tool = name;
     this.root.dataset.tool = name;
     this.root.querySelectorAll(".rd-tool").forEach((b) => b.classList.toggle("on", b.dataset.tool === name));
-    const kind = name === "highlighter" ? "highlighter" : name === "text" ? "text" : "pen";
+    const kind = this.kind;
     const palette = kind === "highlighter" ? HIGHLIGHT_COLOURS : PEN_COLOURS;
-    this.colourRow.replaceChildren(...palette.map((c) => el("button", { type: "button", class: "rd-colour", style: `--c:${c}`,
-      "data-colour": c, title: c, "aria-label": c, onclick: () => this.setColour(c) })));
+    this.colourRow.replaceChildren(
+      ...palette.map((c) =>
+        el("button", {
+          type: "button",
+          class: "rd-colour",
+          style: `--c:${c}`,
+          "data-colour": c,
+          title: c,
+          "aria-label": c,
+          onclick: () => this.setColour(c),
+        }),
+      ),
+    );
     const [min, max] = SIZES[kind];
     Object.assign(this.sizeInput, { min, max, step: kind === "pen" ? 0.2 : 1, value: this.sizes[kind] });
     this.showColour(kind);
@@ -434,22 +760,44 @@ class Reader {
 
   /** The current tool's own choices, as the note apps have them: pen types, eraser modes, a straight highlighter. */
   showOptions() {
-    const choice = (value, current, label, set) => el("button", { type: "button", class: `rd-opt${value === current ? " on" : ""}`,
-      "data-opt": value, text: label, onclick: () => { set(value); this.showOptions(); } });
+    const choice = (value, current, label, set) =>
+      el("button", {
+        type: "button",
+        class: `rd-opt${value === current ? " on" : ""}`,
+        "data-opt": value,
+        text: label,
+        onclick: () => {
+          set(value);
+          this.showOptions();
+        },
+      });
     let options = [];
-    if (this.tool === "pen") options = PEN_TYPES.map((p) => choice(p, this.penType, t(`rd.pen_${p}`), (v) => (this.penType = v)));
-    else if (this.tool === "eraser") options = ERASER_MODES.map((m) => choice(m, this.eraserMode, t(`rd.erase_${m}`), (v) => (this.eraserMode = v)));
+    if (this.tool === "pen")
+      options = PEN_TYPES.map((p) => choice(p, this.penType, t(`rd.pen_${p}`), (v) => (this.penType = v)));
+    else if (this.tool === "eraser")
+      options = ERASER_MODES.map((m) => choice(m, this.eraserMode, t(`rd.erase_${m}`), (v) => (this.eraserMode = v)));
     else if (this.tool === "highlighter") {
-      options = [choice("straight", this.straightHighlight ? "straight" : "", t("rd.straight"), () => (this.straightHighlight = !this.straightHighlight))];
+      options = [
+        choice(
+          "straight",
+          this.straightHighlight ? "straight" : "",
+          t("rd.straight"),
+          () => (this.straightHighlight = !this.straightHighlight),
+        ),
+      ];
     }
     this.optionsRow.replaceChildren(...options);
     this.optionsRow.hidden = !options.length;
   }
 
-  get kind() { return this.tool === "highlighter" ? "highlighter" : this.tool === "text" ? "text" : "pen"; }
+  get kind() {
+    return this.tool === "highlighter" ? "highlighter" : this.tool === "text" ? "text" : "pen";
+  }
 
   showColour(kind = this.kind) {
-    this.root.querySelectorAll(".rd-colour").forEach((b) => b.classList.toggle("on", b.dataset.colour === this.colours[kind]));
+    this.root
+      .querySelectorAll(".rd-colour")
+      .forEach((b) => b.classList.toggle("on", b.dataset.colour === this.colours[kind]));
     this.customColour.value = this.colours[kind].length === 7 ? this.colours[kind] : "#000000";
   }
 
@@ -480,14 +828,19 @@ class Reader {
 
   togglePanel(panel) {
     panel.hidden = !panel.hidden;
-    this.root.querySelector(panel === this.thumbsEl ? ".rd-thumbs-btn" : ".rd-annots-btn").classList.toggle("on", !panel.hidden);
+    this.root
+      .querySelector(panel === this.thumbsEl ? ".rd-thumbs-btn" : ".rd-annots-btn")
+      .classList.toggle("on", !panel.hidden);
   }
 
   toggleNotes(show = this.notesEl.hidden) {
     this.notesEl.hidden = !show;
     this.root.classList.toggle("notes-open", show);
     this.root.querySelector(".rd-notes-btn").classList.toggle("on", show);
-    if (show && !this.doc.notes.length) this.addNotePage(false);
+    if (show && !this.doc.notes.length) {
+      this.doc.notes.push([]); // a first page to write on: not a change to undo or save
+      this.renderNotes();
+    }
     this.layoutPages();
   }
 
@@ -502,7 +855,9 @@ class Reader {
   layoutPages() {
     if (this.pdf) {
       if (!this.surfaces.size || ![...this.surfaces.keys()].some((k) => k.startsWith("p:"))) {
-        this.pagesEl.replaceChildren(...[...this.viewports.keys()].map((n) => this.makeSurface(`p:${n}`, this.viewports.get(n)).el));
+        this.pagesEl.replaceChildren(
+          ...[...this.viewports.keys()].map((n) => this.makeSurface(`p:${n}`, this.viewports.get(n)).el),
+        );
       }
       const width = this.pageWidth();
       for (const [n, vp] of this.viewports) {
@@ -518,14 +873,17 @@ class Reader {
   }
 
   observePages() {
-    this.observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        const s = this.surfaces.get(entry.target.dataset.key);
-        if (!s) continue;
-        s.visible = entry.isIntersecting;
-        if (s.visible && (!s.renderedAt || s.stale)) this.renderPage(s);
-      }
-    }, { root: this.pagesEl, rootMargin: "600px 0px" });
+    this.observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const s = this.surfaces.get(entry.target.dataset.key);
+          if (!s) continue;
+          s.visible = entry.isIntersecting;
+          if (s.visible && (!s.renderedAt || s.stale)) this.renderPage(s);
+        }
+      },
+      { root: this.pagesEl, rootMargin: "600px 0px" },
+    );
     for (const [key, s] of this.surfaces) if (key.startsWith("p:")) this.observer.observe(s.el);
   }
 
@@ -534,31 +892,51 @@ class Reader {
   }
 
   async renderPage(s) {
-    if (s.rendering) { s.again = true; return; }
+    if (s.rendering) {
+      s.again = true;
+      return;
+    }
     s.rendering = true;
     try {
       const page = await this.pdf.getPage(s.page);
       const width = parseFloat(s.el.style.width);
       const scale = (width / s.width) * Math.min(window.devicePixelRatio || 1, 2.5);
       const viewport = page.getViewport({ scale });
-      const canvas = el("canvas", { class: "rd-canvas", width: Math.floor(viewport.width), height: Math.floor(viewport.height) });
+      const canvas = el("canvas", {
+        class: "rd-canvas",
+        width: Math.floor(viewport.width),
+        height: Math.floor(viewport.height),
+      });
       await page.render({ canvas, canvasContext: canvas.getContext("2d"), viewport }).promise;
       s.canvas.replaceWith(canvas);
       s.canvas = canvas;
-      s.renderedAt = width; s.stale = false;
-    } catch { /* closed while rendering */ }
+      s.renderedAt = width;
+      s.stale = false;
+    } catch {
+      /* closed while rendering */
+    }
     s.rendering = false;
-    if (s.again) { s.again = false; if (s.stale) this.renderPage(s); }
+    if (s.again) {
+      s.again = false;
+      if (s.stale) this.renderPage(s);
+    }
   }
 
   makeSurface(key, { width, height }) {
     const svg = svgEl("svg", { class: "rd-ink", viewBox: `0 0 ${width} ${height}`, preserveAspectRatio: "none" });
-    const items = svgEl("g", { class: "rd-items" }), live = svgEl("g", { class: "rd-live" }), found = svgEl("g", { class: "rd-found" });
+    const items = svgEl("g", { class: "rd-items" }),
+      live = svgEl("g", { class: "rd-live" }),
+      found = svgEl("g", { class: "rd-found" });
     svg.append(found, items, live);
     const canvas = el("canvas", { class: "rd-canvas" });
     const page = key.startsWith("p:") ? Number(key.slice(2)) : null;
-    const wrapper = el("div", { class: page ? "rd-page" : "rd-page rd-note", "data-key": key, "data-page": page ?? "" },
-      page ? canvas : null, svg, el("span", { class: "rd-page-no", text: page ? String(page) : "" }));
+    const wrapper = el(
+      "div",
+      { class: page ? "rd-page" : "rd-page rd-note", "data-key": key, "data-page": page ?? "" },
+      page ? canvas : null,
+      svg,
+      el("span", { class: "rd-page-no", text: page ? String(page) : "" }),
+    );
     const s = { key, el: wrapper, svg, itemsG: items, liveG: live, foundG: found, canvas, width, height, page };
     this.surfaces.set(key, s);
     this.bindInput(s);
@@ -573,7 +951,8 @@ class Reader {
 
   setItems(key, items) {
     if (key.startsWith("p:")) {
-      if (items.length) this.doc.pages[key.slice(2)] = items; else delete this.doc.pages[key.slice(2)];
+      if (items.length) this.doc.pages[key.slice(2)] = items;
+      else delete this.doc.pages[key.slice(2)];
     } else this.doc.notes[Number(key.slice(2))] = items;
   }
 
@@ -581,10 +960,14 @@ class Reader {
 
   renderNotes() {
     for (const key of [...this.surfaces.keys()]) if (key.startsWith("n:")) this.surfaces.delete(key);
-    const pages = this.doc.notes.map((_, i) => this.makeSurface(`n:${i}`, { width: NOTE_PAGE[0], height: NOTE_PAGE[1] }).el);
-    pages.forEach((p, i) => p.querySelector(".rd-page-no").textContent = t("rd.notePage", { n: i + 1 }));
-    this.notesEl.replaceChildren(...pages,
-      el("button", { type: "button", class: "rd-add-note", text: t("rd.addNote"), onclick: () => this.addNotePage() }));
+    const pages = this.doc.notes.map(
+      (_, i) => this.makeSurface(`n:${i}`, { width: NOTE_PAGE[0], height: NOTE_PAGE[1] }).el,
+    );
+    pages.forEach((p, i) => (p.querySelector(".rd-page-no").textContent = t("rd.notePage", { n: i + 1 })));
+    this.notesEl.replaceChildren(
+      ...pages,
+      el("button", { type: "button", class: "rd-add-note", text: t("rd.addNote"), onclick: () => this.addNotePage() }),
+    );
     this.layoutNotes();
   }
 
@@ -597,10 +980,10 @@ class Reader {
     }
   }
 
-  addNotePage(scroll = true) {
+  addNotePage() {
     this.record("notes", () => this.doc.notes.push([]));
     this.renderNotes();
-    if (scroll) this.notesEl.lastElementChild.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" });
+    this.notesEl.lastElementChild.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ───────────── drawing items ─────────────
@@ -613,10 +996,19 @@ class Reader {
   itemNode(item) {
     const colour = safeColour(item.color);
     let node;
-    if (item.type === "ink") node = svgEl("path", { d: polygonPath(strokeOutline(item.points, item.width, item.pen)), fill: colour });
+    if (item.type === "ink")
+      node = svgEl("path", { d: polygonPath(strokeOutline(item.points, item.width, item.pen)), fill: colour });
     else if (item.type === "highlight") {
-      node = svgEl("path", { d: linePath(item.points), fill: "none", stroke: colour, "stroke-width": item.width,
-        "stroke-linecap": "round", "stroke-linejoin": "round", opacity: HIGHLIGHT_OPACITY, class: "rd-hl" });
+      node = svgEl("path", {
+        d: linePath(item.points),
+        fill: "none",
+        stroke: colour,
+        "stroke-width": item.width,
+        "stroke-linecap": "round",
+        "stroke-linejoin": "round",
+        opacity: HIGHLIGHT_OPACITY,
+        class: "rd-hl",
+      });
     } else {
       node = svgEl("text", { x: item.x, y: item.y, "font-size": item.size, fill: colour, class: "rd-text" });
       textLines(item).forEach((line, i) => {
@@ -634,20 +1026,46 @@ class Reader {
     const before = key === "notes" ? clone(this.doc.notes) : clone(this.itemsOf(key));
     change();
     const after = key === "notes" ? clone(this.doc.notes) : clone(this.itemsOf(key));
-    this.undo.push({ key, before, after });
-    if (this.undo.length > 200) this.undo.shift();
+    this.remember({ key, before, after });
+  }
+
+  remember(step) {
+    this.undo.push(step);
+    if (this.undo.length > MAX_UNDO) this.undo.shift();
     this.redo = [];
     this.changed();
   }
 
   applyState(key, items) {
-    if (key === "notes") { this.doc.notes = clone(items); this.renderNotes(); }
-    else { this.setItems(key, clone(items)); const s = this.surfaces.get(key); if (s) this.drawSurface(s); }
+    if (key === "notes") {
+      this.doc.notes = clone(items);
+      this.renderNotes();
+    } else {
+      this.setItems(key, clone(items));
+      const s = this.surfaces.get(key);
+      if (s) this.drawSurface(s);
+    }
     this.changed();
   }
 
-  doUndo() { this.finishEditing(); const op = this.undo.pop(); if (op) { this.redo.push(op); this.select(null); this.applyState(op.key, op.before); } }
-  doRedo() { const op = this.redo.pop(); if (op) { this.undo.push(op); this.select(null); this.applyState(op.key, op.after); } }
+  doUndo() {
+    this.finishEditing();
+    const op = this.undo.pop();
+    if (op) {
+      this.redo.push(op);
+      this.select(null);
+      this.applyState(op.key, op.before);
+    }
+  }
+  doRedo() {
+    this.finishEditing();
+    const op = this.redo.pop();
+    if (op) {
+      this.undo.push(op);
+      this.select(null);
+      this.applyState(op.key, op.after);
+    }
+  }
 
   changed() {
     this.root.querySelector(".rd-undo").disabled = !this.undo.length;
@@ -656,11 +1074,18 @@ class Reader {
     this.saveTimer = setTimeout(() => this.flush(), 700);
   }
 
+  /** Something to come back to: a PDF, or anything written. (An empty note page or a paper that wouldn't open is not.) */
+  worthSaving() {
+    const written = [...Object.values(this.doc.pages), ...this.doc.notes].some((items) => items.length);
+    return this.saved || Boolean(this.pdf) || written;
+  }
+
   async flush() {
     clearTimeout(this.saveTimer);
-    if (!this.doc) return;
+    if (!this.doc || !this.worthSaving()) return;
     try {
       await this.api("PUT", `/annotations/${encodeURIComponent(this.docId)}`, this.doc);
+      this.saved = true;
       this.root.classList.remove("unsaved");
     } catch (e) {
       this.root.classList.add("unsaved");
@@ -676,7 +1101,9 @@ class Reader {
     return [((e.clientX - r.left) / r.width) * s.width, ((e.clientY - r.top) / r.height) * s.height];
   }
 
-  unitsPerPx(s) { return s.width / s.svg.getBoundingClientRect().width; }
+  unitsPerPx(s) {
+    return s.width / s.svg.getBoundingClientRect().width;
+  }
 
   bindInput(s) {
     const svg = s.svg;
@@ -705,25 +1132,32 @@ class Reader {
     if (e.pointerType === "touch") {
       this.touches.set(e.pointerId, { x: e.clientX, y: e.clientY });
       // two or three fingers tapped together: undo or redo (GoodNotes, Notability)
-      if (!this.tap || this.touches.size === 1) this.tap = { at: Date.now(), fingers: 0, moved: false, starts: new Map() };
+      if (!this.tap || this.touches.size === 1)
+        this.tap = { at: Date.now(), fingers: 0, moved: false, starts: new Map() };
       this.tap.fingers = Math.max(this.tap.fingers, this.touches.size);
       this.tap.starts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
-    if (this.gesture && this.gesture.kind === "draw" && e.pointerType === "touch" && this.touches.size > 1) {
-      s.liveG.replaceChildren(); this.gesture = null; // a second finger: it was a pinch, not a line
+    // a second finger: it was a pinch or a tap, not writing, so what the first finger began is taken back
+    if (e.pointerType === "touch" && this.touches.size > 1 && this.gesture && this.gesture.touch) this.cancelGesture();
+    if (this.navigates(e)) {
+      this.startNavigation(s, e);
+      return;
     }
-    if (this.navigates(e)) { this.startNavigation(e); return; }
     if (this.gesture) return; // one stroke at a time
     e.preventDefault();
-    try { s.svg.setPointerCapture(e.pointerId); } catch { /* not a live pointer (synthetic events) */ }
-    const p = this.pointOn(s, e), pressure = e.pointerType === "pen" ? e.pressure || 0.5 : 0;
+    capture(s.svg, e);
+    const p = this.pointOn(s, e),
+      pressure = e.pointerType === "pen" ? e.pressure || 0.5 : 0;
+    const begin = (kind, more = {}) =>
+      (this.gesture = { kind, s, id: e.pointerId, touch: e.pointerType === "touch", ...more });
     // the stylus's eraser end, or its side button held (S Pen): erase whatever the tool is
-    const stylusErases = e.pointerType === "pen" && (e.button === 5 || e.button === 2 || (e.buttons & 32) || (e.buttons & 2));
+    const stylusErases =
+      e.pointerType === "pen" && (e.button === 5 || e.button === 2 || e.buttons & 32 || e.buttons & 2);
     if (stylusErases || this.tool === "eraser") {
-      this.gesture = { kind: "erase", s, id: e.pointerId, before: clone(this.itemsOf(s.key)), removed: 0 };
+      begin("erase", { before: clone(this.itemsOf(s.key)), removed: 0 });
       this.eraseAt(s, p);
     } else if (this.tool === "pen" || this.tool === "highlighter") {
-      this.gesture = { kind: "draw", s, id: e.pointerId, points: [[...p, pressure]], highlight: this.tool === "highlighter" };
+      begin("draw", { points: [[...p, pressure]], highlight: this.tool === "highlighter" });
       this.drawLive();
       this.holdAt(e);
     } else if (this.tool === "text") {
@@ -734,15 +1168,23 @@ class Reader {
       const sel = this.selection;
       const box = sel && sel.key === s.key && this.selectionBox();
       const corner = box && Math.hypot(p[0] - box[2], p[1] - box[3]) <= 12 * this.unitsPerPx(s);
-      if (corner) { // the resize handle: scale around the selection's top-left corner
-        this.gesture = { kind: "resize", s, id: e.pointerId, origin: [box[0], box[1]], from: Math.max(1, Math.hypot(box[2] - box[0], box[3] - box[1])), k: 1 };
+      if (corner) {
+        // the resize handle: scale around the selection's top-left corner
+        begin("resize", {
+          origin: [box[0], box[1]],
+          from: Math.max(1, Math.hypot(box[2] - box[0], box[3] - box[1])),
+          k: 1,
+        });
         return;
       }
       const grabbed = sel && sel.key === s.key && this.insideSelection(p);
       const item = grabbed ? null : this.itemAt(s, p);
       if (item) this.select({ key: s.key, ids: new Set([item.id]) });
-      if (grabbed || item) this.gesture = { kind: "move", s, id: e.pointerId, from: p, dx: 0, dy: 0 };
-      else { this.select(null); this.gesture = { kind: "lasso", s, id: e.pointerId, points: [p] }; }
+      if (grabbed || item) begin("move", { from: p, dx: 0, dy: 0 });
+      else {
+        this.select(null);
+        begin("lasso", { points: [p] });
+      }
     }
   }
 
@@ -752,33 +1194,48 @@ class Reader {
       const start = this.tap && this.tap.starts.get(e.pointerId);
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) this.tap.moved = true;
     }
-    if (this.nav) { this.navigate(e); return; }
+    if (this.steers(e)) {
+      this.navigate(e);
+      return;
+    }
     const g = this.gesture;
     if (!g || g.id !== e.pointerId || g.s !== s) return;
     e.preventDefault();
     const events = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
-    if (g.kind === "draw" && g.snapped) { // a snapped straight line: its end follows the pen until lifted
-      if (g.points.length === 2) { g.points[1] = [...this.pointOn(s, e), g.points[1][2]]; this.drawLive(); }
+    if (g.kind === "draw" && g.snapped) {
+      // a snapped straight line: its end follows the pen until lifted
+      if (g.points.length === 2) {
+        g.points[1] = [...this.pointOn(s, e), g.points[1][2]];
+        this.drawLive();
+      }
     } else if (g.kind === "draw") {
-      for (const ev of events.length ? events : [e]) g.points.push([...this.pointOn(s, ev), e.pointerType === "pen" ? ev.pressure || 0.5 : 0]);
+      for (const ev of events.length ? events : [e])
+        g.points.push([...this.pointOn(s, ev), e.pointerType === "pen" ? ev.pressure || 0.5 : 0]);
       this.drawLive();
       this.holdAt(e);
     } else if (g.kind === "resize") {
-      const p = this.pointOn(s, e), box = this.selectionBox();
+      const p = this.pointOn(s, e),
+        box = this.selectionBox();
       g.k = Math.max(0.1, Math.hypot(p[0] - g.origin[0], p[1] - g.origin[1]) / g.from);
       const ids = this.selection.ids;
-      s.itemsG.replaceChildren(...this.itemsOf(s.key).map((i) => this.itemNode(ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i)));
+      s.itemsG.replaceChildren(
+        ...this.itemsOf(s.key).map((i) => this.itemNode(ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i)),
+      );
       if (box) this.drawSelection();
     } else if (g.kind === "erase") {
       for (const ev of events.length ? events : [e]) this.eraseAt(s, this.pointOn(s, ev));
     } else if (g.kind === "move") {
       const p = this.pointOn(s, e);
-      g.dx = p[0] - g.from[0]; g.dy = p[1] - g.from[1];
-      for (const node of s.itemsG.children) if (this.selection.ids.has(node.dataset.id)) node.setAttribute("transform", `translate(${g.dx} ${g.dy})`);
+      g.dx = p[0] - g.from[0];
+      g.dy = p[1] - g.from[1];
+      for (const node of s.itemsG.children)
+        if (this.selection.ids.has(node.dataset.id)) node.setAttribute("transform", `translate(${g.dx} ${g.dy})`);
       this.drawSelection(g.dx, g.dy);
     } else if (g.kind === "lasso") {
       g.points.push(this.pointOn(s, e));
-      s.liveG.replaceChildren(svgEl("polygon", { points: g.points.map((q) => q.join(",")).join(" "), class: "rd-lasso" }));
+      s.liveG.replaceChildren(
+        svgEl("polygon", { points: g.points.map((q) => q.join(",")).join(" "), class: "rd-lasso" }),
+      );
     }
   }
 
@@ -790,40 +1247,62 @@ class Reader {
         this.tap = null;
         if (!tap.moved && !cancelled && Date.now() - tap.at < TAP_MS && tap.fingers >= 2) {
           this.nav = null;
-          if (tap.fingers === 2) this.doUndo(); else this.doRedo();
+          if (tap.fingers === 2) this.doUndo();
+          else this.doRedo();
           return;
         }
       }
     }
-    clearTimeout(this.holdTimer);
-    if (this.nav) { if (!this.touches.size || e.pointerType !== "touch") this.nav = null; else this.startNavigation(e); return; }
+    if (this.steers(e)) {
+      if (this.nav.touch && this.touches.size)
+        this.startNavigation(s, e); // one finger lifted: go on from the other
+      else this.nav = null;
+      return;
+    }
     const g = this.gesture;
     if (!g || g.id !== e.pointerId) return;
+    if (cancelled) return this.cancelGesture();
+    clearTimeout(this.holdTimer);
     this.gesture = null;
     s.liveG.replaceChildren();
-    if (cancelled) { this.drawSurface(s); return; }
     if (g.kind === "draw") {
       const highlight = g.highlight;
       let points = g.snapped ? g.points : simplify(g.points, 0.25 * this.unitsPerPx(s));
       if (highlight && this.straightHighlight && points.length > 1) points = [points[0], points[points.length - 1]];
-      const item = { id: newId(), type: highlight ? "highlight" : "ink", color: this.colours[highlight ? "highlighter" : "pen"],
+      const item = {
+        id: newId(),
+        type: highlight ? "highlight" : "ink",
+        color: this.colours[highlight ? "highlighter" : "pen"],
         width: Math.round(this.sizes[highlight ? "highlighter" : "pen"] * 10) / 10,
-        points: highlight ? points.map(([x, y]) => [x, y]) : points };
+        points: highlight ? points.map(([x, y]) => [x, y]) : points,
+      };
       if (!highlight) item.pen = this.penType;
       this.record(s.key, () => this.itemsOf(s.key).push(item));
       this.drawSurface(s);
     } else if (g.kind === "erase") {
-      if (g.removed) { this.undo.push({ key: s.key, before: g.before, after: clone(this.itemsOf(s.key)) }); this.redo = []; this.changed(); }
+      if (g.removed) {
+        this.remember({ key: s.key, before: g.before, after: clone(this.itemsOf(s.key)) });
+      }
     } else if (g.kind === "move") {
       if (Math.abs(g.dx) + Math.abs(g.dy) > 0.2) {
         const ids = this.selection.ids;
-        this.record(s.key, () => this.setItems(s.key, this.itemsOf(s.key).map((i) => (ids.has(i.id) ? moved(i, g.dx, g.dy) : i))));
+        this.record(s.key, () =>
+          this.setItems(
+            s.key,
+            this.itemsOf(s.key).map((i) => (ids.has(i.id) ? moved(i, g.dx, g.dy) : i)),
+          ),
+        );
       }
       this.drawSurface(s);
     } else if (g.kind === "resize") {
       if (Math.abs(g.k - 1) > 0.01) {
         const ids = this.selection.ids;
-        this.record(s.key, () => this.setItems(s.key, this.itemsOf(s.key).map((i) => (ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i))));
+        this.record(s.key, () =>
+          this.setItems(
+            s.key,
+            this.itemsOf(s.key).map((i) => (ids.has(i.id) ? scaled(i, g.origin[0], g.origin[1], g.k) : i)),
+          ),
+        );
       }
       this.drawSurface(s);
     } else if (g.kind === "lasso") {
@@ -832,12 +1311,36 @@ class Reader {
     }
   }
 
+  /** Drop the gesture under way and put the page back as it was before it. */
+  cancelGesture() {
+    const g = this.gesture;
+    if (!g) return;
+    clearTimeout(this.holdTimer);
+    this.gesture = null;
+    g.s.liveG.replaceChildren();
+    if (g.kind === "erase" && g.removed) this.setItems(g.s.key, g.before);
+    this.drawSurface(g.s);
+  }
+
   drawLive() {
-    const g = this.gesture, highlight = g.highlight;
-    const colour = this.colours[highlight ? "highlighter" : "pen"], width = this.sizes[highlight ? "highlighter" : "pen"];
-    const points = highlight && this.straightHighlight && g.points.length > 1 ? [g.points[0], g.points[g.points.length - 1]] : g.points;
+    const g = this.gesture,
+      highlight = g.highlight;
+    const colour = this.colours[highlight ? "highlighter" : "pen"],
+      width = this.sizes[highlight ? "highlighter" : "pen"];
+    const points =
+      highlight && this.straightHighlight && g.points.length > 1
+        ? [g.points[0], g.points[g.points.length - 1]]
+        : g.points;
     const node = highlight
-      ? svgEl("path", { d: linePath(points), fill: "none", stroke: colour, "stroke-width": width, "stroke-linecap": "round", opacity: HIGHLIGHT_OPACITY, class: "rd-hl" })
+      ? svgEl("path", {
+          d: linePath(points),
+          fill: "none",
+          stroke: colour,
+          "stroke-width": width,
+          "stroke-linecap": "round",
+          opacity: HIGHLIGHT_OPACITY,
+          class: "rd-hl",
+        })
       : svgEl("path", { d: polygonPath(strokeOutline(points, width, this.penType)), fill: colour });
     g.s.liveG.replaceChildren(node);
   }
@@ -860,20 +1363,29 @@ class Reader {
       g.points = shape;
       g.snapped = true;
       this.drawLive();
-      if (navigator.vibrate) try { navigator.vibrate(10); } catch { /* not allowed */ }
+      if (navigator.vibrate)
+        try {
+          navigator.vibrate(10);
+        } catch {
+          /* not allowed */
+        }
     }, HOLD_MS);
   }
 
   itemAt(s, [x, y], filter = () => true) {
-    const items = this.itemsOf(s.key), tolerance = 6 * this.unitsPerPx(s);
-    for (let i = items.length - 1; i >= 0; i--) if (filter(items[i]) && hits(items[i], x, y, tolerance)) return items[i];
+    const items = this.itemsOf(s.key),
+      tolerance = 6 * this.unitsPerPx(s);
+    for (let i = items.length - 1; i >= 0; i--)
+      if (filter(items[i]) && hits(items[i], x, y, tolerance)) return items[i];
     return null;
   }
 
   /** Erase at (x, y): part of a stroke ("area"), whole strokes ("stroke"), or whole highlights only ("highlight"). */
   eraseAt(s, [x, y]) {
-    const items = this.itemsOf(s.key), tolerance = Math.max(4, this.sizes.pen * 2) * this.unitsPerPx(s);
-    let kept, changed = false;
+    const items = this.itemsOf(s.key),
+      tolerance = Math.max(4, this.sizes.pen * 2) * this.unitsPerPx(s);
+    let kept,
+      changed = false;
     if (this.eraserMode === "area") {
       kept = items.flatMap((i) => {
         const rest = i.type === "text" ? (hits(i, x, y, tolerance) ? [] : null) : eraseFrom(i, x, y, tolerance);
@@ -882,7 +1394,9 @@ class Reader {
         return rest;
       });
     } else {
-      kept = items.filter((i) => !((this.eraserMode === "stroke" || i.type === "highlight") && hits(i, x, y, tolerance)));
+      kept = items.filter(
+        (i) => !((this.eraserMode === "stroke" || i.type === "highlight") && hits(i, x, y, tolerance)),
+      );
       changed = kept.length !== items.length;
     }
     if (changed) {
@@ -895,8 +1409,12 @@ class Reader {
   /** Copies of the selection, a little down and to the right, selected instead (the note apps' Duplicate). */
   duplicateSelection() {
     if (!this.selection) return;
-    const { key, ids } = this.selection, s = this.surfaces.get(key), shift = 12 * (s ? this.unitsPerPx(s) : 1);
-    const copies = this.itemsOf(key).filter((i) => ids.has(i.id)).map((i) => ({ ...moved(i, shift, shift), id: newId() }));
+    const { key, ids } = this.selection,
+      s = this.surfaces.get(key),
+      shift = 12 * (s ? this.unitsPerPx(s) : 1);
+    const copies = this.itemsOf(key)
+      .filter((i) => ids.has(i.id))
+      .map((i) => ({ ...moved(i, shift, shift), id: newId() }));
     this.record(key, () => this.itemsOf(key).push(...copies));
     if (s) this.drawSurface(s);
     this.select({ key, ids: new Set(copies.map((i) => i.id)) });
@@ -904,33 +1422,50 @@ class Reader {
 
   // ───────────── moving around ─────────────
 
-  startNavigation(e) {
-    const pts = [...this.touches.values()];
-    const mid = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : { x: e.clientX, y: e.clientY };
-    this.nav = { last: mid, dist: pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0, zoom: this.zoom };
+  /** Where the fingers (or the mouse) that move the page are: their middle, and how far apart two fingers are. */
+  grip(e) {
+    const pts =
+      e.pointerType === "touch" && this.touches.size ? [...this.touches.values()] : [{ x: e.clientX, y: e.clientY }];
+    if (pts.length < 2) return { mid: pts[0], dist: 0 };
+    return {
+      mid: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 },
+      dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+    };
+  }
+
+  startNavigation(s, e) {
+    const touch = e.pointerType === "touch";
+    if (!touch) capture(s.svg, e); // a mouse let go off the page still lets go
+    const { mid, dist } = this.grip(e);
+    this.nav = { touch, id: e.pointerId, last: mid, dist, zoom: this.zoom };
+  }
+
+  /** Is this pointer the one moving the page? A pen writes on while a palm rests on the screen. */
+  steers(e) {
+    return Boolean(this.nav) && (this.nav.touch ? e.pointerType === "touch" : e.pointerId === this.nav.id);
   }
 
   navigate(e) {
-    const pts = e.pointerType === "touch" ? [...this.touches.values()] : [{ x: e.clientX, y: e.clientY }];
-    const mid = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : pts[0];
+    const { mid, dist } = this.grip(e);
     const scroller = this.scrollerAt(e);
     scroller.scrollLeft -= mid.x - this.nav.last.x;
     scroller.scrollTop -= mid.y - this.nav.last.y;
     this.nav.last = mid;
-    if (pts.length > 1 && this.nav.dist) {
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      this.setZoom(this.nav.zoom * (dist / this.nav.dist), { clientX: mid.x, clientY: mid.y });
-    }
+    if (dist && this.nav.dist) this.setZoom(this.nav.zoom * (dist / this.nav.dist), { clientX: mid.x, clientY: mid.y });
   }
 
-  scrollerAt(e) { return this.notesEl.contains(e.target) ? this.notesEl : this.pagesEl; }
+  scrollerAt(e) {
+    return this.notesEl.contains(e.target) ? this.notesEl : this.pagesEl;
+  }
 
   setZoom(z, at = null) {
     z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
     if (Math.abs(z - this.zoom) < 0.001) return;
     const box = this.pagesEl.getBoundingClientRect();
-    const ax = at ? at.clientX - box.left : box.width / 2, ay = at ? at.clientY - box.top : box.height / 2;
-    const fx = (this.pagesEl.scrollLeft + ax) / (this.pagesEl.scrollWidth || 1), fy = (this.pagesEl.scrollTop + ay) / (this.pagesEl.scrollHeight || 1);
+    const ax = at ? at.clientX - box.left : box.width / 2,
+      ay = at ? at.clientY - box.top : box.height / 2;
+    const fx = (this.pagesEl.scrollLeft + ax) / (this.pagesEl.scrollWidth || 1),
+      fy = (this.pagesEl.scrollTop + ay) / (this.pagesEl.scrollHeight || 1);
     this.zoom = z;
     this.layoutPages();
     this.pagesEl.scrollLeft = fx * this.pagesEl.scrollWidth - ax;
@@ -938,7 +1473,9 @@ class Reader {
     this.updateZoomLabel();
   }
 
-  updateZoomLabel() { this.root.querySelector(".rd-zoom-label").textContent = `${Math.round(this.zoom * 100)}%`; }
+  updateZoomLabel() {
+    this.root.querySelector(".rd-zoom-label").textContent = `${Math.round(this.zoom * 100)}%`;
+  }
 
   scrollToPage(n, smooth = true) {
     const s = this.surfaces.get(`p:${n}`);
@@ -955,25 +1492,50 @@ class Reader {
   onScroll() {
     if (!this.pdf) return;
     const page = this.currentPage();
-    if (page !== this.doc.last_page) { this.doc.last_page = page; this.changed(); }
-    this.thumbsEl.querySelectorAll(".rd-thumb").forEach((b) => b.classList.toggle("on", Number(b.dataset.page) === page));
+    if (page !== this.doc.last_page) {
+      this.doc.last_page = page;
+      this.changed();
+    }
+    this.thumbsEl
+      .querySelectorAll(".rd-thumb")
+      .forEach((b) => b.classList.toggle("on", Number(b.dataset.page) === page));
     // reached the end of the last page: the paper has been read
     const lastPage = this.surfaces.get(`p:${this.pdf.numPages}`);
-    if (!this.finished && lastPage && this.pagesEl.scrollTop + this.pagesEl.clientHeight >= lastPage.el.offsetTop + lastPage.el.offsetHeight - 40) {
+    if (
+      !this.finished &&
+      lastPage &&
+      this.pagesEl.scrollTop + this.pagesEl.clientHeight >= lastPage.el.offsetTop + lastPage.el.offsetHeight - 40
+    ) {
       this.finished = true;
-      if (this.onFinished && this.paper) this.onFinished(this.paper).then((marked) => marked && this.toast(t("rd.finished")));
+      if (this.onFinished && this.paper)
+        this.onFinished(this.paper).then((marked) => marked && this.toast(t("rd.finished")));
     }
   }
 
   onKey(e) {
-    if (this.editor) { if (e.key === "Escape") this.finishEditing(); return; }
+    if (this.editor) {
+      if (e.key === "Escape") this.finishEditing();
+      return;
+    }
     if (e.target.closest && e.target.closest("input, textarea")) return;
     const mod = e.ctrlKey || e.metaKey;
-    if (mod && e.key.toLowerCase() === "z") { e.preventDefault(); if (e.shiftKey) this.doRedo(); else this.doUndo(); }
-    else if (mod && e.key.toLowerCase() === "y") { e.preventDefault(); this.doRedo(); }
-    else if ((e.key === "Delete" || e.key === "Backspace") && this.selection) { e.preventDefault(); this.deleteSelection(); }
-    else if (e.key === "Escape") { if (this.selection) this.select(null); else this.close(); }
-    else if (mod && e.key.toLowerCase() === "f" && this.pdf) { e.preventDefault(); this.toggleSearch(true); }
+    if (mod && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) this.doRedo();
+      else this.doUndo();
+    } else if (mod && e.key.toLowerCase() === "y") {
+      e.preventDefault();
+      this.doRedo();
+    } else if ((e.key === "Delete" || e.key === "Backspace") && this.selection) {
+      e.preventDefault();
+      this.deleteSelection();
+    } else if (e.key === "Escape") {
+      if (this.selection) this.select(null);
+      else this.close();
+    } else if (mod && e.key.toLowerCase() === "f" && this.pdf) {
+      e.preventDefault();
+      this.toggleSearch(true);
+    }
   }
 
   // ───────────── selection ─────────────
@@ -989,8 +1551,12 @@ class Reader {
     const items = this.itemsOf(this.selection.key).filter((i) => this.selection.ids.has(i.id));
     if (!items.length) return null;
     const boxes = items.map(bbox);
-    return [Math.min(...boxes.map((b) => b[0])) + dx, Math.min(...boxes.map((b) => b[1])) + dy,
-      Math.max(...boxes.map((b) => b[2])) + dx, Math.max(...boxes.map((b) => b[3])) + dy];
+    return [
+      Math.min(...boxes.map((b) => b[0])) + dx,
+      Math.min(...boxes.map((b) => b[1])) + dy,
+      Math.max(...boxes.map((b) => b[2])) + dx,
+      Math.max(...boxes.map((b) => b[3])) + dy,
+    ];
   }
 
   insideSelection([x, y]) {
@@ -1000,11 +1566,20 @@ class Reader {
 
   drawSelection(dx = 0, dy = 0) {
     if (!this.selection) return;
-    const s = this.surfaces.get(this.selection.key), b = this.selectionBox(dx, dy);
+    const s = this.surfaces.get(this.selection.key),
+      b = this.selectionBox(dx, dy);
     if (!s || !b) return;
     s.svg.querySelectorAll(".rd-selbox, .rd-handle").forEach((n) => n.remove());
     const pad = 3 * this.unitsPerPx(s);
-    s.svg.append(svgEl("rect", { class: "rd-selbox", x: b[0] - pad, y: b[1] - pad, width: b[2] - b[0] + 2 * pad, height: b[3] - b[1] + 2 * pad }));
+    s.svg.append(
+      svgEl("rect", {
+        class: "rd-selbox",
+        x: b[0] - pad,
+        y: b[1] - pad,
+        width: b[2] - b[0] + 2 * pad,
+        height: b[3] - b[1] + 2 * pad,
+      }),
+    );
     const r = 6 * this.unitsPerPx(s); // drag the corner to resize
     s.svg.append(svgEl("rect", { class: "rd-handle", x: b[2] - r, y: b[3] - r, width: 2 * r, height: 2 * r }));
   }
@@ -1012,14 +1587,24 @@ class Reader {
   deleteSelection() {
     if (!this.selection) return;
     const { key, ids } = this.selection;
-    this.record(key, () => this.setItems(key, this.itemsOf(key).filter((i) => !ids.has(i.id))));
+    this.record(key, () =>
+      this.setItems(
+        key,
+        this.itemsOf(key).filter((i) => !ids.has(i.id)),
+      ),
+    );
     this.select(null);
     this.drawSurface(this.surfaces.get(key));
   }
 
   restyleSelection(change) {
     const { key, ids } = this.selection;
-    this.record(key, () => this.setItems(key, this.itemsOf(key).map((i) => (ids.has(i.id) ? { ...i, ...change } : i))));
+    this.record(key, () =>
+      this.setItems(
+        key,
+        this.itemsOf(key).map((i) => (ids.has(i.id) ? { ...i, ...change } : i)),
+      ),
+    );
     this.drawSurface(this.surfaces.get(key));
   }
 
@@ -1027,8 +1612,16 @@ class Reader {
 
   newText(s, [x, y]) {
     const size = this.sizes.text;
-    const item = { id: newId(), type: "text", color: this.colours.text, size, x: Math.round(x), y: Math.round(y - size / 2),
-      w: Math.round(Math.min(s.width - x - 4, Math.max(120, s.width * 0.35))), text: "" };
+    const item = {
+      id: newId(),
+      type: "text",
+      color: this.colours.text,
+      size,
+      x: Math.round(x),
+      y: Math.round(y - size / 2),
+      w: Math.round(Math.min(s.width - x - 4, Math.max(120, s.width * 0.35))),
+      text: "",
+    };
     this.editText(s, item, true);
   }
 
@@ -1037,9 +1630,18 @@ class Reader {
     const scale = 1 / this.unitsPerPx(s);
     const area = el("textarea", { class: "rd-editor", spellcheck: "false", "aria-label": t("rd.text") });
     area.value = item.text;
-    Object.assign(area.style, { left: `${item.x * scale}px`, top: `${item.y * scale}px`, width: `${item.w * scale}px`,
-      fontSize: `${item.size * scale}px`, lineHeight: String(TEXT_LINE), color: safeColour(item.color) });
-    const fit = () => { area.style.height = "auto"; area.style.height = `${area.scrollHeight + 2}px`; };
+    Object.assign(area.style, {
+      left: `${item.x * scale}px`,
+      top: `${item.y * scale}px`,
+      width: `${item.w * scale}px`,
+      fontSize: `${item.size * scale}px`,
+      lineHeight: String(TEXT_LINE),
+      color: safeColour(item.color),
+    });
+    const fit = () => {
+      area.style.height = "auto";
+      area.style.height = `${area.scrollHeight + 2}px`;
+    };
     area.addEventListener("input", fit);
     area.addEventListener("blur", () => this.finishEditing());
     s.el.append(area);
@@ -1060,9 +1662,19 @@ class Reader {
     if (ed.isNew) {
       if (text) this.record(ed.s.key, () => items.push({ ...ed.item, text }));
     } else if (!text) {
-      this.record(ed.s.key, () => this.setItems(ed.s.key, items.filter((i) => i.id !== ed.item.id)));
+      this.record(ed.s.key, () =>
+        this.setItems(
+          ed.s.key,
+          items.filter((i) => i.id !== ed.item.id),
+        ),
+      );
     } else if (text !== ed.item.text) {
-      this.record(ed.s.key, () => this.setItems(ed.s.key, items.map((i) => (i.id === ed.item.id ? { ...i, text } : i))));
+      this.record(ed.s.key, () =>
+        this.setItems(
+          ed.s.key,
+          items.map((i) => (i.id === ed.item.id ? { ...i, text } : i)),
+        ),
+      );
     }
     this.drawSurface(ed.s);
   }
@@ -1080,12 +1692,19 @@ class Reader {
   /** Text items of a page with their boxes in page units. */
   async pageText(n) {
     if (!this.textCache.has(n)) {
-      const page = await this.pdf.getPage(n), vp = this.viewports.get(n);
+      const page = await this.pdf.getPage(n),
+        vp = this.viewports.get(n);
       const content = await page.getTextContent();
-      this.textCache.set(n, content.items.filter((i) => i.str && i.str.trim()).map((i) => {
-        const tx = pdfjsLib.Util.transform(vp.transform, i.transform), h = Math.hypot(tx[2], tx[3]);
-        return { str: i.str, box: [tx[4], tx[5] - h, tx[4] + i.width * vp.scale, tx[5]] };
-      }));
+      this.textCache.set(
+        n,
+        content.items
+          .filter((i) => i.str && i.str.trim())
+          .map((i) => {
+            const tx = pdfjsLib.Util.transform(vp.transform, i.transform),
+              h = Math.hypot(tx[2], tx[3]);
+            return { str: i.str, box: [tx[4], tx[5] - h, tx[4] + i.width * vp.scale, tx[5]] };
+          }),
+      );
     }
     return this.textCache.get(n);
   }
@@ -1094,82 +1713,149 @@ class Reader {
     query = query.trim().toLowerCase();
     if (!query) return;
     if (this.searchQuery !== query) {
-      this.searchQuery = query; this.hits = []; this.hitAt = -1;
+      this.searchQuery = query;
+      this.hits = [];
+      this.hitAt = -1;
       for (let n = 1; n <= this.pdf.numPages; n++) {
-        for (const item of await this.pageText(n)) if (item.str.toLowerCase().includes(query)) this.hits.push({ page: n, box: item.box });
+        for (const item of await this.pageText(n))
+          if (item.str.toLowerCase().includes(query)) this.hits.push({ page: n, box: item.box });
       }
     }
     for (const s of this.surfaces.values()) s.foundG.replaceChildren();
-    if (!this.hits.length) { this.searchCount.textContent = t("rd.noMatches"); return; }
+    if (!this.hits.length) {
+      this.searchCount.textContent = t("rd.noMatches");
+      return;
+    }
     this.hitAt = (this.hitAt + direction + this.hits.length) % this.hits.length;
-    const hit = this.hits[this.hitAt], s = this.surfaces.get(`p:${hit.page}`);
+    const hit = this.hits[this.hitAt],
+      s = this.surfaces.get(`p:${hit.page}`);
     this.searchCount.textContent = `${this.hitAt + 1} / ${this.hits.length}`;
     for (const h of this.hits.filter((x) => x.page === hit.page)) {
-      s.foundG.append(svgEl("rect", { class: h === hit ? "rd-hit on" : "rd-hit", x: h.box[0] - 1, y: h.box[1] - 1, width: h.box[2] - h.box[0] + 2, height: h.box[3] - h.box[1] + 2 }));
+      s.foundG.append(
+        svgEl("rect", {
+          class: h === hit ? "rd-hit on" : "rd-hit",
+          x: h.box[0] - 1,
+          y: h.box[1] - 1,
+          width: h.box[2] - h.box[0] + 2,
+          height: h.box[3] - h.box[1] + 2,
+        }),
+      );
     }
     const scale = s.el.offsetWidth / s.width;
-    this.pagesEl.scrollTo({ top: s.el.offsetTop + hit.box[1] * scale - this.pagesEl.clientHeight / 3, behavior: "smooth" });
+    this.pagesEl.scrollTo({
+      top: s.el.offsetTop + hit.box[1] * scale - this.pagesEl.clientHeight / 3,
+      behavior: "smooth",
+    });
   }
 
   buildThumbnails() {
-    const buttons = [...this.viewports.keys()].map((n) => el("button", { type: "button", class: "rd-thumb", "data-page": n,
-      "aria-label": t("rd.goToPage", { n }), onclick: () => this.scrollToPage(n) }, el("canvas"), el("span", { text: String(n) })));
+    const buttons = [...this.viewports.keys()].map((n) =>
+      el(
+        "button",
+        {
+          type: "button",
+          class: "rd-thumb",
+          "data-page": n,
+          "aria-label": t("rd.goToPage", { n }),
+          onclick: () => this.scrollToPage(n),
+        },
+        el("canvas"),
+        el("span", { text: String(n) }),
+      ),
+    );
     this.thumbsEl.replaceChildren(...buttons);
-    const observer = new IntersectionObserver(async (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting || entry.target.dataset.done) continue;
-        entry.target.dataset.done = "1";
-        const n = Number(entry.target.dataset.page), page = await this.pdf.getPage(n);
-        const viewport = page.getViewport({ scale: 96 / this.viewports.get(n).width });
-        const canvas = entry.target.querySelector("canvas");
-        Object.assign(canvas, { width: Math.floor(viewport.width), height: Math.floor(viewport.height) });
-        page.render({ canvas, canvasContext: canvas.getContext("2d"), viewport });
-      }
-    }, { root: this.thumbsEl, rootMargin: "300px" });
+    const observer = new IntersectionObserver(
+      async (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting || entry.target.dataset.done) continue;
+          entry.target.dataset.done = "1";
+          const n = Number(entry.target.dataset.page),
+            page = await this.pdf.getPage(n);
+          const viewport = page.getViewport({ scale: 96 / this.viewports.get(n).width });
+          const canvas = entry.target.querySelector("canvas");
+          Object.assign(canvas, { width: Math.floor(viewport.width), height: Math.floor(viewport.height) });
+          page.render({ canvas, canvasContext: canvas.getContext("2d"), viewport });
+        }
+      },
+      { root: this.thumbsEl, rootMargin: "300px" },
+    );
     buttons.forEach((b) => observer.observe(b));
   }
 
   /** Highlights (with the text under them), text boxes and note pages, in page order. */
   async annotationList() {
     const out = [];
-    const pages = Object.keys(this.doc.pages).map(Number).sort((a, b) => a - b);
+    const pages = Object.keys(this.doc.pages)
+      .map(Number)
+      .sort((a, b) => a - b);
     for (const n of pages) {
       const text = this.pdf ? await this.pageText(n) : [];
       for (const item of this.doc.pages[n]) {
         if (item.type === "text") out.push({ page: n, kind: "text", text: item.text });
         else if (item.type === "highlight") {
           const [x0, y0, x1, y1] = bbox(item);
-          const under = text.filter(({ box }) => box[0] < x1 && box[2] > x0 && box[1] < y1 && box[3] > y0).map((i) => i.str).join(" ").trim();
+          const under = text
+            .filter(({ box }) => box[0] < x1 && box[2] > x0 && box[1] < y1 && box[3] > y0)
+            .map((i) => i.str)
+            .join(" ")
+            .trim();
           out.push({ page: n, kind: "highlight", text: under || t("rd.highlightNoText"), colour: item.color });
         }
       }
     }
-    this.doc.notes.forEach((items, i) => items.filter((x) => x.type === "text").forEach((x) => out.push({ note: i + 1, kind: "text", text: x.text })));
+    this.doc.notes.forEach((items, i) =>
+      items.filter((x) => x.type === "text").forEach((x) => out.push({ note: i + 1, kind: "text", text: x.text })),
+    );
     return out;
   }
 
   async renderAnnots() {
     if (this.annotsEl.hidden) return;
     const list = await this.annotationList();
-    const lines = list.map((a) => `${a.page ? `p.${a.page}` : t("rd.notePage", { n: a.note })} ${a.kind === "highlight" ? "▍" : "✎"} ${a.text}`);
-    const copy = el("button", { type: "button", class: "rd-btn rd-to-note", text: t("rd.toBookmarkNote"),
-      onclick: async () => { if (this.onAttachNote && this.paper) this.toast(await this.onAttachNote(this.paper, lines.join("\n"))); } });
+    const lines = list.map(
+      (a) =>
+        `${a.page ? `p.${a.page}` : t("rd.notePage", { n: a.note })} ${a.kind === "highlight" ? "▍" : "✎"} ${a.text}`,
+    );
+    const copy = el("button", {
+      type: "button",
+      class: "rd-btn rd-to-note",
+      text: t("rd.toBookmarkNote"),
+      onclick: async () => {
+        if (this.onAttachNote && this.paper) this.toast(await this.onAttachNote(this.paper, lines.join("\n")));
+      },
+    });
     copy.hidden = !this.paper || !list.length;
-    this.annotsEl.replaceChildren(el("h3", { text: t("rd.annots") }),
+    this.annotsEl.replaceChildren(
+      el("h3", { text: t("rd.annots") }),
       list.length ? null : el("p", { class: "rd-empty", text: t("rd.annotsEmpty") }),
-      el("ol", {}, list.map((a, i) => el("li", { class: `rd-annot ${a.kind}` },
-        el("button", { type: "button", onclick: () => (a.page ? this.scrollToPage(a.page) : null) },
-          el("b", { text: a.page ? `p.${a.page}` : t("rd.notePage", { n: a.note }) }),
-          el("span", { class: "rd-swatch", style: a.colour ? `--c:${safeColour(a.colour)}` : null }),
-          el("span", { text: a.text }))))),
-      copy);
+      el(
+        "ol",
+        {},
+        list.map((a, i) =>
+          el(
+            "li",
+            { class: `rd-annot ${a.kind}` },
+            el(
+              "button",
+              { type: "button", onclick: () => (a.page ? this.scrollToPage(a.page) : null) },
+              el("b", { text: a.page ? `p.${a.page}` : t("rd.notePage", { n: a.note }) }),
+              el("span", { class: "rd-swatch", style: a.colour ? `--c:${safeColour(a.colour)}` : null }),
+              el("span", { text: a.text }),
+            ),
+          ),
+        ),
+      ),
+      copy,
+    );
   }
 
   // ───────────── saving files ─────────────
 
   async rasterize(item) {
-    const lines = textLines(item), scale = 3;
-    const width = item.w, height = Math.max(1, lines.length) * item.size * TEXT_LINE;
+    const lines = textLines(item),
+      scale = 3;
+    const width = item.w,
+      height = Math.max(1, lines.length) * item.size * TEXT_LINE;
     const canvas = el("canvas", { width: Math.ceil(width * scale), height: Math.ceil(height * scale) });
     const ctx = canvas.getContext("2d");
     ctx.scale(scale, scale);
@@ -1182,7 +1868,12 @@ class Reader {
   }
 
   fileName(suffix) {
-    const base = (this.doc.title || "document").replace(/\.pdf$/i, "").replace(/[\\/:*?"<>|]+/g, " ").trim().slice(0, 80) || "document";
+    const base =
+      (this.doc.title || "document")
+        .replace(/\.pdf$/i, "")
+        .replace(/[\\/:*?"<>|]+/g, " ")
+        .trim()
+        .slice(0, 80) || "document";
     return `${base} ${suffix}.pdf`;
   }
 
@@ -1193,10 +1884,17 @@ class Reader {
     this.toast(t("rd.saving"));
     try {
       const PDFLib = await import(PDFLIB.href);
-      const data = await annotatedPdf(PDFLib, this.bytes, this.doc,
-        (n, x, y) => this.viewports.get(n).convertToPdfPoint(x, y), (item) => this.rasterize(item));
+      const data = await annotatedPdf(
+        PDFLib,
+        this.bytes,
+        this.doc,
+        (n, x, y) => this.viewports.get(n).convertToPdfPoint(x, y),
+        (item) => this.rasterize(item),
+      );
       this.toast(await this.saveFile(this.fileName(t("rd.suffixAnnotated")), new Uint8Array(data), "application/pdf"));
-    } catch (e) { this.toast(t("rd.saveFailed", { error: e.message })); }
+    } catch (e) {
+      this.toast(t("rd.saveFailed", { error: e.message }));
+    }
   }
 
   async saveNotes() {
@@ -1207,7 +1905,9 @@ class Reader {
       const PDFLib = await import(PDFLIB.href);
       const data = await notesPdf(PDFLib, this.doc, (item) => this.rasterize(item), this.doc.title);
       this.toast(await this.saveFile(this.fileName(t("rd.suffixNotes")), new Uint8Array(data), "application/pdf"));
-    } catch (e) { this.toast(t("rd.saveFailed", { error: e.message })); }
+    } catch (e) {
+      this.toast(t("rd.saveFailed", { error: e.message }));
+    }
   }
 }
 
@@ -1227,4 +1927,6 @@ function bareDoi(doi) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
-function shortId(id) { return String(id).replace(/\/+$/, "").split("/").pop(); }
+function shortId(id) {
+  return String(id).replace(/\/+$/, "").split("/").pop();
+}

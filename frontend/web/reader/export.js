@@ -7,7 +7,11 @@ export const NOTE_PAGE = [595, 842]; // A4, in points
 const rgbOf = (PDFLib, hex) => {
   let h = safeColour(hex).slice(1);
   if (h.length === 3) h = [...h].map((c) => c + c).join("");
-  return PDFLib.rgb(parseInt(h.slice(0, 2), 16) / 255, parseInt(h.slice(2, 4), 16) / 255, parseInt(h.slice(4, 6), 16) / 255);
+  return PDFLib.rgb(
+    parseInt(h.slice(0, 2), 16) / 255,
+    parseInt(h.slice(2, 4), 16) / 255,
+    parseInt(h.slice(4, 6), 16) / 255,
+  );
 };
 
 /**
@@ -24,8 +28,13 @@ async function drawItems(PDFLib, pdf, page, items, toPdf, rasterize) {
       page.drawSvgPath(path, { x: 0, y: 0, color: rgbOf(PDFLib, item.color), borderWidth: 0 });
     } else if (item.type === "highlight") {
       page.drawSvgPath(linePath(flipped(item.points), true), {
-        x: 0, y: 0, borderColor: rgbOf(PDFLib, item.color), borderWidth: item.width, borderOpacity: HIGHLIGHT_OPACITY,
-        borderLineCap: PDFLib.LineCapStyle.Round, blendMode: PDFLib.BlendMode.Multiply,
+        x: 0,
+        y: 0,
+        borderColor: rgbOf(PDFLib, item.color),
+        borderWidth: item.width,
+        borderOpacity: HIGHLIGHT_OPACITY,
+        borderLineCap: PDFLib.LineCapStyle.Round,
+        blendMode: PDFLib.BlendMode.Multiply,
       });
     } else if (item.type === "text" && String(item.text || "").trim()) {
       const { png, width, height } = await rasterize(item);
@@ -42,7 +51,8 @@ export async function annotatedPdf(PDFLib, bytes, doc, toPdf, rasterize) {
   const pages = pdf.getPages();
   for (const [number, items] of Object.entries(doc.pages || {})) {
     const page = pages[Number(number) - 1];
-    if (page && items.length) await drawItems(PDFLib, pdf, page, items, (x, y) => toPdf(Number(number), x, y), rasterize);
+    if (page && items.length)
+      await drawItems(PDFLib, pdf, page, items, (x, y) => toPdf(Number(number), x, y), rasterize);
   }
   return pdf.save();
 }

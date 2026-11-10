@@ -61,7 +61,7 @@ def acronyms(texts: list[str]) -> dict[str, str]:
             words = [w for w in re.split(r"[\s-]+", long) if w]
             if len(letters) < 2 or len(words) < len(letters):
                 continue
-            words = words[-len(letters):]
+            words = words[-len(letters) :]
             if all(w[0].lower() == c.lower() for w, c in zip(words, letters)):
                 seen[("".join(letters).lower(), " ".join(singular(w.lower()) for w in words))] += 1
     best: dict[str, tuple[int, str]] = {}
@@ -131,7 +131,9 @@ def citation_counts_within(papers: list[dict]) -> np.ndarray:
     return counts
 
 
-def citation_influence(papers: list[dict], start: np.ndarray, damping: float = 0.85, iterations: int = 60) -> np.ndarray:
+def citation_influence(
+    papers: list[dict], start: np.ndarray, damping: float = 0.85, iterations: int = 60
+) -> np.ndarray:
     """Personalized PageRank over the citation graph of the candidates.
 
     A reader starts at papers in proportion to `start` (their relevance) and keeps following

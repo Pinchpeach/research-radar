@@ -7,9 +7,8 @@ The map has three layers:
 """
 
 import math
-from collections import Counter
-
 import re
+from collections import Counter
 
 import numpy as np
 from sklearn.cluster import KMeans
@@ -37,13 +36,10 @@ def short_id(paper_id: str) -> str:
 def outside_references(papers: list[dict], min_count: int = 2, limit: int = 10) -> list[tuple[str, int]]:
     """Works cited by at least `min_count` papers in the set but not in the set themselves."""
     in_set = {short_id(paper["id"]) for paper in papers}
-    counts = Counter(
-        ref for paper in papers for ref in set(paper.get("referenced_works") or []) if ref not in in_set
-    )
+    counts = Counter(ref for paper in papers for ref in set(paper.get("referenced_works") or []) if ref not in in_set)
     # ties broken by ID, so the same works are picked every run
     ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
     return [(ref, count) for ref, count in ranked if count >= min_count][:limit]
-
 
 
 def credible_foundations(papers: list[dict], foundations: list[dict], min_count: int = 2) -> list[dict]:
@@ -53,7 +49,8 @@ def credible_foundations(papers: list[dict], foundations: list[dict], min_count:
     for work in foundations:
         wid = short_id(work["id"])
         citers = [
-            p for p in papers
+            p
+            for p in papers
             if wid in (p.get("referenced_works") or []) and plausible_citation(p.get("year"), work.get("year"))
         ]
         if len(citers) >= min_count:
@@ -104,7 +101,8 @@ def title_case(phrase: str) -> str:
     small = {"and", "or", "of", "in", "on", "for", "the", "a", "an", "to", "via", "with"}
     words = phrase.split()
     return " ".join(
-        w if (w.isupper() and len(w) > 1) or any(c.isupper() for c in w[1:])  # keep GNN, X-ray, k-NN as written
+        w
+        if (w.isupper() and len(w) > 1) or any(c.isupper() for c in w[1:])  # keep GNN, X-ray, k-NN as written
         else (w if i and w.lower() in small else w[:1].upper() + w[1:])
         for i, w in enumerate(words)
     )
@@ -248,8 +246,10 @@ def cluster_papers(papers: list[dict], query: str | None = None) -> tuple[list[i
 
     model = KMeans(n_clusters=k, n_init=10, random_state=0).fit(matrix)
     # label by what sets a topic apart from the whole map, not just what is frequent in it
-    labels = [", ".join(label_terms(centroid - overall, terms)) or f"topic {i + 1}"
-              for i, centroid in enumerate(model.cluster_centers_)]
+    labels = [
+        ", ".join(label_terms(centroid - overall, terms)) or f"topic {i + 1}"
+        for i, centroid in enumerate(model.cluster_centers_)
+    ]
     return [int(label) for label in model.labels_], labels
 
 

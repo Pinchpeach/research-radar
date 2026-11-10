@@ -14,7 +14,11 @@ export function rng(seed) {
   };
 }
 
-const sqNorm = (row) => { let s = 0; for (const w of row.values()) s += w * w; return s; };
+const sqNorm = (row) => {
+  let s = 0;
+  for (const w of row.values()) s += w * w;
+  return s;
+};
 
 function dist(row, rowNorm, center, centerNorm) {
   let d = 0;
@@ -22,14 +26,25 @@ function dist(row, rowNorm, center, centerNorm) {
   return Math.max(0, rowNorm - 2 * d + centerNorm);
 }
 
-const dense = (row, size) => { const c = new Float64Array(size); for (const [i, w] of row) c[i] = w; return c; };
-const denseNorm = (c) => { let s = 0; for (let i = 0; i < c.length; i++) s += c[i] * c[i]; return s; };
+const dense = (row, size) => {
+  const c = new Float64Array(size);
+  for (const [i, w] of row) c[i] = w;
+  return c;
+};
+const denseNorm = (c) => {
+  let s = 0;
+  for (let i = 0; i < c.length; i++) s += c[i] * c[i];
+  return s;
+};
 
 function pickWeighted(weights, random) {
   const total = weights.reduce((a, b) => a + b, 0);
   if (!(total > 0)) return Math.floor(random() * weights.length);
   let r = random() * total;
-  for (let i = 0; i < weights.length; i++) { r -= weights[i]; if (r < 0) return i; }
+  for (let i = 0; i < weights.length; i++) {
+    r -= weights[i];
+    if (r < 0) return i;
+  }
   return weights.length - 1;
 }
 
@@ -42,7 +57,8 @@ function seedCenters(rows, norms, k, size, random) {
     let best = null;
     for (let t = 0; t < trials; t++) {
       const cand = pickWeighted(closest, random);
-      const c = dense(rows[cand], size), cn = norms[cand];
+      const c = dense(rows[cand], size),
+        cn = norms[cand];
       const next = rows.map((row, i) => Math.min(closest[i], dist(row, norms[i], c, cn)));
       const pot = next.reduce((a, b) => a + b, 0);
       if (!best || pot < best.pot) best = { c, next, pot };
@@ -54,22 +70,36 @@ function seedCenters(rows, norms, k, size, random) {
 }
 
 function lloyd(rows, norms, centers, size, maxIter, tol) {
-  const n = rows.length, k = centers.length;
-  let labels = new Array(n).fill(0), inertia = 0;
+  const n = rows.length,
+    k = centers.length;
+  let labels = new Array(n).fill(0),
+    inertia = 0;
   for (let it = 0; it < maxIter; it++) {
     const cn = centers.map(denseNorm);
     inertia = 0;
     const d = rows.map((row, i) => {
-      let best = 0, bd = Infinity;
-      for (let c = 0; c < k; c++) { const v = dist(row, norms[i], centers[c], cn[c]); if (v < bd) { bd = v; best = c; } }
+      let best = 0,
+        bd = Infinity;
+      for (let c = 0; c < k; c++) {
+        const v = dist(row, norms[i], centers[c], cn[c]);
+        if (v < bd) {
+          bd = v;
+          best = c;
+        }
+      }
       labels[i] = best;
       inertia += bd;
       return bd;
     });
-    const sums = centers.map(() => new Float64Array(size)), counts = new Array(k).fill(0);
-    rows.forEach((row, i) => { counts[labels[i]] += 1; for (const [j, w] of row) sums[labels[i]][j] += w; });
+    const sums = centers.map(() => new Float64Array(size)),
+      counts = new Array(k).fill(0);
+    rows.forEach((row, i) => {
+      counts[labels[i]] += 1;
+      for (const [j, w] of row) sums[labels[i]][j] += w;
+    });
     for (let c = 0; c < k; c++) {
-      if (!counts[c]) { // empty cluster: move it to the point farthest from its center
+      if (!counts[c]) {
+        // empty cluster: move it to the point farthest from its center
         const far = d.indexOf(Math.max(...d));
         d[far] = 0;
         sums[c] = dense(rows[far], size);
@@ -86,8 +116,15 @@ function lloyd(rows, norms, centers, size, maxIter, tol) {
   const cn = centers.map(denseNorm);
   inertia = 0;
   rows.forEach((row, i) => {
-    let best = 0, bd = Infinity;
-    for (let c = 0; c < k; c++) { const v = dist(row, norms[i], centers[c], cn[c]); if (v < bd) { bd = v; best = c; } }
+    let best = 0,
+      bd = Infinity;
+    for (let c = 0; c < k; c++) {
+      const v = dist(row, norms[i], centers[c], cn[c]);
+      if (v < bd) {
+        bd = v;
+        best = c;
+      }
+    }
     labels[i] = best;
     inertia += bd;
   });
