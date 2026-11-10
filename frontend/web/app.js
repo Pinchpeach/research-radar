@@ -859,24 +859,11 @@ async function openReader(options) {
 // Android: a PDF opened with the app (mobile.js), on the paper it was fetched for, if any.
 window.radarOpenFile = (file, paper) => openReader({ paper: paper ? pick(paper) : null, file });
 
-/** Ask for a PDF file; resolves to the File, or null if the person cancels. */
-function pickPdf() {
-  const input = $("pick-pdf");
-  input.value = "";
-  return new Promise((resolve) => {
-    input.onchange = () => resolve(input.files[0] || null);
-    input.click();
-  });
-}
-
-/** Read a paper: its free PDF when there is one, else a PDF file the person picks. */
-async function readPaper(paper, { askFile = false } = {}) {
-  const url = webUrl(paper.open_access_url);
-  // the reader also asks Unpaywall and the person's library (reader.js findPdf)
-  if ((url || paper.doi) && !askFile) return openReader({ paper: pick(paper), url });
-  const file = await pickPdf();
-  if (file) openReader({ paper: pick(paper), file });
-}
+/**
+ * Open a paper. The reader takes it from there (reader.js start): the note kept for it if there
+ * is one, else a free copy, else the person's library, else it asks for the file.
+ */
+const readPaper = (paper) => openReader({ paper: pick(paper), url: webUrl(paper.open_access_url) });
 
 const bookmarkOf = (paper) => state.bookmarks.find((b) => b.id === shortId(paper.id));
 
@@ -938,10 +925,9 @@ async function renderDocs() {
         const paper = d.paper_id
           ? (bookmarkOf({ id: d.paper_id }) || {}).paper || { id: `https://openalex.org/${d.paper_id}`, title: d.title }
           : null;
-        if (d.id.startsWith("notes-")) return openReader({ paper, docId: d.id });
         // a kept PDF opens as it is (reader.js keptPdf); else the paper is looked for again, or the file asked for
-        if (paper) return openReader({ paper, url: webUrl(d.source) || null });
-        openReader({ docId: d.id });
+        if (paper) openReader({ paper, url: webUrl(d.source) || null });
+        else openReader({ docId: d.id });
       });
       const remove = el("button", { type: "button", class: "danger small-button", text: t("bm.delete") });
       remove.addEventListener("click", async () => {

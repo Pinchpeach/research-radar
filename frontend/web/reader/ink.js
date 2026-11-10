@@ -311,8 +311,7 @@ export function recognizeShape(points) {
       }
     }
   }
-  if (corners.length === 3) return [...corners, corners[0]].map(at);
-  if (corners.length === 4) return [...corners, corners[0]].map(at);
+  if (corners.length === 3 || corners.length === 4) return [...corners, corners[0]].map(at); // closed: back to the start
   // an ellipse: every point about as far from the centre as the box says it should be
   const cx = (x0 + x1) / 2,
     cy = (y0 + y1) / 2,

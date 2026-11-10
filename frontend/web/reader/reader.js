@@ -37,6 +37,7 @@ const MAX_ZOOM = 4,
 const ERASER_MODES = ["area", "stroke", "highlight"]; // part of a stroke, whole strokes, highlighter only
 const HOLD_MS = 500; // draw and hold this still: the stroke snaps to a clean line or shape
 const TAP_MS = 300; // two or three fingers down and up this quickly: undo or redo
+const MAX_UNDO = 200;
 
 let pdfjsLib = null;
 async function loadPdfjs() {
@@ -65,6 +66,25 @@ const svgEl = (tag, attrs = {}) => {
   return node;
 };
 const clone = (v) => JSON.parse(JSON.stringify(v));
+/** Keep getting this pointer's events, wherever it goes, until it lifts. */
+const capture = (node, e) => {
+  try {
+    node.setPointerCapture(e.pointerId);
+  } catch {
+    /* not a live pointer (synthetic events) */
+  }
+};
+
+const isPdf = (bytes) => new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF");
+
+/** What the app's server said went wrong (`detail` of its JSON answer), or null. */
+async function errorDetail(response) {
+  try {
+    return (await response.json()).detail || null;
+  } catch {
+    return null; // not JSON
+  }
+}
 
 /** A document id for a PDF opened from a file: the start of its SHA-256. */
 async function fileId(bytes) {
@@ -126,7 +146,7 @@ class Reader {
       onAttachNote,
       onClose,
     });
-    this.givenId = docId; // a notes-only document opened again
+    this.givenId = docId; // a document opened again from the reading list
     this.tool = "pen";
     this.colours = { pen: PEN_COLOURS[0], highlighter: HIGHLIGHT_COLOURS[0], text: PEN_COLOURS[0] };
     this.sizes = { pen: SIZES.pen[2], highlighter: SIZES.highlighter[2], text: SIZES.text[2] };
@@ -156,20 +176,18 @@ class Reader {
   async start() {
     this.build();
     document.body.classList.add("reader-open");
+    const paperId = this.paper ? shortId(this.paper.id) : null;
+    // a PDF is expected (to look for, or a file's document opened again), not only note pages
+    const wantsPdf = Boolean(
+      this.paper || this.url || this.file || (this.givenId && !this.givenId.startsWith("notes-")),
+    );
     let error = null;
-    const known = this.paper ? shortId(this.paper.id) : this.givenId; // a document that may have its PDF kept
-    const filed = Boolean(this.givenId && !this.givenId.startsWith("notes-")); // a file's document opened again from the reading list
     try {
-      if (this.pdfBytes) this.bytes = this.pdfBytes;
-      else if (this.file) this.bytes = new Uint8Array(await this.file.arrayBuffer());
-      else if (known && (this.bytes = await this.keptPdf(known))) this.kept = true;
-      else if (this.url || (this.paper && !this.givenId)) this.bytes = await this.findPdf();
+      this.bytes = await this.source(paperId || this.givenId);
     } catch (e) {
       error = e;
     }
-    if (this.bytes) this.docId = this.paper ? shortId(this.paper.id) : await fileId(this.bytes);
-    else if (this.paper) this.docId = shortId(this.paper.id);
-    else this.docId = this.givenId || `notes-${newId()}`;
+    this.docId = paperId || this.givenId || (this.bytes ? await fileId(this.bytes) : `notes-${newId()}`);
     this.doc = await this.loadDoc();
     if (this.bytes) {
       try {
@@ -179,16 +197,34 @@ class Reader {
         this.bytes = null;
       }
     }
-    // kept with its document: opens again as it is, with no new download or sign-in (keptPdf)
-    if (this.bytes && !this.kept && (this.file || this.paper)) this.keep();
-    else if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
-    const wanted = this.url || this.file || (this.paper && !this.givenId) || filed;
-    if (!this.bytes && (wanted || error)) this.showUnavailable(error);
-    else if (!this.bytes) this.pagesEl.hidden = true; // just note pages
-    const notesOnly = !this.bytes && !wanted && !error;
-    if (this.doc.notes.length || notesOnly) this.toggleNotes(true);
+    if (this.bytes && this.kept) this.toast(t("rd.openedKept"));
+    else if (this.bytes) this.keep();
+    else if (wantsPdf || error) this.showUnavailable(error);
+    else this.pagesEl.hidden = true; // just note pages
+    if (this.doc.notes.length || this.pagesEl.hidden) this.toggleNotes(true);
     this.renderNotes();
     if (this.onOpened && this.paper) this.onOpened(this.paper);
+  }
+
+  /**
+   * The PDF to show, or null: the one handed over; else the one kept with this document when it
+   * was opened before, as it is, with no new download or sign-in; else one found for the paper.
+   */
+  async source(id) {
+    if (this.pdfBytes) return this.pdfBytes;
+    if (this.file) return new Uint8Array(await this.file.arrayBuffer());
+    const kept = id ? await this.keptPdf(id) : null;
+    if (kept) {
+      this.kept = true;
+      return kept;
+    }
+    return this.paper || this.url ? this.findPdf() : null;
+  }
+
+  showFinding(message) {
+    this.pagesEl.replaceChildren(
+      el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: message })),
+    );
   }
 
   /**
@@ -200,9 +236,7 @@ class Reader {
     const doi = bareDoi(this.paper && this.paper.doi);
     let lastError = null;
     const attempt = async (message, get) => {
-      this.pagesEl.replaceChildren(
-        el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: message })),
-      );
+      this.showFinding(message);
       try {
         return await get();
       } catch (e) {
@@ -288,15 +322,11 @@ class Reader {
         const response = await fetch(path);
         if (response.ok) {
           const bytes = new Uint8Array(await response.arrayBuffer());
-          if (new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) return bytes;
+          if (isPdf(bytes)) return bytes;
           throw new Error(t("rd.notPdf"));
         }
         status = response.status;
-        try {
-          detail = (await response.json()).detail;
-        } catch {
-          /* not JSON */
-        }
+        detail = await errorDetail(response);
         return null;
       };
       let bytes = await get();
@@ -304,9 +334,7 @@ class Reader {
       // library's window gets it in the page (desktop/main.py library_login), then it's asked again
       const desktop = window.pywebview && window.pywebview.api;
       if (!bytes && (status === 404 || status === 502) && desktop && desktop.library_login) {
-        this.pagesEl.replaceChildren(
-          el("div", { class: "rd-unavailable" }, el("p", { class: "rd-finding", text: t("rd.findingLibrary") })),
-        );
+        this.showFinding(t("rd.findingLibrary"));
         try {
           if (await desktop.library_login(doi)) bytes = await get();
         } catch {
@@ -329,17 +357,9 @@ class Reader {
     // Android: CapacitorHttp lets the page fetch any site; the desktop page goes through its server
     const target = window.radarLocalApi ? url : `/pdf?url=${encodeURIComponent(url)}`;
     const response = await fetch(target);
-    if (!response.ok) {
-      let detail = "";
-      try {
-        detail = (await response.json()).detail || "";
-      } catch {
-        /* not JSON */
-      }
-      throw new Error(detail || `HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error((await errorDetail(response)) || `HTTP ${response.status}`);
     const bytes = new Uint8Array(await response.arrayBuffer());
-    if (!new TextDecoder().decode(bytes.slice(0, 1024)).trimStart().startsWith("%PDF")) throw new Error(t("rd.notPdf"));
+    if (!isPdf(bytes)) throw new Error(t("rd.notPdf"));
     return bytes;
   }
 
@@ -350,6 +370,7 @@ class Reader {
     } catch {
       /* first time */
     }
+    this.saved = Boolean(doc); // already in the reading list
     return {
       title: (this.paper && this.paper.title) || (this.file && this.file.name) || t("rd.untitled"),
       paper_id: this.paper ? shortId(this.paper.id) : null,
@@ -689,14 +710,16 @@ class Reader {
   }
 
   close(notify = true) {
-    this.flush();
+    clearTimeout(this.holdTimer);
+    clearTimeout(this.renderTimer);
+    // the reading list is read again once the last change is in
+    this.flush().finally(() => notify && this.onClose && this.onClose());
     document.removeEventListener("keydown", this.keyHandler);
     window.removeEventListener("resize", this.resizeHandler);
     if (this.observer) this.observer.disconnect();
     if (this.loading) this.loading.destroy().catch(() => {}); // frees the worker and the pages
     this.root.remove();
     document.body.classList.remove("reader-open");
-    if (notify && this.onClose) this.onClose();
   }
 
   toast(message) {
@@ -714,7 +737,7 @@ class Reader {
     this.tool = name;
     this.root.dataset.tool = name;
     this.root.querySelectorAll(".rd-tool").forEach((b) => b.classList.toggle("on", b.dataset.tool === name));
-    const kind = name === "highlighter" ? "highlighter" : name === "text" ? "text" : "pen";
+    const kind = this.kind;
     const palette = kind === "highlighter" ? HIGHLIGHT_COLOURS : PEN_COLOURS;
     this.colourRow.replaceChildren(
       ...palette.map((c) =>
@@ -814,7 +837,10 @@ class Reader {
     this.notesEl.hidden = !show;
     this.root.classList.toggle("notes-open", show);
     this.root.querySelector(".rd-notes-btn").classList.toggle("on", show);
-    if (show && !this.doc.notes.length) this.addNotePage(false);
+    if (show && !this.doc.notes.length) {
+      this.doc.notes.push([]); // a first page to write on: not a change to undo or save
+      this.renderNotes();
+    }
     this.layoutPages();
   }
 
@@ -954,11 +980,10 @@ class Reader {
     }
   }
 
-  addNotePage(scroll = true) {
+  addNotePage() {
     this.record("notes", () => this.doc.notes.push([]));
     this.renderNotes();
-    if (scroll)
-      this.notesEl.lastElementChild.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" });
+    this.notesEl.lastElementChild.previousElementSibling.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   // ───────────── drawing items ─────────────
@@ -1001,8 +1026,12 @@ class Reader {
     const before = key === "notes" ? clone(this.doc.notes) : clone(this.itemsOf(key));
     change();
     const after = key === "notes" ? clone(this.doc.notes) : clone(this.itemsOf(key));
-    this.undo.push({ key, before, after });
-    if (this.undo.length > 200) this.undo.shift();
+    this.remember({ key, before, after });
+  }
+
+  remember(step) {
+    this.undo.push(step);
+    if (this.undo.length > MAX_UNDO) this.undo.shift();
     this.redo = [];
     this.changed();
   }
@@ -1029,6 +1058,7 @@ class Reader {
     }
   }
   doRedo() {
+    this.finishEditing();
     const op = this.redo.pop();
     if (op) {
       this.undo.push(op);
@@ -1044,11 +1074,18 @@ class Reader {
     this.saveTimer = setTimeout(() => this.flush(), 700);
   }
 
+  /** Something to come back to: a PDF, or anything written. (An empty note page or a paper that wouldn't open is not.) */
+  worthSaving() {
+    const written = [...Object.values(this.doc.pages), ...this.doc.notes].some((items) => items.length);
+    return this.saved || Boolean(this.pdf) || written;
+  }
+
   async flush() {
     clearTimeout(this.saveTimer);
-    if (!this.doc) return;
+    if (!this.doc || !this.worthSaving()) return;
     try {
       await this.api("PUT", `/annotations/${encodeURIComponent(this.docId)}`, this.doc);
+      this.saved = true;
       this.root.classList.remove("unsaved");
     } catch (e) {
       this.root.classList.add("unsaved");
@@ -1100,37 +1137,27 @@ class Reader {
       this.tap.fingers = Math.max(this.tap.fingers, this.touches.size);
       this.tap.starts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     }
-    if (this.gesture && this.gesture.kind === "draw" && e.pointerType === "touch" && this.touches.size > 1) {
-      s.liveG.replaceChildren();
-      this.gesture = null; // a second finger: it was a pinch, not a line
-    }
+    // a second finger: it was a pinch or a tap, not writing, so what the first finger began is taken back
+    if (e.pointerType === "touch" && this.touches.size > 1 && this.gesture && this.gesture.touch) this.cancelGesture();
     if (this.navigates(e)) {
-      this.startNavigation(e);
+      this.startNavigation(s, e);
       return;
     }
     if (this.gesture) return; // one stroke at a time
     e.preventDefault();
-    try {
-      s.svg.setPointerCapture(e.pointerId);
-    } catch {
-      /* not a live pointer (synthetic events) */
-    }
+    capture(s.svg, e);
     const p = this.pointOn(s, e),
       pressure = e.pointerType === "pen" ? e.pressure || 0.5 : 0;
+    const begin = (kind, more = {}) =>
+      (this.gesture = { kind, s, id: e.pointerId, touch: e.pointerType === "touch", ...more });
     // the stylus's eraser end, or its side button held (S Pen): erase whatever the tool is
     const stylusErases =
       e.pointerType === "pen" && (e.button === 5 || e.button === 2 || e.buttons & 32 || e.buttons & 2);
     if (stylusErases || this.tool === "eraser") {
-      this.gesture = { kind: "erase", s, id: e.pointerId, before: clone(this.itemsOf(s.key)), removed: 0 };
+      begin("erase", { before: clone(this.itemsOf(s.key)), removed: 0 });
       this.eraseAt(s, p);
     } else if (this.tool === "pen" || this.tool === "highlighter") {
-      this.gesture = {
-        kind: "draw",
-        s,
-        id: e.pointerId,
-        points: [[...p, pressure]],
-        highlight: this.tool === "highlighter",
-      };
+      begin("draw", { points: [[...p, pressure]], highlight: this.tool === "highlighter" });
       this.drawLive();
       this.holdAt(e);
     } else if (this.tool === "text") {
@@ -1143,23 +1170,20 @@ class Reader {
       const corner = box && Math.hypot(p[0] - box[2], p[1] - box[3]) <= 12 * this.unitsPerPx(s);
       if (corner) {
         // the resize handle: scale around the selection's top-left corner
-        this.gesture = {
-          kind: "resize",
-          s,
-          id: e.pointerId,
+        begin("resize", {
           origin: [box[0], box[1]],
           from: Math.max(1, Math.hypot(box[2] - box[0], box[3] - box[1])),
           k: 1,
-        };
+        });
         return;
       }
       const grabbed = sel && sel.key === s.key && this.insideSelection(p);
       const item = grabbed ? null : this.itemAt(s, p);
       if (item) this.select({ key: s.key, ids: new Set([item.id]) });
-      if (grabbed || item) this.gesture = { kind: "move", s, id: e.pointerId, from: p, dx: 0, dy: 0 };
+      if (grabbed || item) begin("move", { from: p, dx: 0, dy: 0 });
       else {
         this.select(null);
-        this.gesture = { kind: "lasso", s, id: e.pointerId, points: [p] };
+        begin("lasso", { points: [p] });
       }
     }
   }
@@ -1170,7 +1194,7 @@ class Reader {
       const start = this.tap && this.tap.starts.get(e.pointerId);
       if (start && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10) this.tap.moved = true;
     }
-    if (this.nav) {
+    if (this.steers(e)) {
       this.navigate(e);
       return;
     }
@@ -1229,20 +1253,18 @@ class Reader {
         }
       }
     }
-    clearTimeout(this.holdTimer);
-    if (this.nav) {
-      if (!this.touches.size || e.pointerType !== "touch") this.nav = null;
-      else this.startNavigation(e);
+    if (this.steers(e)) {
+      if (this.nav.touch && this.touches.size)
+        this.startNavigation(s, e); // one finger lifted: go on from the other
+      else this.nav = null;
       return;
     }
     const g = this.gesture;
     if (!g || g.id !== e.pointerId) return;
+    if (cancelled) return this.cancelGesture();
+    clearTimeout(this.holdTimer);
     this.gesture = null;
     s.liveG.replaceChildren();
-    if (cancelled) {
-      this.drawSurface(s);
-      return;
-    }
     if (g.kind === "draw") {
       const highlight = g.highlight;
       let points = g.snapped ? g.points : simplify(g.points, 0.25 * this.unitsPerPx(s));
@@ -1259,9 +1281,7 @@ class Reader {
       this.drawSurface(s);
     } else if (g.kind === "erase") {
       if (g.removed) {
-        this.undo.push({ key: s.key, before: g.before, after: clone(this.itemsOf(s.key)) });
-        this.redo = [];
-        this.changed();
+        this.remember({ key: s.key, before: g.before, after: clone(this.itemsOf(s.key)) });
       }
     } else if (g.kind === "move") {
       if (Math.abs(g.dx) + Math.abs(g.dy) > 0.2) {
@@ -1289,6 +1309,17 @@ class Reader {
       const caught = lassoed(this.itemsOf(s.key), g.points);
       this.select(caught.length ? { key: s.key, ids: new Set(caught.map((i) => i.id)) } : null);
     }
+  }
+
+  /** Drop the gesture under way and put the page back as it was before it. */
+  cancelGesture() {
+    const g = this.gesture;
+    if (!g) return;
+    clearTimeout(this.holdTimer);
+    this.gesture = null;
+    g.s.liveG.replaceChildren();
+    if (g.kind === "erase" && g.removed) this.setItems(g.s.key, g.before);
+    this.drawSurface(g.s);
   }
 
   drawLive() {
@@ -1391,28 +1422,36 @@ class Reader {
 
   // ───────────── moving around ─────────────
 
-  startNavigation(e) {
-    const pts = [...this.touches.values()];
-    const mid =
-      pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : { x: e.clientX, y: e.clientY };
-    this.nav = {
-      last: mid,
-      dist: pts.length > 1 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0,
-      zoom: this.zoom,
+  /** Where the fingers (or the mouse) that move the page are: their middle, and how far apart two fingers are. */
+  grip(e) {
+    const pts =
+      e.pointerType === "touch" && this.touches.size ? [...this.touches.values()] : [{ x: e.clientX, y: e.clientY }];
+    if (pts.length < 2) return { mid: pts[0], dist: 0 };
+    return {
+      mid: { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 },
+      dist: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
     };
   }
 
+  startNavigation(s, e) {
+    const touch = e.pointerType === "touch";
+    if (!touch) capture(s.svg, e); // a mouse let go off the page still lets go
+    const { mid, dist } = this.grip(e);
+    this.nav = { touch, id: e.pointerId, last: mid, dist, zoom: this.zoom };
+  }
+
+  /** Is this pointer the one moving the page? A pen writes on while a palm rests on the screen. */
+  steers(e) {
+    return Boolean(this.nav) && (this.nav.touch ? e.pointerType === "touch" : e.pointerId === this.nav.id);
+  }
+
   navigate(e) {
-    const pts = e.pointerType === "touch" ? [...this.touches.values()] : [{ x: e.clientX, y: e.clientY }];
-    const mid = pts.length > 1 ? { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 } : pts[0];
+    const { mid, dist } = this.grip(e);
     const scroller = this.scrollerAt(e);
     scroller.scrollLeft -= mid.x - this.nav.last.x;
     scroller.scrollTop -= mid.y - this.nav.last.y;
     this.nav.last = mid;
-    if (pts.length > 1 && this.nav.dist) {
-      const dist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
-      this.setZoom(this.nav.zoom * (dist / this.nav.dist), { clientX: mid.x, clientY: mid.y });
-    }
+    if (dist && this.nav.dist) this.setZoom(this.nav.zoom * (dist / this.nav.dist), { clientX: mid.x, clientY: mid.y });
   }
 
   scrollerAt(e) {

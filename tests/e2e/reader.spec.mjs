@@ -52,6 +52,27 @@ async function synthetic(target, pointerType, points, pressure = 0.7) {
   );
 }
 
+/** Several pointers at once, as [type, pointerType, pointerId, x, y] in CSS pixels from the page's top-left. */
+async function pointers(target, events) {
+  await target.evaluate((svg, events) => {
+    const r = svg.getBoundingClientRect();
+    for (const [type, pointerType, pointerId, x, y] of events)
+      svg.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          cancelable: true,
+          pointerId,
+          pointerType,
+          clientX: r.left + x,
+          clientY: r.top + y,
+          pressure: 0.6,
+          button: 0,
+          buttons: type === "pointerup" ? 0 : 1,
+        }),
+      );
+  }, events);
+}
+
 const wave = Array.from({ length: 12 }, (_, i) => [60 + i * 14, 300 + Math.sin(i / 2) * 12]);
 
 test("pen, colours, highlighter and text boxes", async ({ page }) => {
@@ -275,6 +296,94 @@ test("pen types, draw and hold, a straight highlighter, two-finger undo, the sty
   expect(saved[0].pages["1"].some((i) => i.pen === "brush")).toBe(true);
 });
 
+const line = [
+  [60, 300],
+  [120, 300],
+  [200, 300],
+];
+
+test("the pen writes on while a palm rests on the screen", async ({ page }) => {
+  await openSample(page);
+  await synthetic(page1(page), "pen", line); // a stylus: fingers now only move the page
+  const before = await page.locator(".rd-pages").evaluate((e) => e.scrollTop);
+  await pointers(page1(page), [
+    ["pointerdown", "touch", 1, 300, 600],
+    ["pointerdown", "pen", 7, 60, 380],
+    ["pointermove", "pen", 7, 120, 420],
+    ["pointermove", "pen", 7, 200, 460],
+    ["pointerup", "pen", 7, 200, 460],
+    ["pointerup", "touch", 1, 300, 600],
+  ]);
+  await expect(items(page)).toHaveCount(2);
+  expect(await page.locator(".rd-pages").evaluate((e) => e.scrollTop)).toBe(before);
+});
+
+test("two fingers with the eraser move the page: nothing is erased, and the tools still work", async ({ page }) => {
+  await openSample(page);
+  await stroke(page, page1(page), line);
+  await page.locator(".rd-tool[data-tool=eraser]").click();
+  await page.locator(".rd-opt[data-opt=stroke]").click();
+  await pointers(page1(page), [
+    ["pointerdown", "touch", 1, 120, 300], // on the stroke
+    ["pointerdown", "touch", 2, 220, 300],
+    ["pointermove", "touch", 1, 120, 200],
+    ["pointermove", "touch", 2, 220, 200],
+    ["pointerup", "touch", 1, 120, 200],
+    ["pointerup", "touch", 2, 220, 200],
+  ]);
+  await expect(items(page)).toHaveCount(1);
+  await page.locator(".rd-tool[data-tool=pen]").click();
+  await stroke(
+    page,
+    page1(page),
+    line.map(([x, y]) => [x, y + 80]),
+  );
+  await expect(items(page)).toHaveCount(2);
+
+  // an erase the system interrupts (a call, a gesture) is taken back too
+  await page.locator(".rd-tool[data-tool=eraser]").click();
+  await pointers(page1(page), [
+    ["pointerdown", "mouse", 1, 120, 300],
+    ["pointercancel", "mouse", 1, 120, 300],
+  ]);
+  await expect(items(page)).toHaveCount(2);
+  await expect(page.locator(".rd-undo")).toBeEnabled();
+});
+
+test("the hand tool lets go when the mouse is released off the page", async ({ page, isMobile }) => {
+  test.skip(isMobile, "a mouse");
+  await openSample(page);
+  await page.locator(".rd-tool[data-tool=hand]").click();
+  const box = await page1(page).boundingBox();
+  await page.mouse.move(box.x + 100, box.y + 400);
+  await page.mouse.down();
+  await page.mouse.move(box.x + 100, box.y + 300, { steps: 3 });
+  await page.mouse.move(box.x - 60, box.y + 300, { steps: 3 }); // off the page
+  await page.mouse.up();
+  const before = await page.locator(".rd-pages").evaluate((e) => e.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await page.mouse.move(box.x + 100, box.y + 300, { steps: 3 });
+  await page.mouse.move(box.x + 100, box.y + 100, { steps: 3 });
+  expect(await page.locator(".rd-pages").evaluate((e) => e.scrollTop)).toBe(before);
+});
+
+test("the reading list keeps only what there is to come back to", async ({ page }) => {
+  await page.goto("./");
+  await go(page, "reading");
+  await page.locator("#new-notes").click();
+  await expect(page.locator(".rd-note")).toHaveCount(1);
+  await expect(page.locator(".rd-undo")).toBeDisabled(); // the first page is not a change
+  await page.locator(".rd-close").click();
+  await expect(page.locator(".reader")).toHaveCount(0);
+  await expect(page.locator("#docs-empty")).toBeVisible();
+  await expect(page.locator("#doc-list .read-row")).toHaveCount(0); // nothing written: nothing listed
+
+  await page.locator("#new-notes").click();
+  await stroke(page, page.locator(".rd-note .rd-ink").first(), line);
+  await page.locator(".rd-close").click();
+  await expect(page.locator("#doc-list .read-row")).toHaveCount(1); // listed as soon as the reader closes
+});
+
 test("note pages beside the PDF, hiding handwriting, search and page list", async ({ page }) => {
   await openSample(page);
   await stroke(page, page1(page), wave);
@@ -490,6 +599,11 @@ test.describe("no free copy on OpenAlex", () => {
     await read.click();
     await expect(page.locator(".rd-unavailable h3")).toHaveText("무료로 받을 수 있는 PDF를 찾지 못했어요");
     await expect(page.locator(".rd-unavailable")).toContainText("설정 › 도서관");
+    await page.locator(".rd-close").click();
+    await go(page, "reading");
+    await expect(page.locator("#doc-list .read-row")).toHaveCount(0); // a paper that didn't open isn't listed
+    await go(page, "discover");
+    await read.click();
     await page
       .locator(".rd-unavailable input[type=file]")
       .setInputFiles({ name: "mine.pdf", mimeType: "application/pdf", buffer: await samplePdf() });
