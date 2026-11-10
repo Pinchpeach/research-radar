@@ -6,13 +6,13 @@
 
 ## ⬇ 다운로드
 
-최신 버전 **v0.14.1**:
+최신 버전 **v0.14.2**:
 
 | Windows | macOS | Linux | Android |
 |---|---|---|---|
-| [ResearchRadar-0.14.1-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-windows.zip) | [ResearchRadar-0.14.1-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-macos.zip) | [ResearchRadar-0.14.1-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-linux.tar.gz) | [ResearchRadar-0.14.1-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/ResearchRadar-0.14.1-android.apk) |
+| [ResearchRadar-0.14.2-windows.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.2/ResearchRadar-0.14.2-windows.zip) | [ResearchRadar-0.14.2-macos.zip](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.2/ResearchRadar-0.14.2-macos.zip) | [ResearchRadar-0.14.2-linux.tar.gz](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.2/ResearchRadar-0.14.2-linux.tar.gz) | [ResearchRadar-0.14.2-android.apk](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.2/ResearchRadar-0.14.2-android.apk) |
 
-모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.1/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
+모든 버전과 체크섬([SHA256SUMS.txt](https://github.com/Pinchpeach/research-radar/releases/download/v0.14.2/SHA256SUMS.txt))은 [**최신 릴리스 페이지**](https://github.com/Pinchpeach/research-radar/releases/latest)에 있습니다. 설치 방법은 [아래](#설치)를 보세요. Android 앱은 [여기](#android-앱)를 보세요.
 
 ![연구 흐름: 주제별 레일, 갈래, 클릭하면 떠 있는 논문 카드](docs/images/research-map.png)
 
@@ -274,6 +274,8 @@ research-radar/
 │       └── techtree.py      # 인터랙티브 테크트리 지도
 ├── frontend/
 │   └── web/                 # 앱 화면 (HTML/CSS/JS, 빌드 과정 없음). PC와 Android가 같이 씀
+│       ├── app/             # 화면별 모듈: main.js에서 시작 (home, discover, bookmarks, reading, map, news, settings…)
+│       ├── reader/          # PDF 리더와 필기: reader.js와 부분별 파일 (opening, input, selection, panels, saving…)
 │       ├── core/            # Android용 백엔드: backend/의 JavaScript 이식판
 │       ├── shared/          # 두 백엔드가 같이 읽는 포스터 틀·문구·단어 목록
 │       └── mobile.js        # Android 앱 시작점

@@ -1,7 +1,7 @@
 "use strict";
 
 // UI text in Korean and English. Paper titles, authors and topic names are never translated.
-// Static markup uses data-i18n (text), data-i18n-placeholder and data-i18n-title; app.js calls t().
+// Static markup uses data-i18n (text), data-i18n-placeholder and data-i18n-title; the screens (app/) call t().
 
 const STRINGS = {
   ko: {

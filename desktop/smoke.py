@@ -49,7 +49,7 @@ def main(executable: str) -> int:
         print("health:", json.loads(body))
         checks = {
             "/": b"Research Radar",
-            "/static/app.js": b"loadSettings",
+            "/static/app/main.js": b"loadSettings",
             "/static/i18n.js": b"setLanguage",
             "/settings": b"openalex_api_key",
             "/bookmarks": b"[]",

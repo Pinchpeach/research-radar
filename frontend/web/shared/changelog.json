@@ -1,5 +1,19 @@
 [
   {
+    "version": "0.14.2",
+    "date": "2026-11-10",
+    "ko": [
+      "Android 앱을 켜자마자 누른 첫 탭이 무시될 수 있던 문제를 고쳤어요. 이제 화면이 다 준비된 다음에 앱이 열려요.",
+      "Windows에서 설정에 따라 PC 앱 화면이 뜨지 않을 수 있던 문제를 막았어요.",
+      "앱 화면과 PDF 리더 코드를 기능별 파일로 나눠 정리했어요. 쓰는 방법은 그대로예요."
+    ],
+    "en": [
+      "Fixed the first tap right after starting the Android app sometimes being ignored. The app now opens once its screens are ready.",
+      "Prevented the PC app's screens from failing to load on some Windows setups.",
+      "The app's screens and the PDF reader are now organized into files by feature. Nothing changes in how you use them."
+    ]
+  },
+  {
     "version": "0.14.1",
     "date": "2026-11-10",
     "ko": [
