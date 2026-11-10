@@ -274,6 +274,8 @@ research-radar/
 │       └── techtree.py      # 인터랙티브 테크트리 지도
 ├── frontend/
 │   └── web/                 # 앱 화면 (HTML/CSS/JS, 빌드 과정 없음). PC와 Android가 같이 씀
+│       ├── app/             # 화면별 모듈: main.js에서 시작 (home, discover, bookmarks, reading, map, news, settings…)
+│       ├── reader/          # PDF 리더와 필기: reader.js와 부분별 파일 (opening, input, selection, panels, saving…)
 │       ├── core/            # Android용 백엔드: backend/의 JavaScript 이식판
 │       ├── shared/          # 두 백엔드가 같이 읽는 포스터 틀·문구·단어 목록
 │       └── mobile.js        # Android 앱 시작점

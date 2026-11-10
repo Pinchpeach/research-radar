@@ -1,4 +1,4 @@
-// Ranking-quality metrics (port of backend/evaluation.py; app.js shows the same numbers live).
+// Ranking-quality metrics (port of backend/evaluation.py; app/evaluation.js shows them live).
 
 export const GAIN = { relevant: 2, partial: 1, not_relevant: 0 };
 

@@ -26,7 +26,11 @@ replace(
   'content="width=device-width,initial-scale=1,viewport-fit=cover"',
 );
 replace('<script src="/static/i18n.js"></script>', '<script src="i18n.js"></script>');
-replace('<script src="/static/app.js"></script>', '<script type="module" src="mobile.js"></script>');
+// mobile.js first: module scripts run in order, so the screens find its backend in place
+replace(
+  '<script type="module" src="/static/app/main.js"></script>',
+  '<script type="module" src="mobile.js"></script>\n  <script type="module" src="app/main.js"></script>',
+);
 if (html.includes("/static/"))
   throw new Error("index.html still points at /static/ (served by the desktop backend only)");
 fs.writeFileSync(path.join(out, "index.html"), html);

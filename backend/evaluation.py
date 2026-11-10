@@ -1,4 +1,4 @@
-"""Ranking-quality metrics for relevance judgments (mirrored in frontend/web/app.js for live display)."""
+"""Ranking-quality metrics for relevance judgments (mirrored in frontend/web/core/evaluation.js, shown live by app/evaluation.js)."""
 
 import math
 

@@ -1,6 +1,7 @@
 // Entry point of the Android app (see mobile/). The desktop app talks to a local FastAPI server;
-// here the same API is answered in the page by the JavaScript port of the backend, then the
-// usual app.js starts.
+// here the same API is answered in the page by the JavaScript port of the backend. The usual
+// screens (app/main.js) come next: build.mjs puts their script after this one, and module
+// scripts run in order.
 
 import { createApi } from "./core/api.js";
 import { inScope, loginPage, loginUrl, normalizeProxy, onPublisher, SIGN_IN_TARGET, through } from "./core/library.js";
@@ -192,13 +193,13 @@ async function openHandedPdf(uri) {
   if (!/^(content|file):/i.test(uri || "")) return;
   // the app's local server reads content:// addresses for the page (Capacitor's convertFileSrc)
   const blob = await (await fetch(window.Capacitor.convertFileSrc(uri))).blob();
-  while (!window.radarOpenFile) await new Promise((resolve) => setTimeout(resolve, 100)); // app.js still loading
+  while (!window.radarOpenFile) await new Promise((resolve) => setTimeout(resolve, 100)); // the screens still loading
   window.radarOpenFile(new File([blob], "paper.pdf", { type: "application/pdf" }), null);
 }
 /** A DOI or a paper's link shared to the app (SharedTextPlugin): open that paper. */
 async function openSharedText(text) {
   if (!text) return;
-  while (!window.radarOpenLink) await new Promise((resolve) => setTimeout(resolve, 100)); // app.js still loading
+  while (!window.radarOpenLink) await new Promise((resolve) => setTimeout(resolve, 100)); // the screens still loading
   if (!(await window.radarOpenLink(text))) window.radarSearchFor(text.slice(0, 300)); // no DOI in it: search for it
 }
 const { SharedText } = plugins;
@@ -234,6 +235,3 @@ if (Filesystem && Share) {
 }
 
 document.documentElement.classList.add("mobile-app");
-const app = document.createElement("script");
-app.src = "app.js";
-document.body.append(app);

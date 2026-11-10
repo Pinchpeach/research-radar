@@ -1,4 +1,4 @@
-// The desktop backend's HTTP API (backend/main.py), answered inside the app. app.js calls
+// The desktop backend's HTTP API (backend/main.py), answered inside the app. The screens call
 // api(method, path, body) either way; the Android app routes it here instead of to FastAPI.
 
 import { dedupe } from "./dedupe.js";

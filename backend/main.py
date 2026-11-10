@@ -3,6 +3,7 @@
 Each area of the app has its own router in backend/routes/; this file puts them together.
 """
 
+import mimetypes
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -16,6 +17,9 @@ from backend.routes import bookmarks, evaluations, library, news, reader, search
 from backend.version import __version__
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+# The screens are JavaScript modules, which browsers run only when served as JavaScript. Windows
+# can map .js to text/plain in its registry, which Python's mimetypes reads: say it here.
+mimetypes.add_type("text/javascript", ".js")
 
 app = FastAPI(title="Research Radar API", version=__version__)
 security.protect(app)
