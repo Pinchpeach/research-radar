@@ -6,6 +6,6 @@ uvicorn[standard]
 requests
 scikit-learn
 numpy
-pydantic>=2
+pydantic>=2.14.3
 python-dotenv
 platformdirs
